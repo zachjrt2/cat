@@ -22,6 +22,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -37,6 +38,14 @@ jobs:
 
       - name: Build project with Vite
         run: npm run build
+
+      - name: Verify build output
+        run: |
+          echo "=== Files in dist ==="
+          find dist -type f
+          echo ""
+          echo "=== dist/index.html ==="
+          cat dist/index.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
