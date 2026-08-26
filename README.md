@@ -13,6 +13,7 @@ npm run build     # outputs to dist/
 npm run preview   # serve the production build locally
 ```
 
+
 ## Deploying to GitHub Pages
 
 `.github/workflows/deploy.yml` builds and publishes `dist/` to GitHub Pages on every push to `main`. In the repo settings, set **Pages → Source → GitHub Actions**. `vite.config.ts` uses `base: './'` so the build works whether it's served from a project subpath (`username.github.io/repo/`) or a custom domain.
