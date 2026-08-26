@@ -88,8 +88,8 @@ export class UIManager {
         <button class="icon-btn shop-btn" id="shop-btn" title="Sanctuary Shop & Upgrades">
           ${SVG_ICONS.shop}
         </button>
-        <button class="icon-btn" id="sound-toggle-btn" title="Toggle Sound">
-          ${sound.isSoundEnabled() ? SVG_ICONS.soundOn : SVG_ICONS.soundOff}
+        <button class="icon-btn" id="sound-toggle-btn" title="Sound Settings">
+          ${sound.isSfxEnabled() || sound.isMusicEnabled() ? SVG_ICONS.soundOn : SVG_ICONS.soundOff}
         </button>
         <button class="icon-btn" id="save-menu-btn" title="Sanctuary Options">
           ${SVG_ICONS.menu}
@@ -102,6 +102,13 @@ export class UIManager {
     this.timeWeatherBtn = hud.querySelector('#time-weather-btn')!;
     this.soundBtn = hud.querySelector('#sound-toggle-btn')!;
 
+    // Start background music on first user gesture
+    const startMusicOnce = () => {
+      sound.startMusic();
+      document.removeEventListener('pointerdown', startMusicOnce);
+    };
+    document.addEventListener('pointerdown', startMusicOnce, { once: true });
+
     this.timeWeatherBtn.addEventListener('click', () => {
       sound.playTap();
       EventBus.emit('toggle-time', {});
@@ -113,9 +120,8 @@ export class UIManager {
     });
 
     this.soundBtn.addEventListener('click', () => {
-      const enabled = sound.toggleSound();
-      this.soundBtn.innerHTML = enabled ? SVG_ICONS.soundOn : SVG_ICONS.soundOff;
-      this.showToast(enabled ? 'Sound enabled' : 'Sound muted');
+      sound.playTap();
+      this.openSoundPanel();
     });
 
     hud.querySelector('#save-menu-btn')!.addEventListener('click', () => this.openSaveMenu());
@@ -225,8 +231,11 @@ export class UIManager {
 
   private bindBusEvents(): void {
     EventBus.on('love-changed', ({ love }: { love: number }) => {
+      const prev = this.currentLove;
       this.currentLove = Math.floor(love);
       this.loveEl.textContent = this.currentLove.toLocaleString();
+      // Play coin sound when earning love
+      if (this.currentLove > prev) sound.playCoin();
     });
 
     EventBus.on('tokens-changed', ({ tokens }: { tokens: number }) => {
@@ -1156,6 +1165,79 @@ export class UIManager {
       sound.playPurr();
       backdrop.remove();
     });
+    backdrop.appendChild(modal);
+    this.root.appendChild(backdrop);
+  }
+
+  private openSoundPanel(): void {
+    const backdrop = this.createBackdrop();
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <h2>🔊 Sound Settings</h2>
+      <div style="display:flex;flex-direction:column;gap:18px;margin-top:12px;">
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <label style="font-weight:600;color:var(--text-dark);display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="sfx-toggle" ${sound.isSfxEnabled() ? 'checked' : ''}>
+            Sound Effects
+          </label>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:12px;color:#888;">🔇</span>
+            <input type="range" id="sfx-volume" min="0" max="100" value="${Math.round(sound.getSfxVolume() * 100)}"
+              style="flex:1;accent-color:#ff758f;">
+            <span style="font-size:12px;color:#888;">🔊</span>
+            <span id="sfx-vol-label" style="min-width:32px;font-size:13px;color:var(--text-dark);">${Math.round(sound.getSfxVolume() * 100)}%</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <label style="font-weight:600;color:var(--text-dark);display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="music-toggle" ${sound.isMusicEnabled() ? 'checked' : ''}>
+            Background Music
+          </label>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:12px;color:#888;">🔇</span>
+            <input type="range" id="music-volume" min="0" max="100" value="${Math.round(sound.getMusicVolume() * 100)}"
+              style="flex:1;accent-color:#a78bfa;">
+            <span style="font-size:12px;color:#888;">🔊</span>
+            <span id="music-vol-label" style="min-width:32px;font-size:13px;color:var(--text-dark);">${Math.round(sound.getMusicVolume() * 100)}%</span>
+          </div>
+        </div>
+      </div>
+      <button class="modal-close" id="close-sound-panel" style="margin-top:20px;">Done</button>
+    `;
+
+    const sfxToggle = modal.querySelector('#sfx-toggle') as HTMLInputElement;
+    const sfxSlider = modal.querySelector('#sfx-volume') as HTMLInputElement;
+    const sfxLabel = modal.querySelector('#sfx-vol-label') as HTMLElement;
+    const musicToggle = modal.querySelector('#music-toggle') as HTMLInputElement;
+    const musicSlider = modal.querySelector('#music-volume') as HTMLInputElement;
+    const musicLabel = modal.querySelector('#music-vol-label') as HTMLElement;
+
+    sfxToggle.addEventListener('change', () => {
+      sound.setSfxEnabled(sfxToggle.checked);
+      this.soundBtn.innerHTML = (sound.isSfxEnabled() || sound.isMusicEnabled()) ? SVG_ICONS.soundOn : SVG_ICONS.soundOff;
+    });
+    sfxSlider.addEventListener('input', () => {
+      const v = parseInt(sfxSlider.value) / 100;
+      sound.setSfxVolume(v);
+      sfxLabel.textContent = `${sfxSlider.value}%`;
+    });
+
+    musicToggle.addEventListener('change', () => {
+      sound.setMusicEnabled(musicToggle.checked);
+      this.soundBtn.innerHTML = (sound.isSfxEnabled() || sound.isMusicEnabled()) ? SVG_ICONS.soundOn : SVG_ICONS.soundOff;
+    });
+    musicSlider.addEventListener('input', () => {
+      const v = parseInt(musicSlider.value) / 100;
+      sound.setMusicVolume(v);
+      musicLabel.textContent = `${musicSlider.value}%`;
+    });
+
+    modal.querySelector('#close-sound-panel')!.addEventListener('click', () => {
+      sound.playTap();
+      backdrop.remove();
+    });
+
     backdrop.appendChild(modal);
     this.root.appendChild(backdrop);
   }

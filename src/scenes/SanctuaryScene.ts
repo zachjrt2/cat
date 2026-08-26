@@ -1656,10 +1656,14 @@ export class SanctuaryScene extends Phaser.Scene {
             kittenSprite.setPosition(kx, ky);
             kittenSprite.showEmote('🍼');
           }
+          // Birth sounds: pop + kitten birth meow
+          sound.playPop();
+          setTimeout(() => sound.playKittenMeow(true), 350);
 
           this.saveManager.save(this.state);
           this.notifyUiState();
         }
+
       } else {
         sound.playPurr();
         spriteA.showEmote('💕');

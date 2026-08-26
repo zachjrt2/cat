@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { Cat, LifeStage, ToolType } from '../data/types';
 import { shouldFallAsleep, shouldWakeUp } from '../systems/NeedsSystem';
+import { sound } from '../systems/SoundManager';
 
 const BASE_SPRITE_SCALE = 2.2;
 
@@ -64,6 +65,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private wanderTimer = 0;
   private bounds: Phaser.Geom.Rectangle;
   private lastInteractionTimestamp = 0;
+
+  // Ambient meow timer: random interval 5–20s, staggered per cat
+  private ambientMeowTimer = 5 + Math.random() * 15;
+  // Track which needs were at 0 last tick to avoid spamming
+  private hungryAlerted = false;
+  // Chirp cooldown for play state
+  private chirpCooldown = 0;
 
   // AI & Social Interaction Support
   private targetMachineId: string | null = null;
@@ -371,6 +379,32 @@ export class CatSprite extends Phaser.GameObjects.Container {
     }
     const dt = deltaMs / 1000;
 
+    // ── Ambient meow timer (every 5–20 s, staggered) ──────────────────────
+    this.ambientMeowTimer -= dt;
+    if (this.ambientMeowTimer <= 0) {
+      this.ambientMeowTimer = 5 + Math.random() * 15;
+      if (this.cat.animationState !== 'sleep') {
+        if (this.cat.stage === 'kitten') {
+          sound.playKittenMeow(false);
+        } else {
+          sound.playMeow();
+        }
+      }
+    }
+
+    // ── Hungry / distress alert at exactly 0% ─────────────────────────────
+    const anyNeedAtZero = this.cat.hunger <= 0 || this.cat.cleanliness <= 0 ||
+                          this.cat.affection <= 0 || this.cat.fun <= 0;
+    if (anyNeedAtZero && !this.hungryAlerted) {
+      this.hungryAlerted = true;
+      sound.playHungry();
+    } else if (!anyNeedAtZero) {
+      this.hungryAlerted = false;
+    }
+
+    // ── Chirp cooldown tick ────────────────────────────────────────────────
+    if (this.chirpCooldown > 0) this.chirpCooldown -= dt;
+
     if (this.cat.animationState !== 'sleep' && shouldFallAsleep(this.cat)) {
       this.cat.animationState = 'sleep';
       this.wanderTarget = null;
@@ -384,6 +418,11 @@ export class CatSprite extends Phaser.GameObjects.Container {
     }
     if (this.cat.animationState === 'play') {
       this.wanderTimer -= dt;
+      // Chirp while playing, roughly every 3-6s
+      if (this.chirpCooldown <= 0) {
+        this.chirpCooldown = 3 + Math.random() * 3;
+        sound.playChirp();
+      }
       if (this.wanderTimer <= 0) {
         const roll = Math.random();
         this.cat.animationState = roll < 0.5 ? 'sit' : roll < 0.8 ? 'look' : 'lay';
@@ -392,6 +431,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
       }
       return;
     }
+
     this.wanderTimer -= dt;
     if (this.wanderTimer <= 0) this.pickNewWanderTarget();
     if (this.wanderTarget) {

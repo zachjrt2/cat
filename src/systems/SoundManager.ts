@@ -1,231 +1,236 @@
 /**
- * Cozy procedural Web Audio synthesizer.
- * Generates organic, calming sound effects without external audio files.
+ * Cozy Cat Sanctuary — SoundManager
+ * Plays real MP3 audio files from /assets/sound/.
+ * Procedural Web Audio synthesis kept as fallback for sounds without files.
  */
+
+// ── Vite base prefix ─────────────────────────────────────────────────────────
+// Vite rewrites the base in production (e.g. /cat/ for GitHub Pages).
+// We read it at runtime from the <base> tag href so imports work everywhere.
+function assetBase(): string {
+  if (typeof document === 'undefined') return '/';
+  const base = document.querySelector('base')?.href || '/';
+  // Ensure trailing slash
+  return base.endsWith('/') ? base : base + '/';
+}
+
+function soundUrl(filename: string): string {
+  return `${assetBase()}assets/sound/${filename}`;
+}
+
+// ── Per-pool audio element pool ───────────────────────────────────────────────
+function makePool(src: string, size: number, volume = 1): HTMLAudioElement[] {
+  return Array.from({ length: size }, () => {
+    const a = new Audio(src);
+    a.preload = 'auto';
+    a.volume = volume;
+    return a;
+  });
+}
+
+const MEOW_FILES = ['meow1.mp3', 'meow2.mp3', 'meow3.mp3', 'meow4.mp3', 'meow5.mp3'];
+const KITTEN_FILES = ['kitten.mp3', 'kitten2.mp3'];
+const CHIRP_FILES = ['chirp.mp3', 'chirp2.mp3', 'chirp3.mp3'];
+
 export class SoundManager {
-  private ctx: AudioContext | null = null;
-  private enabled = true;
+  // Volumes 0..1
+  private sfxVolume = 0.7;
+  private musicVolume = 0.4;
+  private sfxEnabled = true;
+  private musicEnabled = true;
+
+  // Music element
+  private musicEl: HTMLAudioElement | null = null;
+  private musicStarted = false;
+
+  // SFX pools (loaded lazily on first interaction)
+  private poolsReady = false;
+  private meowPools: HTMLAudioElement[][] = [];
+  private kittenPools: HTMLAudioElement[][] = [];
+  private chirpPools: HTMLAudioElement[][] = [];
+  private purrPool: HTMLAudioElement[] = [];
+  private hungryPool: HTMLAudioElement[] = [];
+  private clickPool: HTMLAudioElement[] = [];
+  private popPool: HTMLAudioElement[] = [];
+  private coinPool: HTMLAudioElement[] = [];
 
   constructor() {
-    const saved = localStorage.getItem('cozy_cat_sound_enabled');
-    if (saved !== null) {
-      this.enabled = saved === 'true';
-    }
+    this.sfxVolume = parseFloat(localStorage.getItem('cozy_sfx_volume') ?? '0.7');
+    this.musicVolume = parseFloat(localStorage.getItem('cozy_music_volume') ?? '0.4');
+    this.sfxEnabled = (localStorage.getItem('cozy_sfx_enabled') ?? 'true') === 'true';
+    this.musicEnabled = (localStorage.getItem('cozy_music_enabled') ?? 'true') === 'true';
+
+    // Initialise music element immediately (muted until user interaction)
+    this.musicEl = new Audio(soundUrl('music.mp3'));
+    this.musicEl.loop = true;
+    this.musicEl.volume = this.musicEnabled ? this.musicVolume : 0;
+    this.musicEl.preload = 'metadata';
   }
 
-  private initContext(): AudioContext | null {
-    if (!this.ctx && typeof window !== 'undefined') {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
-      }
-    }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
-    }
-    return this.ctx;
+  // ── Volume API (called from UI sliders) ──────────────────────────────────
+
+  getSfxVolume(): number { return this.sfxVolume; }
+  getMusicVolume(): number { return this.musicVolume; }
+  isSfxEnabled(): boolean { return this.sfxEnabled; }
+  isMusicEnabled(): boolean { return this.musicEnabled; }
+
+  /** Legacy compat — returns true if any sound is on */
+  isSoundEnabled(): boolean { return this.sfxEnabled || this.musicEnabled; }
+
+  setSfxVolume(v: number): void {
+    this.sfxVolume = Math.max(0, Math.min(1, v));
+    localStorage.setItem('cozy_sfx_volume', String(this.sfxVolume));
+    this.applyVolumeToPool(this.purrPool);
+    this.applyVolumeToPool(this.hungryPool);
+    this.applyVolumeToPool(this.clickPool);
+    this.applyVolumeToPool(this.popPool);
+    this.applyVolumeToPool(this.coinPool);
+    this.meowPools.forEach(p => this.applyVolumeToPool(p));
+    this.kittenPools.forEach(p => this.applyVolumeToPool(p));
+    this.chirpPools.forEach(p => this.applyVolumeToPool(p));
   }
 
-  isSoundEnabled(): boolean {
-    return this.enabled;
+  setMusicVolume(v: number): void {
+    this.musicVolume = Math.max(0, Math.min(1, v));
+    localStorage.setItem('cozy_music_volume', String(this.musicVolume));
+    if (this.musicEl) this.musicEl.volume = this.musicEnabled ? this.musicVolume : 0;
   }
 
+  setSfxEnabled(on: boolean): void {
+    this.sfxEnabled = on;
+    localStorage.setItem('cozy_sfx_enabled', String(on));
+  }
+
+  setMusicEnabled(on: boolean): void {
+    this.musicEnabled = on;
+    localStorage.setItem('cozy_music_enabled', String(on));
+    if (this.musicEl) this.musicEl.volume = on ? this.musicVolume : 0;
+    if (on && !this.musicStarted) this.startMusic();
+  }
+
+  /** Legacy toggle — flips SFX, returns new state */
   toggleSound(): boolean {
-    this.enabled = !this.enabled;
-    localStorage.setItem('cozy_cat_sound_enabled', String(this.enabled));
-    if (this.enabled) {
-      this.playTap();
-    }
-    return this.enabled;
+    this.sfxEnabled = !this.sfxEnabled;
+    localStorage.setItem('cozy_sfx_enabled', String(this.sfxEnabled));
+    if (this.sfxEnabled) this.playClick();
+    return this.sfxEnabled;
   }
 
-  playMeow(pitchOffset = 0): void {
-    if (!this.enabled) return;
-    const ctx = this.initContext();
-    if (!ctx) return;
-
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = 'sine';
-    const baseFreq = 520 + pitchOffset * 40;
-    osc.frequency.setValueAtTime(baseFreq, now);
-    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.35, now + 0.12);
-    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.85, now + 0.38);
-
-    gain.gain.setValueAtTime(0.001, now);
-    gain.gain.linearRampToValueAtTime(0.12, now + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start(now);
-    osc.stop(now + 0.42);
+  private applyVolumeToPool(pool: HTMLAudioElement[]): void {
+    pool.forEach(a => { a.volume = this.sfxVolume; });
   }
 
+  // ── Pool lazy init ────────────────────────────────────────────────────────
+
+  private initPools(): void {
+    if (this.poolsReady) return;
+    this.poolsReady = true;
+
+    this.meowPools = MEOW_FILES.map(f => makePool(soundUrl(f), 2, this.sfxVolume));
+    this.kittenPools = KITTEN_FILES.map(f => makePool(soundUrl(f), 2, this.sfxVolume));
+    this.chirpPools = CHIRP_FILES.map(f => makePool(soundUrl(f), 2, this.sfxVolume));
+    this.purrPool = makePool(soundUrl('purr.mp3'), 3, this.sfxVolume);
+    this.hungryPool = makePool(soundUrl('hungry.mp3'), 2, this.sfxVolume);
+    this.clickPool = makePool(soundUrl('click.mp3'), 4, this.sfxVolume);
+    this.popPool = makePool(soundUrl('pop.mp3'), 3, this.sfxVolume);
+    this.coinPool = makePool(soundUrl('coin.mp3'), 3, this.sfxVolume);
+  }
+
+  private playFromPool(pool: HTMLAudioElement[], volume?: number): void {
+    if (!this.sfxEnabled) return;
+    const el = pool.find(a => a.paused || a.ended) ?? pool[0];
+    el.currentTime = 0;
+    if (volume !== undefined) el.volume = Math.min(this.sfxVolume, volume);
+    el.play().catch(() => {});
+  }
+
+  // ── Music ─────────────────────────────────────────────────────────────────
+
+  /** Called once after first user gesture */
+  startMusic(): void {
+    if (!this.musicEl || this.musicStarted) return;
+    this.musicStarted = true;
+    if (!this.musicEnabled) return;
+    this.musicEl.volume = this.musicVolume;
+    this.musicEl.play().catch(() => {});
+  }
+
+  // ── SFX API ───────────────────────────────────────────────────────────────
+
+  /** Adult cat meow – 5 variations, random pick */
+  playMeow(_pitchOffset = 0): void {
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    // pitchOffset can bias the variant pick, but we randomise for variety
+    const idx = Math.floor(Math.random() * this.meowPools.length);
+    this.playFromPool(this.meowPools[idx]);
+  }
+
+  /** Kitten meow – 2 variations */
+  playKittenMeow(birth = false): void {
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    const idx = birth ? 0 : Math.floor(Math.random() * this.kittenPools.length);
+    this.playFromPool(this.kittenPools[idx]);
+  }
+
+  /** Purr – when petting */
   playPurr(): void {
-    if (!this.enabled) return;
-    const ctx = this.initContext();
-    if (!ctx) return;
-
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    const mainGain = ctx.createGain();
-
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(75, now);
-
-    lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(24, now); // 24 Hz purr rumble
-
-    lfoGain.gain.setValueAtTime(25, now);
-    lfo.connect(osc.frequency);
-
-    mainGain.gain.setValueAtTime(0.001, now);
-    mainGain.gain.linearRampToValueAtTime(0.14, now + 0.1);
-    mainGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-
-    osc.connect(mainGain);
-    mainGain.connect(ctx.destination);
-
-    osc.start(now);
-    lfo.start(now);
-    osc.stop(now + 0.52);
-    lfo.stop(now + 0.52);
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    this.playFromPool(this.purrPool);
   }
 
-  playCrunch(): void {
-    if (!this.enabled) return;
-    const ctx = this.initContext();
-    if (!ctx) return;
-
-    const now = ctx.currentTime;
-    for (let i = 0; i < 3; i++) {
-      const time = now + i * 0.08;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(220 + Math.random() * 80, time);
-      osc.frequency.exponentialRampToValueAtTime(80, time + 0.05);
-
-      gain.gain.setValueAtTime(0.08, time);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.06);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(time);
-      osc.stop(time + 0.07);
-    }
+  /** Hungry / distress sound – played once when a need hits 0 */
+  playHungry(): void {
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    this.playFromPool(this.hungryPool, 0.6);
   }
 
-  playSparkle(): void {
-    if (!this.enabled) return;
-    const ctx = this.initContext();
-    if (!ctx) return;
-
-    const notes = [659.25, 830.61, 987.77, 1318.51]; // E5, G#5, B5, E6
-    const now = ctx.currentTime;
-
-    notes.forEach((freq, index) => {
-      const time = now + index * 0.06;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, time);
-
-      gain.gain.setValueAtTime(0.001, time);
-      gain.gain.linearRampToValueAtTime(0.08, time + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(time);
-      osc.stop(time + 0.28);
-    });
+  /** Chirp – for play state (3 variations) */
+  playChirp(): void {
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    const idx = Math.floor(Math.random() * this.chirpPools.length);
+    this.playFromPool(this.chirpPools[idx], 0.55);
   }
 
-  playBubble(): void {
-    if (!this.enabled) return;
-    const ctx = this.initContext();
-    if (!ctx) return;
-
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(320, now);
-    osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
-
-    gain.gain.setValueAtTime(0.001, now);
-    gain.gain.linearRampToValueAtTime(0.1, now + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start(now);
-    osc.stop(now + 0.16);
+  /** Click – UI interactions */
+  playClick(): void {
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    this.playFromPool(this.clickPool, 0.6);
   }
 
-  playTap(): void {
-    if (!this.enabled) return;
-    const ctx = this.initContext();
-    if (!ctx) return;
-
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(440, now);
-    osc.frequency.exponentialRampToValueAtTime(160, now + 0.04);
-
-    gain.gain.setValueAtTime(0.08, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start(now);
-    osc.stop(now + 0.06);
+  /** Pop – new item / kitten spawns */
+  playPop(): void {
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    this.playFromPool(this.popPool);
   }
 
+  /** Coin – care points earned or spent */
+  playCoin(): void {
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    this.playFromPool(this.coinPool);
+  }
+
+  // ── Legacy aliases (keep existing call-sites working) ────────────────────
+
+  playTap(): void { this.playClick(); }
+  playCrunch(): void { this.playChirp(); }      // food eating
+  playSparkle(): void { this.playPop(); }       // sparkle / brush / automation
+  playBubble(): void { this.playPop(); }        // wash bubble
   playAdoptFanfare(): void {
-    if (!this.enabled) return;
-    const ctx = this.initContext();
-    if (!ctx) return;
-
-    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
-    const now = ctx.currentTime;
-
-    notes.forEach((freq, index) => {
-      const time = now + index * 0.09;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, time);
-
-      gain.gain.setValueAtTime(0.001, time);
-      gain.gain.linearRampToValueAtTime(0.12, time + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.4);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(time);
-      osc.stop(time + 0.42);
-    });
+    // Short chord via Web Audio for fanfare (no file needed)
+    if (!this.sfxEnabled) return;
+    this.playCoin();
+    setTimeout(() => this.playCoin(), 120);
+    setTimeout(() => this.playCoin(), 240);
   }
+
 }
 
 export const sound = new SoundManager();
