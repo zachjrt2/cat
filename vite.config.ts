@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 // whether it's served from a user/org root or a project subpath
 // (https://<user>.github.io/<repo>/), and also works via `vite preview`.
 export default defineConfig({
-  base: './',
+  base: '/cat/',
   build: {
     outDir: 'dist',
     sourcemap: true,
@@ -13,3 +13,5 @@ export default defineConfig({
     host: true,
   },
 });
+
+
