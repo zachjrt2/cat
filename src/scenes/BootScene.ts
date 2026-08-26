@@ -1,0 +1,202 @@
+import Phaser from 'phaser';
+import { CAT_SKINS, CAT_MARKINGS } from '../data/catAssets';
+
+export class BootScene extends Phaser.Scene {
+  constructor() {
+    super('Boot');
+  }
+
+  preload(): void {
+    // Show a cozy loading text
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const loadingText = this.add.text(w / 2, h / 2, '🐾 Waking up cozy cats...', {
+      fontFamily: '"Nunito", "Segoe UI", sans-serif',
+      fontSize: '18px',
+      color: '#5a4632',
+    }).setOrigin(0.5);
+
+    this.load.on('progress', (val: number) => {
+      loadingText.setText(`🐾 Waking up cozy cats... ${Math.round(val * 100)}%`);
+    });
+
+    // 1. Load all 27 Cat Color Sheets (32x32 frames)
+    for (const skin of CAT_SKINS) {
+      this.load.spritesheet(`cat_${skin.id}`, `assets/cats/${skin.file}`, {
+        frameWidth: 32,
+        frameHeight: 32,
+      });
+    }
+
+    // 2. Load all 14 Marking Overlays (32x32 frames)
+    for (const marking of CAT_MARKINGS) {
+      if (marking.file) {
+        this.load.spritesheet(`marking_${marking.file}`, `assets/cats/Markings/${marking.file}`, {
+          frameWidth: 32,
+          frameHeight: 32,
+        });
+      }
+    }
+  }
+
+  create(): void {
+    this.createAllAnimations();
+    this.scene.start('Sanctuary');
+  }
+
+  private createAllAnimations(): void {
+    // Create animations for all cat base skins
+    for (const skin of CAT_SKINS) {
+      this.registerSpriteAnimations(`cat_${skin.id}`);
+    }
+
+    // Create animations for all marking overlays
+    for (const marking of CAT_MARKINGS) {
+      if (marking.file) {
+        this.registerSpriteAnimations(`marking_${marking.file}`);
+      }
+    }
+  }
+
+  private registerSpriteAnimations(textureKey: string): void {
+    const anims = this.anims;
+    const colsPerRow = 32;
+
+    // 8 directions: 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW
+    for (let dir = 0; dir < 8; dir++) {
+      const rowTop = 1 + dir * 2;
+      const rowBot = 2 + dir * 2;
+
+      // 1. Sit idle / sit down
+      const sitTopFrames = [0, 1, 2, 3].map((c) => rowTop * colsPerRow + c);
+      const sitBotFrames = [0, 1].map((c) => rowBot * colsPerRow + c);
+      const sitAnimKey = `${textureKey}_sit_${dir}`;
+      if (!anims.exists(sitAnimKey)) {
+        anims.create({
+          key: sitAnimKey,
+          frames: anims.generateFrameNumbers(textureKey, { frames: [...sitBotFrames, sitTopFrames[3]] }),
+          frameRate: 2.5,
+          repeat: -1,
+        });
+      }
+
+      // 2. Look around (curious)
+      const lookAnimKey = `${textureKey}_look_${dir}`;
+      if (!anims.exists(lookAnimKey)) {
+        anims.create({
+          key: lookAnimKey,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [
+              rowTop * colsPerRow + 4,
+              rowTop * colsPerRow + 5,
+              rowTop * colsPerRow + 6,
+              rowTop * colsPerRow + 7,
+              rowTop * colsPerRow + 6,
+              rowTop * colsPerRow + 5,
+            ],
+          }),
+          frameRate: 3.5,
+          repeat: -1,
+        });
+      }
+
+      // 3. Lay down (relaxed)
+      const layAnimKey = `${textureKey}_lay_${dir}`;
+      if (!anims.exists(layAnimKey)) {
+        anims.create({
+          key: layAnimKey,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [
+              rowTop * colsPerRow + 8,
+              rowTop * colsPerRow + 9,
+              rowTop * colsPerRow + 10,
+              rowTop * colsPerRow + 11,
+            ],
+          }),
+          frameRate: 3,
+          repeat: -1,
+        });
+      }
+
+      // 4. Sleep (curled sleeping breathing loop)
+      const sleepAnimKey = `${textureKey}_sleep_${dir}`;
+      if (!anims.exists(sleepAnimKey)) {
+        anims.create({
+          key: sleepAnimKey,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [
+              rowBot * colsPerRow + 8,
+              rowBot * colsPerRow + 9,
+              rowBot * colsPerRow + 10,
+              rowBot * colsPerRow + 11,
+              rowBot * colsPerRow + 10,
+              rowBot * colsPerRow + 9,
+            ],
+          }),
+          frameRate: 2,
+          repeat: -1,
+        });
+      }
+
+      // 5. Walk (4 frames wander loop)
+      const walkAnimKey = `${textureKey}_walk_${dir}`;
+      if (!anims.exists(walkAnimKey)) {
+        anims.create({
+          key: walkAnimKey,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [
+              rowTop * colsPerRow + 12,
+              rowTop * colsPerRow + 13,
+              rowTop * colsPerRow + 14,
+              rowTop * colsPerRow + 15,
+            ],
+          }),
+          frameRate: 6,
+          repeat: -1,
+        });
+      }
+
+      // 6. Run (Zoomies fast cycle)
+      const runAnimKey = `${textureKey}_run_${dir}`;
+      if (!anims.exists(runAnimKey)) {
+        anims.create({
+          key: runAnimKey,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [
+              rowTop * colsPerRow + 20,
+              rowTop * colsPerRow + 21,
+              rowTop * colsPerRow + 22,
+              rowTop * colsPerRow + 23,
+              rowBot * colsPerRow + 20,
+              rowBot * colsPerRow + 21,
+              rowBot * colsPerRow + 22,
+              rowBot * colsPerRow + 23,
+            ],
+          }),
+          frameRate: 10,
+          repeat: -1,
+        });
+      }
+
+      // 7. Play (Toy interaction)
+      const playAnimKey = `${textureKey}_play_${dir}`;
+      if (!anims.exists(playAnimKey)) {
+        anims.create({
+          key: playAnimKey,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [
+              rowTop * colsPerRow + 16,
+              rowTop * colsPerRow + 17,
+              rowTop * colsPerRow + 18,
+              rowTop * colsPerRow + 19,
+              rowTop * colsPerRow + 5,
+              rowTop * colsPerRow + 6,
+            ],
+          }),
+          frameRate: 7,
+          repeat: -1,
+        });
+      }
+    }
+  }
+}

@@ -1,0 +1,595 @@
+Cozy Cat Sanctuary
+Game Design Document v1.0
+
+Genre: Cozy Idle / Collection / Virtual Pet
+Platform: Web (Mobile First)
+Deployment: GitHub Pages (Static Website)
+Engine: Phaser 3 + TypeScript + Vite
+Monetization: None (initially)
+Target Session Length: 1–10 minutes
+Audience: Cozy gamers, cat lovers, idle game players
+
+The chosen asset pack is particularly well-suited because it already includes multiple cat animations, nearly 50+ color variations, and separate pattern overlays that can be mixed and matched to create a large population of unique cats without requiring additional artwork.
+
+Vision Statement
+
+Create a relaxing digital cat sanctuary where players collect, care for, and observe dozens of unique cats.
+
+The primary reward is not progression.
+
+The primary reward is attachment.
+
+Players should gradually learn:
+
+Which cats are friends
+Which cats are troublemakers
+Which cats sleep all day
+Which cats constantly demand attention
+
+The game should feel alive even when the player does nothing.
+
+Watching the sanctuary should be enjoyable.
+
+Core Pillars
+1. Low Stress
+
+No fail states.
+
+No dead cats.
+
+No punishment.
+
+Ignoring a cat for a day simply means it is slightly less happy.
+
+2. Personality First
+
+Every cat should feel different.
+
+Players should eventually refer to cats by name instead of color.
+
+3. Watching Is Gameplay
+
+The sanctuary should remain entertaining even when the player is idle.
+
+Cats should:
+
+Wander
+Sleep
+Play
+Follow friends
+Chase toys
+Groom themselves
+Sit together
+4. Collection Without Pressure
+
+Collecting cats is exciting.
+
+Missing cats is not frustrating.
+
+Core Gameplay Loop
+Earn Love
+    ↓
+Adopt New Cats
+    ↓
+More Cat Interactions
+    ↓
+More Love Generation
+    ↓
+Expand Sanctuary
+    ↓
+Unlock New Cats
+
+Simple.
+
+Easy to understand within 30 seconds.
+
+Player Resources
+Love
+
+Primary currency.
+
+Generated from:
+
+Feeding
+Petting
+Playing
+Washing
+Happy relationships
+Sleeping cats
+Sanctuary decorations
+
+Used for:
+
+Adoptions
+Upgrades
+Decorations
+New areas
+Adoption Tokens
+
+Late-game prestige-like currency.
+
+Generated through major milestones.
+
+Used to unlock rare cats.
+
+Sanctuary Layout
+
+The game takes place on a single screen.
+
+No scrolling initially.
+
+Areas
+Yard
+
+Starting area.
+
+Contains:
+
+Grass
+Food bowl
+Water bowl
+
+Capacity:
+5 cats
+
+Shelter
+
+Unlock:
+
+20 cats
+
+Adds:
+
+Cat beds
+Grooming station
+
+Capacity:
+15 additional cats
+
+Sunroom
+
+Unlock:
+
+50 cats
+
+Adds:
+
+Sunbeams
+Plants
+
+Capacity:
+25 additional cats
+
+Cat Café
+
+Unlock:
+
+100 cats
+
+Adds:
+
+Visitors
+Passive Love bonuses
+Cat Data Model
+
+Each cat contains:
+
+Cat {
+    id
+    name
+    color
+    pattern
+    personalityTraits[]
+    hunger
+    cleanliness
+    affection
+    fun
+    energy
+    happiness
+    friendshipIds[]
+    rivalIds[]
+    favoriteToy
+    favoriteFood
+    age
+}
+Needs System
+Hunger
+
+Falls slowly.
+
+Low hunger:
+
+Less active
+Generates less Love
+
+Resolved by:
+
+Food bowl
+
+Cleanliness
+
+Falls slowly.
+
+Dirty cats:
+
+Less happy
+
+Resolved by:
+
+Brush or wash tool
+
+Affection
+
+Needs occasional attention.
+
+Resolved by:
+
+Petting
+
+Friend interactions
+
+Fun
+
+Represents stimulation.
+
+Resolved by:
+
+Toys
+
+Playing
+
+Friends
+
+Energy
+
+Automatically recovers.
+
+Cats sleep when tired.
+
+Player cannot directly affect this.
+
+Personality System
+
+Each cat receives:
+
+1 Major Trait
+1 Minor Trait
+Lazy
+Sleeps longer
+Generates passive Love while sleeping
+Zoomie
+Runs frequently
+Generates Fun for nearby cats
+Gets hungry faster
+Diva
+Wants attention
+Bigger Love rewards
+Hunter
+Finds gifts
+Creates random events
+Curious
+Investigates decorations
+Discovers collectibles
+Social
+Likes crowds
+Makes friends faster
+Shy
+Prefers isolated locations
+Gains happiness alone
+Mischievous
+Creates messes
+Starts playful interactions
+Cuddler
+Sleeps with friends
+Relationship bonuses
+Relationship System
+
+Cats build relationships automatically.
+
+Values:
+
+-100 = Rival
+0 = Neutral
+100 = Best Friend
+
+Friendships develop from:
+
+Sleeping nearby
+Playing together
+Eating together
+Dynamic Events
+
+Occasionally a cat triggers an event.
+
+Examples:
+
+Found Feather
+
++10 Love
+
+Stole Toy
+
+Temporary Fun bonus
+
+Shared Nap
+
+Friendship increase
+
+Zoomies
+
+Nearby cats gain Fun
+
+Sunbeam Nap
+
+Bonus happiness
+
+Cat Journal
+
+Every cat maintains history.
+
+Example:
+
+Mochi
+
+Adopted Day 3
+
+Favorite Food:
+Salmon
+
+Best Friend:
+Pumpkin
+
+Longest Nap:
+7 Hours
+
+Most Pets Received:
+142
+
+This is one of the primary retention systems.
+
+Players become attached to stories.
+
+Interaction System
+
+Bottom toolbar.
+
+Large mobile-friendly buttons.
+
+Food
+
+Tap tool.
+
+Tap cat.
+
+Pet
+
+Tap tool.
+
+Tap cat.
+
+Brush
+
+Tap tool.
+
+Tap cat.
+
+Toy
+
+Tap tool.
+
+Tap cat.
+
+Wash
+
+Tap tool.
+
+Tap cat.
+
+Animation Usage
+
+The asset pack includes multiple states such as sitting, looking around, laying down, walking, running, and additional playful movement animations. These can be mapped directly to cat behaviors.
+
+Animation	Behavior
+Sit	Idle
+Look Around	Curious
+Lay Down	Relax
+Sleep	Recover Energy
+Walk	Wander
+Run	Zoomies
+Play	Toy Interaction
+Offline Progression
+
+When player returns:
+
+While Away:
++340 Love
+
+Mochi made a new friend.
+
+Pumpkin slept 6 hours.
+
+Bean found a feather.
+
+Progress calculated using timestamp differences.
+
+Stored in LocalStorage.
+
+No backend required.
+
+Collection System
+Colors
+
+Generated from asset pack variants.
+
+Examples:
+
+Orange
+Calico
+Black
+Gray
+White
+Tuxedo
+Patterns
+
+Additional overlays.
+
+Examples:
+
+Tabby
+Socks
+Mittens
+Spots
+Stripes
+
+The pack's large collection of colors and pattern options makes procedural generation of many unique cats practical.
+
+Rare Cats
+
+Small adoption chances.
+
+Examples:
+
+Golden Cat
+
+Love bonus.
+
+Ghost Cat
+
+Appears only at night.
+
+Heterochromia Cat
+
+Rare cosmetic.
+
+Royal Cat
+
+Generates passive Love.
+
+Progression
+Tier 1
+
+1–10 Cats
+
+Learning systems.
+
+Tier 2
+
+10–25 Cats
+
+Relationships unlock.
+
+Tier 3
+
+25–50 Cats
+
+Rare cats appear.
+
+Tier 4
+
+50–100 Cats
+
+Additional sanctuary areas.
+
+Tier 5
+
+100+ Cats
+
+Collection endgame.
+
+Technical Architecture
+Front End
+Phaser 3
+TypeScript
+Vite
+
+Benefits:
+
+Fast loading
+Mobile friendly
+GitHub Pages compatible
+Save System
+localStorage
+
+Autosave every 30 seconds.
+
+Manual export/import:
+
+savegame.json
+Mobile First UI
+
+Target width:
+
+360px - 480px
+
+Features:
+
+Large buttons
+Single-thumb interaction
+No hover requirements
+Responsive scaling
+MVP Scope
+
+Version 0.1
+
+Include
+10 cat colors
+5 personalities
+Adoption
+Feeding
+Petting
+Grooming
+Love currency
+Offline progress
+Journal
+Save system
+Exclude
+Decorations
+Prestige
+Weather
+Visitors
+Rare cats
+
+Those can arrive later.
+
+Future Updates
+Weather
+
+Rainy days
+
+Sunny days
+
+Snow
+
+Seasonal Events
+
+Halloween cats
+
+Winter scarves
+
+Spring kittens
+
+Furniture Placement
+
+Beds
+
+Cat trees
+
+Tunnels
+
+Breeding / Family Trees
+
+Optional late-game feature.
+
+Community Features
+
+Export favorite cats as images.
+
+Share cat journals.
+
+Success Metric
+
+The ideal player behavior is:
+
+"I opened the game to collect Love, but spent five minutes watching Mochi and Pumpkin sleep together."
+
+If players become attached to individual cats, the game has succeeded.
