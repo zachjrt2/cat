@@ -1,21 +1,16 @@
 /**
  * Cozy Cat Sanctuary — SoundManager
  * Plays real MP3 audio files from /assets/sound/.
- * Procedural Web Audio synthesis kept as fallback for sounds without files.
+ * Uses Vite's import.meta.env.BASE_URL so the path is correct both
+ * locally (/) and on GitHub Pages (/cat/).
  */
 
-// ── Vite base prefix ─────────────────────────────────────────────────────────
-// Vite rewrites the base in production (e.g. /cat/ for GitHub Pages).
-// We read it at runtime from the <base> tag href so imports work everywhere.
-function assetBase(): string {
-  if (typeof document === 'undefined') return '/';
-  const base = document.querySelector('base')?.href || '/';
-  // Ensure trailing slash
-  return base.endsWith('/') ? base : base + '/';
-}
-
 function soundUrl(filename: string): string {
-  return `${assetBase()}assets/sound/${filename}`;
+  // import.meta.env.BASE_URL is injected by Vite at build time.
+  // It equals '/' in dev and '/cat/' (or whatever base is) in production.
+  const base = import.meta.env.BASE_URL ?? '/';
+  const prefix = base.endsWith('/') ? base : base + '/';
+  return `${prefix}assets/sound/${filename}`;
 }
 
 // ── Per-pool audio element pool ───────────────────────────────────────────────
