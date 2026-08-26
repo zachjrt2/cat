@@ -1300,14 +1300,44 @@ export class SanctuaryScene extends Phaser.Scene {
         message: `🏡 ${cat.name} found a loving forever home! (+${reward.total.toLocaleString()} 💗 Love)`,
       });
 
-      // Check stray safety net
-      if (this.state.cats.length < 2 && !this.state.strayArrivalDueAt) {
+      // If ALL cats are gone: immediately take half love and give two new adults
+      if (this.state.cats.length === 0) {
+        const penalty = Math.floor(this.state.love / 2);
+        this.state.love = Math.max(0, this.state.love - penalty);
+
+        const bounds = this.areaBounds();
+        const usedNames = new Set(this.state.cats.map((c) => c.name));
+
+        for (let i = 0; i < 2; i++) {
+          const newCat = generateCat({ day: this.state.day, usedNames, stage: 'adult' });
+          newCat.area = 'yard';
+          newCat.journal.entries.push({
+            day: this.state.day,
+            timestamp: Date.now(),
+            message: 'Arrived at the empty sanctuary, drawn by a warm familiar scent.',
+          });
+          this.state.cats.push(newCat);
+          usedNames.add(newCat.name);
+          if (this.currentArea === 'yard') {
+            this.spawnCatSprite(newCat, bounds);
+          }
+          sound.playPop();
+          setTimeout(() => sound.playKittenMeow(false), 400 + i * 300);
+        }
+
+        EventBus.emit('love-changed', { love: this.love.love });
+        EventBus.emit('toast', {
+          message: `🏠 The sanctuary is empty… two cats wandered in, but it cost you ${penalty.toLocaleString()} 💗 love.`,
+        });
+      } else if (this.state.cats.length < 2 && !this.state.strayArrivalDueAt) {
+        // < 2 cats: stray arrives after 1 hour
         this.state.strayArrivalDueAt = Date.now() + 60 * 60 * 1000;
       }
 
       this.saveManager.save(this.state);
       this.notifyUiState();
     });
+
 
     EventBus.on('breed-cats', ({ parentAId, parentBId }: { parentAId: string; parentBId: string }) => {
       const parentA = this.state.cats.find((c) => c.id === parentAId);
