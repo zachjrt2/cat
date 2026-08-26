@@ -41,10 +41,12 @@ export class BreedingSystem {
       return { eligible: false, reason: 'This sanctuary area is currently at maximum capacity!' };
     }
 
+    const BREED_COOLDOWN_MS = 30_000; // 30 seconds
     const key = this.pairKey(parentA, parentB);
-    const lastBred = this.state.breedingCooldowns[key];
-    if (lastBred !== undefined && lastBred === this.state.day) {
-      return { eligible: false, reason: 'This pair has already had a kitten today. Try again tomorrow!' };
+    const lastBredAt = this.state.breedingCooldowns[key];
+    if (lastBredAt !== undefined && Date.now() - lastBredAt < BREED_COOLDOWN_MS) {
+      const secsLeft = Math.ceil((BREED_COOLDOWN_MS - (Date.now() - lastBredAt)) / 1000);
+      return { eligible: false, reason: `This pair is resting! Ready again in ${secsLeft}s.` };
     }
 
     return { eligible: true };
@@ -63,7 +65,7 @@ export class BreedingSystem {
 
     this.state.cats.push(kitten);
     const key = this.pairKey(parentA, parentB);
-    this.state.breedingCooldowns[key] = this.state.day;
+    this.state.breedingCooldowns[key] = Date.now(); // timestamp for 10s real-time cooldown
 
     sound.playAdoptFanfare();
     const rarityLabel = kitten.isRare ? '✨ Rare ' : '';
