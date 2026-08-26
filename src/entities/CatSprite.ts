@@ -66,12 +66,15 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private bounds: Phaser.Geom.Rectangle;
   private lastInteractionTimestamp = 0;
 
-  // Ambient meow timer: random interval 5–20s, staggered per cat
-  private ambientMeowTimer = 5 + Math.random() * 15;
+  // Ambient meow timer: random interval 50–200s (staggered per cat)
+  private ambientMeowTimer = 50 + Math.random() * 150;
   // Track which needs were at 0 last tick to avoid spamming
   private hungryAlerted = false;
   // Chirp cooldown for play state
   private chirpCooldown = 0;
+  // Breed-ready heart emote timer (adults only)
+  private breedReadyHeartTimer = 15 + Math.random() * 15;
+  private isBreedReady = false;
 
   // AI & Social Interaction Support
   private targetMachineId: string | null = null;
@@ -349,6 +352,14 @@ export class CatSprite extends Phaser.GameObjects.Container {
   setOtherSpritesProvider(provider: () => CatSprite[]): void { this.otherSpritesProvider = provider; }
   setMachineUseCallback(cb: (cat: Cat, machineId: string) => void): void { this.machineUseCallback = cb; }
 
+  /** Called by SanctuaryScene whenever the breed cooldown state changes for this cat. */
+  setBreedReady(ready: boolean): void {
+    if (this.isBreedReady === ready) return;
+    this.isBreedReady = ready;
+    // Reset timer so a heart fires soon after becoming ready again
+    if (ready) this.breedReadyHeartTimer = 2 + Math.random() * 4;
+  }
+
   private playCurrentAnimation(): void {
     const animState = this.cat.animationState;
     const dir = this.currentDirection;
@@ -382,7 +393,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
     // ── Ambient meow timer (every 5–20 s, staggered) ──────────────────────
     this.ambientMeowTimer -= dt;
     if (this.ambientMeowTimer <= 0) {
-      this.ambientMeowTimer = 5 + Math.random() * 15;
+      this.ambientMeowTimer = 50 + Math.random() * 150;
       if (this.cat.animationState !== 'sleep') {
         if (this.cat.stage === 'kitten') {
           sound.playKittenMeow(false);
@@ -404,6 +415,15 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
     // ── Chirp cooldown tick ────────────────────────────────────────────────
     if (this.chirpCooldown > 0) this.chirpCooldown -= dt;
+
+    // ── Breed-ready heart emote (adult, not sleeping, cooldown expired) ────
+    if (this.isBreedReady && this.cat.stage === 'adult' && this.cat.animationState !== 'sleep') {
+      this.breedReadyHeartTimer -= dt;
+      if (this.breedReadyHeartTimer <= 0) {
+        this.breedReadyHeartTimer = 15 + Math.random() * 15;
+        this.showEmote('❤️');
+      }
+    }
 
     if (this.cat.animationState !== 'sleep' && shouldFallAsleep(this.cat)) {
       this.cat.animationState = 'sleep';

@@ -49,6 +49,10 @@ export class SoundManager {
   private popPool: HTMLAudioElement[] = [];
   private coinPool: HTMLAudioElement[] = [];
 
+  // Concurrent meow limiter
+  private activeMeowCount = 0;
+  private static readonly MAX_CONCURRENT_MEOWS = 2;
+
   constructor() {
     this.sfxVolume = parseFloat(localStorage.getItem('cozy_sfx_volume') ?? '0.7');
     this.musicVolume = parseFloat(localStorage.getItem('cozy_music_volume') ?? '0.4');
@@ -156,17 +160,30 @@ export class SoundManager {
   playMeow(_pitchOffset = 0): void {
     this.initPools();
     if (!this.sfxEnabled) return;
-    // pitchOffset can bias the variant pick, but we randomise for variety
+    if (this.activeMeowCount >= SoundManager.MAX_CONCURRENT_MEOWS) return;
     const idx = Math.floor(Math.random() * this.meowPools.length);
-    this.playFromPool(this.meowPools[idx]);
+    this.playMeowFromPool(this.meowPools[idx]);
   }
 
   /** Kitten meow – 2 variations */
   playKittenMeow(birth = false): void {
     this.initPools();
     if (!this.sfxEnabled) return;
+    if (!birth && this.activeMeowCount >= SoundManager.MAX_CONCURRENT_MEOWS) return;
     const idx = birth ? 0 : Math.floor(Math.random() * this.kittenPools.length);
-    this.playFromPool(this.kittenPools[idx]);
+    this.playMeowFromPool(this.kittenPools[idx]);
+  }
+
+  /** Internal: play from a meow pool and track the active count. */
+  private playMeowFromPool(pool: HTMLAudioElement[]): void {
+    const el = pool.find(a => a.paused || a.ended) ?? pool[0];
+    el.currentTime = 0;
+    el.volume = this.sfxVolume;
+    this.activeMeowCount++;
+    const decrement = () => { this.activeMeowCount = Math.max(0, this.activeMeowCount - 1); };
+    el.addEventListener('ended', decrement, { once: true });
+    el.addEventListener('pause', decrement, { once: true });
+    el.play().catch(() => { decrement(); });
   }
 
   /** Purr – when petting */

@@ -1950,8 +1950,27 @@ export class SanctuaryScene extends Phaser.Scene {
         this.saveManager.save(this.state);
         this.notifyUiState();
       }
+
+      // Update breed-ready heart emote for adult cats in the current area
+      const BREED_COOLDOWN_MS = 30_000;
+      const now = Date.now();
+      for (const [catId, sprite] of this.catSprites.entries()) {
+        const cat = this.state.cats.find((c) => c.id === catId);
+        if (!cat || cat.stage !== 'adult') { sprite.setBreedReady(false); continue; }
+        // Find any other adult in same area to pair with
+        const hasPartner = this.state.cats.some(
+          (c) => c.id !== catId && c.stage === 'adult' && c.area === cat.area
+        );
+        if (!hasPartner) { sprite.setBreedReady(false); continue; }
+        // Check if this cat's cooldown (keyed by any pair it's in) has expired
+        const onCooldown = Object.entries(this.state.breedingCooldowns).some(([key, ts]) => {
+          return key.includes(catId) && now - ts < BREED_COOLDOWN_MS;
+        });
+        sprite.setBreedReady(!onCooldown);
+      }
     }
   }
+
 
 
   private updateAmbientAtmosphere(deltaSeconds: number): void {
