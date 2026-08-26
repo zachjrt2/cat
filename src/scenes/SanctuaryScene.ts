@@ -446,7 +446,8 @@ export class SanctuaryScene extends Phaser.Scene {
     g.beginPath();
     g.moveTo(bounds.left + 16, fairyY);
     for (let fx = bounds.left + 16; fx < bounds.right - 16; fx += 32) {
-      g.quadraticCurveTo(fx + 16, fairyY + 8, fx + 32, fairyY);
+      g.lineTo(fx + 16, fairyY + 6);
+      g.lineTo(fx + 32, fairyY);
     }
     g.strokePath();
 

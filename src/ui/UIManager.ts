@@ -939,16 +939,6 @@ export class UIManager {
     backdrop.appendChild(modal);
     this.root.appendChild(backdrop);
   }
-
-  private createBackdrop(): HTMLElement {
-    this.root.querySelectorAll('.modal-backdrop').forEach((el) => el.remove());
-    const backdrop = document.createElement('div');
-    backdrop.className = 'modal-backdrop';
-    backdrop.addEventListener('click', (e) => {
-      if (e.target === backdrop) backdrop.remove();
-    });
-    return backdrop;
-  }
 }
 
 function cap(s: string): string {
