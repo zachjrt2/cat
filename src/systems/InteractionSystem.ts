@@ -20,6 +20,30 @@ export class InteractionSystem {
   ) {}
 
   applyTool(cat: Cat, tool: ToolType): InteractionResult {
+    let currentVal = 0;
+    switch (tool) {
+      case 'food':
+        currentVal = cat.hunger;
+        break;
+      case 'pet':
+        currentVal = cat.affection;
+        break;
+      case 'brush':
+        currentVal = cat.cleanliness;
+        break;
+      case 'toy':
+        currentVal = cat.fun;
+        break;
+      case 'wash':
+        currentVal = cat.cleanliness;
+        break;
+    }
+
+    // If the cat's need is already satisfied (>= 95%), do not award points
+    if (currentVal >= 95) {
+      return { loveEarned: 0, message: this.alreadySatisfiedMessageFor(cat, tool) };
+    }
+
     switch (tool) {
       case 'food':
         cat.hunger = Math.min(100, cat.hunger + NEED_RESTORE_AMOUNT);
@@ -44,6 +68,21 @@ export class InteractionSystem {
     this.journal.recordInteraction(cat, tool);
 
     return { loveEarned, message: this.messageFor(cat, tool) };
+  }
+
+  private alreadySatisfiedMessageFor(cat: Cat, tool: ToolType): string {
+    switch (tool) {
+      case 'food':
+        return `${cat.name} is already full!`;
+      case 'pet':
+        return `${cat.name} is feeling well loved!`;
+      case 'brush':
+        return `${cat.name} is already nicely brushed!`;
+      case 'toy':
+        return `${cat.name} is already happily entertained!`;
+      case 'wash':
+        return `${cat.name} is already squeaky clean!`;
+    }
   }
 
   private messageFor(cat: Cat, tool: ToolType): string {

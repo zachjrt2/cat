@@ -48,7 +48,6 @@ export class SanctuaryScene extends Phaser.Scene {
   private currentArea: CatArea = 'yard';
   private catSprites = new Map<string, CatSprite>();
   private selectedTool: ToolType | null = null;
-  private isPointerDown = false;
   private lastTick = 0;
   private relationshipTickAccum = 0;
   private animTimer = 0;
@@ -68,7 +67,6 @@ export class SanctuaryScene extends Phaser.Scene {
     this.initWeatherAndLighting();
     this.drawCurrentArea();
     this.spawnCatsInCurrentArea();
-    this.bindInput();
     this.bindUiEvents();
 
     this.lastTick = this.time.now;
@@ -1069,23 +1067,7 @@ export class SanctuaryScene extends Phaser.Scene {
       this.onCatTapped(cat, sprite);
     });
 
-    sprite.on('pointermove', () => {
-      if (this.isPointerDown && this.selectedTool && sprite.canInteract(this.time.now)) {
-        this.interactWithCat(cat, sprite, this.selectedTool);
-      }
-    });
-
     this.catSprites.set(cat.id, sprite);
-  }
-
-  private bindInput(): void {
-    this.input.on('pointerdown', () => {
-      this.isPointerDown = true;
-    });
-
-    this.input.on('pointerup', () => {
-      this.isPointerDown = false;
-    });
   }
 
   private bindUiEvents(): void {
@@ -1162,17 +1144,16 @@ export class SanctuaryScene extends Phaser.Scene {
           // Cat in another area
           const result = this.interactions.applyTool(cat, tool);
           this.state.totalLoveEarned += result.loveEarned;
-          if (tool === 'pet') this.state.totalPetsGiven++;
-          this.growth.addGrowth(cat, 10);
-          EventBus.emit('toast', { message: `${result.message} (+${result.loveEarned} 💗)` });
+          if (tool === 'pet' && result.loveEarned > 0) this.state.totalPetsGiven++;
+          if (result.loveEarned > 0) this.growth.addGrowth(cat, 10);
+          const toastMsg = result.loveEarned > 0
+            ? `${result.message} (+${result.loveEarned} 💗)`
+            : result.message;
+          EventBus.emit('toast', { message: toastMsg });
           EventBus.emit('love-changed', { love: this.love.love });
           this.notifyUiState();
         }
       }
-    });
-
-    EventBus.on('care-all-in-area', () => {
-      this.careAllInCurrentArea();
     });
   }
 
@@ -1347,68 +1328,47 @@ export class SanctuaryScene extends Phaser.Scene {
     const result = this.interactions.applyTool(cat, tool);
     this.state.totalLoveEarned += result.loveEarned;
 
-    if (tool === 'pet') {
+    if (tool === 'pet' && result.loveEarned > 0) {
       this.state.totalPetsGiven++;
     }
 
-    // Direct care advances life stage growth
-    const evo = this.growth.addGrowth(cat, 10);
-    if (evo) {
-      sprite.refreshVisuals();
+    // Direct care advances life stage growth only when need was satisfied
+    if (result.loveEarned > 0) {
+      const evo = this.growth.addGrowth(cat, 10);
+      if (evo) {
+        sprite.refreshVisuals();
+      }
     }
 
     switch (tool) {
       case 'food':
         sound.playCrunch();
-        sprite.showEmote('🐟');
+        sprite.showEmote(result.loveEarned > 0 ? '🐟' : '😋');
         break;
       case 'pet':
         sound.playPurr();
-        sprite.showEmote('❤️');
+        sprite.showEmote(result.loveEarned > 0 ? '❤️' : '🥰');
         break;
       case 'brush':
         sound.playSparkle();
-        sprite.showEmote('✨');
+        sprite.showEmote(result.loveEarned > 0 ? '✨' : '😸');
         break;
       case 'toy':
         sound.playMeow(cat.stage === 'kitten' ? 4 : 2);
-        sprite.showEmote('🧶');
+        sprite.showEmote(result.loveEarned > 0 ? '🧶' : '🎉');
         break;
       case 'wash':
         sound.playBubble();
-        sprite.showEmote('🫧');
+        sprite.showEmote(result.loveEarned > 0 ? '🫧' : '✨');
         break;
     }
 
     sprite.refreshVisuals();
 
-    EventBus.emit('toast', { message: `${result.message} (+${result.loveEarned} 💗)` });
-    EventBus.emit('love-changed', { love: this.love.love });
-    this.notifyUiState();
-  }
-
-  private careAllInCurrentArea(): void {
-    const areaCats = this.state.cats.filter((c) => c.area === this.currentArea);
-    if (areaCats.length === 0) return;
-
-    let totalLove = 0;
-    for (const cat of areaCats) {
-      const res = this.interactions.applyTool(cat, 'food');
-      this.interactions.applyTool(cat, 'pet');
-      this.interactions.applyTool(cat, 'brush');
-      totalLove += res.loveEarned * 2;
-      this.growth.addGrowth(cat, 15);
-
-      const sp = this.catSprites.get(cat.id);
-      if (sp) {
-        sp.showEmote('💖');
-        sp.refreshVisuals();
-      }
-    }
-
-    sound.playAdoptFanfare();
-    this.state.totalLoveEarned += totalLove;
-    EventBus.emit('toast', { message: `🌟 Caring for all cats in ${AREA_INFO_MAP[this.currentArea].label}! (+${totalLove} 💗)` });
+    const toastMsg = result.loveEarned > 0
+      ? `${result.message} (+${result.loveEarned} 💗)`
+      : result.message;
+    EventBus.emit('toast', { message: toastMsg });
     EventBus.emit('love-changed', { love: this.love.love });
     this.notifyUiState();
   }
@@ -1489,6 +1449,7 @@ export class SanctuaryScene extends Phaser.Scene {
       const sp = this.catSprites.get(evo.cat.id);
       if (sp) sp.refreshVisuals();
     }
+
 
     // Passive Love Generation
     let loveGained = this.love.tickPassiveLove(deltaMinutes);
@@ -1656,6 +1617,27 @@ export class SanctuaryScene extends Phaser.Scene {
         }
       }
     }
+
+    // Cats that are playing in the same area build friendship from shared play
+    const playing = this.state.cats.filter((c) => c.animationState === 'play');
+    for (let i = 0; i < playing.length; i++) {
+      for (let j = i + 1; j < playing.length; j++) {
+        if (playing[i].area === playing[j].area) {
+          this.relationships.play(playing[i], playing[j]);
+        }
+      }
+    }
+
+    // Cats eating (hunger recently refreshed, hunger > 80) build rapport from shared meals
+    const eating = this.state.cats.filter((c) => c.hunger > 80 && c.animationState !== 'sleep');
+    for (let i = 0; i < eating.length; i++) {
+      for (let j = i + 1; j < eating.length; j++) {
+        if (eating[i].area === eating[j].area && Math.random() < 0.3) {
+          this.relationships.eat(eating[i], eating[j]);
+        }
+      }
+    }
+
     this.relationships.updateAllBestFriends();
 
     const events = this.events_.tick(periodSeconds);
@@ -1667,3 +1649,4 @@ export class SanctuaryScene extends Phaser.Scene {
     }
   }
 }
+

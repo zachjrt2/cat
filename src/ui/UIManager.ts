@@ -166,19 +166,6 @@ export class UIManager {
       bar.appendChild(btn);
     }
 
-    // Care All in Area Quick Action
-    const careAllBtn = document.createElement('button');
-    careAllBtn.className = 'tool-btn care-all-btn';
-    careAllBtn.title = 'Nourish & care for all cats in this area at once!';
-    careAllBtn.innerHTML = `<span class="tool-icon">🌟</span><span>Care All</span>`;
-    careAllBtn.addEventListener('click', () => {
-      sound.playTap();
-      careAllBtn.classList.add('pulse-pop');
-      setTimeout(() => careAllBtn.classList.remove('pulse-pop'), 300);
-      EventBus.emit('care-all-in-area', {});
-    });
-    bar.appendChild(careAllBtn);
-
     this.root.appendChild(bar);
   }
 
@@ -271,9 +258,6 @@ export class UIManager {
     EventBus.on('toast', ({ message }: { message: string }) => this.showToast(message));
 
     EventBus.on('cat-info', ({ cat }: { cat: Cat }) => this.openJournal(cat));
-    EventBus.on('journal-data', ({ cat, areas }: { cat: Cat; areas: Record<CatArea, SanctuaryArea> }) => {
-      this.renderJournal(cat, areas);
-    });
 
     EventBus.on('offline-summary', (summary: { minutesAway: number; loveEarned: number; headlines: string[] }) => {
       this.showOfflineSummary(summary);
@@ -298,7 +282,9 @@ export class UIManager {
   }
 
   private openJournal(cat: Cat): void {
-    EventBus.emit('journal-requested', { catId: cat.id });
+    // Use the freshest copy of the cat from cached state (needs/happiness may have ticked)
+    const freshCat = this.catsList.find((c) => c.id === cat.id) ?? cat;
+    this.renderJournal(freshCat, this.areasState);
   }
 
   private renderJournal(cat: Cat, areas?: Record<CatArea, SanctuaryArea>): void {
@@ -344,18 +330,34 @@ export class UIManager {
           ? 'Growing into Adult'
           : 'Fully Grown';
 
+    const growthPaused = cat.happiness < 30;
+    const growthNearFull = cat.growthProgress >= 85;
+    const growthPct = Math.round(cat.growthProgress);
+
     const growthHtml =
       cat.stage === 'adult'
         ? `<div class="growth-box"><span class="stage-tag-badge adult-badge">👑 Fully Grown Adult</span></div>`
         : `
-          <div class="growth-box">
+          <div class="growth-box growth-box-featured">
             <div class="growth-label-row">
               <span class="stage-tag-badge">${stageLabel}</span>
-              <span class="growth-next-text">${nextStageText} (${Math.round(cat.growthProgress)}%)</span>
+              <span class="growth-next-text">${nextStageText}</span>
             </div>
-            <div class="progress-track"><div class="progress-fill fill-growth" style="width: ${cat.growthProgress}%"></div></div>
+            <div class="growth-track-wrap">
+              <div class="progress-track growth-track">
+                <div class="progress-fill fill-growth${growthNearFull ? ' fill-growth-near' : ''}" style="width: ${cat.growthProgress}%"></div>
+              </div>
+              <span class="growth-pct${growthNearFull ? ' growth-pct-near' : ''}">${growthPct}%</span>
+            </div>
+            ${growthPaused
+              ? `<div class="growth-status growth-paused">⏸ Growth paused — keep needs met to continue growing!</div>`
+              : growthNearFull
+                ? `<div class="growth-status growth-ready">✨ Almost there! Keep caring and ${cat.name} will grow soon.</div>`
+                : `<div class="growth-status growth-tip">💡 Keep ${cat.name} happy and well-cared-for to help them grow.</div>`
+            }
           </div>
         `;
+
 
     modal.innerHTML = `
       <div class="journal-header">

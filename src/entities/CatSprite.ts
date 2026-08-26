@@ -3,7 +3,16 @@ import type { Cat, LifeStage, ToolType } from '../data/types';
 import { shouldFallAsleep, shouldWakeUp } from '../systems/NeedsSystem';
 
 const BASE_SPRITE_SCALE = 2.2;
-const HIT_RADIUS = 38;
+
+/** Per-stage hit radius in PIXELS (unscaled — the sprite handles its own scale). */
+function getHitRadius(stage?: LifeStage): number {
+  switch (stage) {
+    case 'kitten': return 18;
+    case 'teen':   return 24;
+    case 'adult':
+    default:       return 30;
+  }
+}
 
 function getScaleForStage(stage?: LifeStage): number {
   switch (stage) {
@@ -37,12 +46,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private dirtGfx: Phaser.GameObjects.Graphics;
   private hoverGfx: Phaser.GameObjects.Graphics;
 
-  // Real-time Tool Need Indicator
+  // Real-time Tool Need Mini Bar Indicator
   private needIndicatorContainer: Phaser.GameObjects.Container;
-  private needIndicatorBg: Phaser.GameObjects.Graphics;
-  private needIndicatorText: Phaser.GameObjects.Text;
+  private needIndicatorGfx: Phaser.GameObjects.Graphics;
   private needPulseTween: Phaser.Tweens.Tween | null = null;
   private currentSelectedTool: ToolType | null = null;
+
+
 
   private currentDirection = 0; // default facing South / front towards camera
   private wanderTarget: Phaser.Math.Vector2 | null = null;
@@ -147,29 +157,26 @@ export class CatSprite extends Phaser.GameObjects.Container {
     }).setOrigin(0.5, 1).setAlpha(0);
     this.add(this.sleepZzz);
 
-    // 9. Floating Need Bubble Indicator for Selected Tool
-    this.needIndicatorContainer = scene.add.container(0, -32 * (scale / BASE_SPRITE_SCALE));
+    // 9. Floating Need Mini Bar Indicator for Selected Tool (No text, sleek bar)
+    this.needIndicatorContainer = scene.add.container(0, -22 * (scale / BASE_SPRITE_SCALE));
     this.needIndicatorContainer.setAlpha(0);
 
-    this.needIndicatorBg = scene.add.graphics();
-    this.needIndicatorContainer.add(this.needIndicatorBg);
-
-    this.needIndicatorText = scene.add.text(0, 0, '', {
-      fontFamily: '"Nunito", "Segoe UI", sans-serif',
-      fontSize: '11px',
-      fontStyle: 'bold',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0.5);
-    this.needIndicatorContainer.add(this.needIndicatorText);
+    this.needIndicatorGfx = scene.add.graphics();
+    this.needIndicatorContainer.add(this.needIndicatorGfx);
 
     this.add(this.needIndicatorContainer);
 
-    // Setup bounds and comfortable interaction area
-    this.setSize(HIT_RADIUS * 2, HIT_RADIUS * 2);
-    this.setInteractive(
-      new Phaser.Geom.Circle(0, 4, HIT_RADIUS),
+    // Make the base sprite interactive — avoids Container coordinate-transform quirks.
+    // Pointer events are forwarded up to the Container so scene code works unchanged.
+    const hitR = getHitRadius(cat.stage);
+    this.baseSprite.setInteractive(
+      new Phaser.Geom.Circle(0, 0, hitR),
       Phaser.Geom.Circle.Contains,
     );
+
+    this.baseSprite.on('pointerover', () => this.emit('pointerover'));
+    this.baseSprite.on('pointerout',  () => this.emit('pointerout'));
+    this.baseSprite.on('pointerdown', (ptr: Phaser.Input.Pointer) => this.emit('pointerdown', ptr));
 
     // Hover visual feedback
     this.on('pointerover', () => {
@@ -190,12 +197,11 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private drawHoverRing(isHovered: boolean): void {
     this.hoverGfx.clear();
     if (isHovered || this.currentSelectedTool) {
-      const scale = getScaleForStage(this.cat.stage);
-      const r = HIT_RADIUS * (scale / BASE_SPRITE_SCALE);
+      const r = getHitRadius(this.cat.stage);
       this.hoverGfx.lineStyle(2, 0xff758f, isHovered ? 0.9 : 0.4);
-      this.hoverGfx.strokeCircle(0, 4, r);
+      this.hoverGfx.strokeCircle(0, 0, r);
       this.hoverGfx.fillStyle(0xff758f, isHovered ? 0.12 : 0.04);
-      this.hoverGfx.fillCircle(0, 4, r);
+      this.hoverGfx.fillCircle(0, 0, r);
       this.hoverGfx.setAlpha(1);
     } else {
       this.hoverGfx.setAlpha(0);
@@ -212,7 +218,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   /**
-   * Updates the Need Bubble badge based on current needs and selected tool
+   * Updates the Need Mini Bar based on current needs and selected tool
    */
   updateNeedIndicator(): void {
     if (!this.currentSelectedTool) {
@@ -231,117 +237,60 @@ export class CatSprite extends Phaser.GameObjects.Container {
       return;
     }
 
-    let badgeText = '';
-    let bgColor = 0x4d3827;
-    let borderColor = 0xffffff;
-    let isUrgent = false;
-
+    let val = 100;
     switch (this.currentSelectedTool) {
-      case 'food': {
-        const val = Math.round(this.cat.hunger);
-        if (val < 50) {
-          badgeText = `🥣 Hungry (${val}%)`;
-          bgColor = 0xe63946;
-          borderColor = 0xffb4a2;
-          isUrgent = true;
-        } else if (val < 85) {
-          badgeText = `🐟 ${val}%`;
-          bgColor = 0xf4a261;
-          borderColor = 0xffe8d6;
-        } else {
-          badgeText = `😋 Full (${val}%)`;
-          bgColor = 0x52b788;
-          borderColor = 0xd8f3dc;
-        }
+      case 'food':
+        val = this.cat.hunger;
         break;
-      }
-      case 'pet': {
-        const val = Math.round(this.cat.affection);
-        if (val < 50) {
-          badgeText = `💖 Wants Pet (${val}%)`;
-          bgColor = 0xd81159;
-          borderColor = 0xffcbf2;
-          isUrgent = true;
-        } else if (val < 85) {
-          badgeText = `❤️ ${val}%`;
-          bgColor = 0xff758f;
-          borderColor = 0xffe5ec;
-        } else {
-          badgeText = `😻 Adored (${val}%)`;
-          bgColor = 0x8338ec;
-          borderColor = 0xe0aaff;
-        }
+      case 'pet':
+        val = this.cat.affection;
         break;
-      }
-      case 'brush': {
-        const val = Math.round(this.cat.cleanliness);
-        if (val < 50) {
-          badgeText = `✨ Brush Me (${val}%)`;
-          bgColor = 0xd97706;
-          borderColor = 0xfde68a;
-          isUrgent = true;
-        } else if (val < 85) {
-          badgeText = `🪮 ${val}%`;
-          bgColor = 0x10b981;
-          borderColor = 0xa7f3d0;
-        } else {
-          badgeText = `✨ Sleek (${val}%)`;
-          bgColor = 0x06b6d4;
-          borderColor = 0xcffafe;
-        }
+      case 'brush':
+        val = this.cat.cleanliness;
         break;
-      }
-      case 'toy': {
-        const val = Math.round(this.cat.fun);
-        if (val < 50) {
-          badgeText = `🧶 Bored (${val}%)`;
-          bgColor = 0xca8a04;
-          borderColor = 0xfef08a;
-          isUrgent = true;
-        } else if (val < 85) {
-          badgeText = `🎾 ${val}%`;
-          bgColor = 0xeab308;
-          borderColor = 0xfef9c3;
-        } else {
-          badgeText = `🎉 Playful (${val}%)`;
-          bgColor = 0x9333ea;
-          borderColor = 0xf3e8ff;
-        }
+      case 'toy':
+        val = this.cat.fun;
         break;
-      }
-      case 'wash': {
-        const val = Math.round(this.cat.cleanliness);
-        if (val < 45) {
-          badgeText = `🫧 Needs Bath (${val}%)`;
-          bgColor = 0x0284c7;
-          borderColor = 0xbae6fd;
-          isUrgent = true;
-        } else {
-          badgeText = `✨ Clean (${val}%)`;
-          bgColor = 0x14b8a6;
-          borderColor = 0xccfbf1;
-        }
+      case 'wash':
+        val = this.cat.cleanliness;
         break;
-      }
     }
 
-    this.needIndicatorText.setText(badgeText);
-    const textBounds = this.needIndicatorText.getBounds();
-    const padX = 8;
-    const padY = 4;
-    const w = Math.max(48, textBounds.width + padX * 2);
-    const h = Math.max(20, textBounds.height + padY * 2);
+    const pct = Math.max(0, Math.min(100, val)) / 100;
+    const barWidth = 28;
+    const barHeight = 5;
+    const radius = 2.5;
 
-    this.needIndicatorBg.clear();
-    // Shadow
-    this.needIndicatorBg.fillStyle(0x000000, 0.25);
-    this.needIndicatorBg.fillRoundedRect(-w / 2 + 1, -h / 2 + 2, w, h, 10);
-    // Background
-    this.needIndicatorBg.fillStyle(bgColor, 0.95);
-    this.needIndicatorBg.fillRoundedRect(-w / 2, -h / 2, w, h, 10);
-    // Border
-    this.needIndicatorBg.lineStyle(1.5, borderColor, 0.95);
-    this.needIndicatorBg.strokeRoundedRect(-w / 2, -h / 2, w, h, 10);
+    let fillColor = 0x10b981; // Green
+    let isUrgent = false;
+
+    if (val < 40) {
+      fillColor = 0xef4444; // Coral Red
+      isUrgent = true;
+    } else if (val < 75) {
+      fillColor = 0xf59e0b; // Warm Amber
+    }
+
+    this.needIndicatorGfx.clear();
+
+    // Drop shadow
+    this.needIndicatorGfx.fillStyle(0x000000, 0.35);
+    this.needIndicatorGfx.fillRoundedRect(-barWidth / 2, -barHeight / 2 + 1, barWidth, barHeight, radius);
+
+    // Dark track background
+    this.needIndicatorGfx.fillStyle(0x1a1a24, 0.82);
+    this.needIndicatorGfx.fillRoundedRect(-barWidth / 2, -barHeight / 2, barWidth, barHeight, radius);
+
+    // Track border
+    this.needIndicatorGfx.lineStyle(1, 0xffffff, 0.35);
+    this.needIndicatorGfx.strokeRoundedRect(-barWidth / 2, -barHeight / 2, barWidth, barHeight, radius);
+
+    // Inner progress fill
+    const innerW = (barWidth - 2) * pct;
+    if (innerW > 1) {
+      this.needIndicatorGfx.fillStyle(fillColor, 0.95);
+      this.needIndicatorGfx.fillRoundedRect(-barWidth / 2 + 1, -barHeight / 2 + 1, innerW, barHeight - 2, 1.5);
+    }
 
     // Show indicator
     this.scene.tweens.add({
@@ -349,16 +298,16 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 1,
       scaleX: 1,
       scaleY: 1,
-      duration: 200,
-      ease: 'Back.easeOut',
+      duration: 180,
+      ease: 'Quad.easeOut',
     });
 
     if (isUrgent && !this.needPulseTween) {
       this.needPulseTween = this.scene.tweens.add({
         targets: this.needIndicatorContainer,
-        scaleX: 1.14,
-        scaleY: 1.14,
-        duration: 450,
+        scaleX: 1.15,
+        scaleY: 1.15,
+        duration: 500,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
@@ -468,6 +417,25 @@ export class CatSprite extends Phaser.GameObjects.Container {
       return;
     }
 
+    // If currently playing, count down the play timer instead of wandering
+    if (this.cat.animationState === 'play') {
+      this.wanderTimer -= dt;
+      if (this.wanderTimer <= 0) {
+        // Transition out of play into a calm idle state
+        const roll = Math.random();
+        if (roll < 0.5) {
+          this.cat.animationState = 'sit';
+        } else if (roll < 0.8) {
+          this.cat.animationState = 'look';
+        } else {
+          this.cat.animationState = 'lay';
+        }
+        this.wanderTimer = 2.0 + Math.random() * 2.5;
+        this.playCurrentAnimation();
+      }
+      return;
+    }
+
     // Wander timer
     this.wanderTimer -= dt;
     if (this.wanderTimer <= 0) {
@@ -489,16 +457,33 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
       if (dist < 6) {
         this.wanderTarget = null;
-        // Randomize idle state
+        // Randomize idle state on arrival — all 4 idles weighted appropriately
+        const isMischievous = this.cat.majorTrait === 'mischievous' || this.cat.minorTrait === 'mischievous';
+        const isCuddler = this.cat.majorTrait === 'cuddler' || this.cat.minorTrait === 'cuddler';
+        const hasFun = this.cat.fun > 60;
+
+        // Spontaneous play chance when fun is high or personality traits suggest it
+        const playchance = (isMischievous ? 0.25 : 0) + (isKitten ? 0.2 : isTeen ? 0.1 : 0) + (hasFun ? 0.12 : 0);
         const roll = Math.random();
-        if (roll < 0.4) {
+
+        if (roll < playchance) {
+          this.cat.animationState = 'play';
+          this.wanderTimer = 1.8 + Math.random() * 2.0; // play for 1.8–3.8s
+        } else if (roll < playchance + 0.32) {
           this.cat.animationState = 'sit';
-        } else if (roll < 0.75) {
+          this.wanderTimer = (isKitten ? 2 : 3) + Math.random() * 3.5;
+        } else if (roll < playchance + 0.58) {
           this.cat.animationState = 'look';
-        } else {
+          this.wanderTimer = 2.0 + Math.random() * 3.0;
+        } else if (roll < playchance + 0.8) {
+          // lay — cats that are calm/cuddler/lazy rest more
           this.cat.animationState = 'lay';
+          const layBonus = isCuddler || this.cat.majorTrait === 'lazy' || this.cat.minorTrait === 'lazy' ? 1.5 : 1.0;
+          this.wanderTimer = (2.5 + Math.random() * 3.0) * layBonus;
+        } else {
+          this.cat.animationState = 'sit';
+          this.wanderTimer = (isKitten ? 2 : 3) + Math.random() * 2.0;
         }
-        this.wanderTimer = (isKitten ? 2 : 3) + Math.random() * 3.5;
         this.playCurrentAnimation();
       } else {
         const stepX = (dx / dist) * speed;
@@ -523,11 +508,37 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private pickNewWanderTarget(): void {
     const isKitten = this.cat.stage === 'kitten';
     const isTeen = this.cat.stage === 'teen';
+    const isMischievous = this.cat.majorTrait === 'mischievous' || this.cat.minorTrait === 'mischievous';
+    const isCuddler = this.cat.majorTrait === 'cuddler' || this.cat.minorTrait === 'cuddler';
 
-    const idleChance = isKitten ? 0.25 : 0.38;
+    // Spontaneous play burst for mischievous cats / kittens when fun is decent
+    const funBoost = this.cat.fun > 50;
+    const spontaneousPlay = (isMischievous && funBoost && Math.random() < 0.2)
+      || (isKitten && funBoost && Math.random() < 0.15);
+
+    if (spontaneousPlay) {
+      this.wanderTarget = null;
+      this.cat.animationState = 'play';
+      this.wanderTimer = 1.5 + Math.random() * 2.5;
+      this.playCurrentAnimation();
+      return;
+    }
+
+    // Idle chance: weighted to include lay for cuddler/lazy cats
+    const idleChance = isKitten ? 0.22 : 0.38;
     if (Math.random() < idleChance) {
       this.wanderTarget = null;
-      this.cat.animationState = Math.random() < 0.6 ? 'sit' : 'look';
+
+      const lazyIdle = isCuddler || this.cat.majorTrait === 'lazy' || this.cat.minorTrait === 'lazy';
+      const r = Math.random();
+      if (r < 0.45) {
+        this.cat.animationState = 'sit';
+      } else if (r < 0.75) {
+        this.cat.animationState = 'look';
+      } else {
+        // lay is now reachable here too — more likely for lazy/cuddler cats
+        this.cat.animationState = lazyIdle && Math.random() < 0.6 ? 'lay' : 'sit';
+      }
       this.wanderTimer = 2.0 + Math.random() * 3.0;
       this.playCurrentAnimation();
       return;
@@ -550,6 +561,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
     this.wanderTimer = 6.5;
     this.playCurrentAnimation();
   }
+
 
   setAreaBounds(bounds: Phaser.Geom.Rectangle): void {
     this.bounds = bounds;

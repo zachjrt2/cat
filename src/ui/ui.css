@@ -881,7 +881,8 @@ html, body {
 .fill-affection { background: #ff758f; }
 .fill-fun { background: #9d4edd; }
 .fill-energy { background: #52b788; }
-.fill-growth { background: linear-gradient(90deg, #52b788, #40916c); }
+.fill-growth { background: linear-gradient(90deg, #38bdf8, #818cf8); }
+.fill-growth-near { background: linear-gradient(90deg, #a78bfa, #e879f9); }
 
 /* Life Stage & Growth Bar Styles */
 .growth-box {
@@ -895,10 +896,47 @@ html, body {
   gap: 6px;
 }
 
+.growth-box-featured {
+  background: linear-gradient(135deg, #f0f9ff 0%, #faf5ff 100%);
+  border: 1.5px solid #c7d2fe;
+  padding: 12px 14px;
+}
+
 .growth-label-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.growth-track-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.growth-track {
+  flex: 1;
+  height: 10px !important;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.08) !important;
+}
+
+.growth-track .progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s ease;
+}
+
+.growth-pct {
+  font-size: 12px;
+  font-weight: 800;
+  color: #6366f1;
+  min-width: 34px;
+  text-align: right;
+}
+
+.growth-pct-near {
+  color: #a21caf;
 }
 
 .stage-tag-badge {
@@ -922,6 +960,33 @@ html, body {
   font-weight: 700;
   color: var(--brown-light);
 }
+
+.growth-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 8px;
+  line-height: 1.4;
+}
+
+.growth-paused {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.growth-ready {
+  background: #f3e8ff;
+  color: #7e22ce;
+  border: 1px solid #e9d5ff;
+}
+
+.growth-tip {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
 
 .roster-title-row {
   display: flex;
@@ -1148,21 +1213,6 @@ html, body {
 .quick-wash:hover {
   background: #e0f2fe;
   border-color: #0284c7;
-}
-
-/* Care All button in toolbar */
-.care-all-btn {
-  background: #fff8e1;
-  border-color: rgba(255, 183, 3, 0.4);
-}
-
-.care-all-btn:hover {
-  background: #ffecb3;
-  border-color: #ffb703;
-}
-
-.care-all-btn .tool-icon {
-  font-size: 20px;
 }
 
 /* Pop bounce animation */
