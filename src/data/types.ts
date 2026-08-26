@@ -101,11 +101,25 @@ export interface SanctuaryArea {
   capacity: number;
 }
 
+export type AutomationNeedType = 'food' | 'pet' | 'brush' | 'toy' | 'wash';
+
+export interface AutomationMachineDef {
+  id: string; // e.g. 'yard_feeder'
+  needType: AutomationNeedType;
+  area: CatArea;
+  name: string;
+  description: string;
+  baseCost: number; // Love cost for level 1
+  upgradeCostLvl2: number;
+  upgradeCostLvl3: number;
+  xPercent: number; // 0..1 inside area bounds
+  yPercent: number; // 0..1 inside area bounds
+}
+
 export interface FurnitureItem {
   id: string;
   name: string;
   area: CatArea;
-  emoji: string;
   loveCost: number;
   tokenCost?: number;
   description: string;
@@ -130,12 +144,18 @@ export interface GameState {
   cats: Cat[];
   areas: Record<CatArea, SanctuaryArea>;
   furniture: string[]; // List of owned furniture IDs
+  machines: Record<string, number>; // machineId -> level (1, 2, 3)
+  breedingCooldowns: Record<string, number>; // `${catA.id}:${catB.id}` -> lastBredDay
+  strayArrivalDueAt?: number | null; // Timestamp for stray cat arrival safety net
   milestoneClaimedIds: string[];
   totalPetsGiven: number;
   totalLoveEarned: number;
+  totalRehomedCats: number;
+  totalRehomeLoveEarned: number;
   timeOfDay: TimeOfDay;
   weather: WeatherType;
   day: number;
   lastSavedAt: number;
   createdAt: number;
 }
+

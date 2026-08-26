@@ -16,9 +16,14 @@ export function createNewGameState(): GameState {
     cats: [],
     areas: structuredClone(SANCTUARY_AREAS),
     furniture: [],
+    machines: {},
+    breedingCooldowns: {},
+    strayArrivalDueAt: null,
     milestoneClaimedIds: [],
     totalPetsGiven: 0,
     totalLoveEarned: 0,
+    totalRehomedCats: 0,
+    totalRehomeLoveEarned: 0,
     timeOfDay: 'day',
     weather: 'sunny',
     day: 1,
@@ -46,9 +51,14 @@ export class SaveManager {
       // Migration checks
       if (typeof state.adoptionTokens !== 'number') state.adoptionTokens = 0;
       if (!Array.isArray(state.furniture)) state.furniture = [];
+      if (!state.machines || typeof state.machines !== 'object') state.machines = {};
+      if (!state.breedingCooldowns || typeof state.breedingCooldowns !== 'object') state.breedingCooldowns = {};
+      if (state.strayArrivalDueAt === undefined) state.strayArrivalDueAt = null;
       if (!Array.isArray(state.milestoneClaimedIds)) state.milestoneClaimedIds = [];
       if (typeof state.totalPetsGiven !== 'number') state.totalPetsGiven = 0;
       if (typeof state.totalLoveEarned !== 'number') state.totalLoveEarned = state.love ?? 0;
+      if (typeof state.totalRehomedCats !== 'number') state.totalRehomedCats = 0;
+      if (typeof state.totalRehomeLoveEarned !== 'number') state.totalRehomeLoveEarned = 0;
       if (!state.timeOfDay) state.timeOfDay = 'day';
       if (!state.weather) state.weather = 'sunny';
 
@@ -58,6 +68,7 @@ export class SaveManager {
       return null;
     }
   }
+
 
   exportToFile(state: GameState): void {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });

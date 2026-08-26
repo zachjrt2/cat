@@ -1,6 +1,7 @@
 /**
  * Clean, elegant SVG silhouette icons for Cozy Cat Sanctuary.
  * Scalable, crisp vectors designed for cozy aesthetic and mobile-friendly tap targets.
+ * 100% vector based with zero emoji dependencies for clean rendering.
  */
 
 export const SVG_ICONS = {
@@ -26,7 +27,7 @@ export const SVG_ICONS = {
     <path d="M447.25 113.53c-.697.022-1.397.065-2.125.126C299.132 126.026 155.697 158.49 36.47 223.28c-10.362 5.632-15.204 13.98-16.845 26.345-1.64 12.366.834 28.467 6.72 45.844 11.216 33.12 34.585 70.496 59.374 98.124l17.593-4.72L66.374 251l18.03-4.813 36.94 137.844 21.03-5.655-36.938-137.813 18.032-4.843 36.936 137.81 18.78-5.03-36.905-137.813 18.064-4.843 36.906 137.78 20.28-5.437-36.936-137.78 18.062-4.845 36.906 137.782 21.032-5.656-36.906-137.75 18.03-4.844 36.907 137.75 21.03-5.625-36.905-137.75 18.03-4.845 36.94 137.72 19.53-5.22-36.906-137.72 18.03-4.843 36.907 137.688 22.47-6.03-36.875-137.69 18.063-4.843 36.875 137.688 21-5.625-36.875-137.688L394 163.22l36.875 137.655 20.28-5.438-36.874-137.625 18.033-4.843 36.875 137.624 17.687-4.75c7.676-36.4 9.244-81.307 2.406-116.03-3.586-18.218-9.55-33.498-17.06-43.158-6.574-8.452-13.485-12.827-22.908-13.125-.673-.02-1.365-.02-2.062 0z"/>
   </svg>`,
 
-  // Yarn Ball Toy Silhouette
+  // Yarn Ball / Toy Silhouette
   toy: `<svg viewBox="0 0 168.428 168.428" width="22" height="22" fill="currentColor">
     <path d="M143.764,24.666C127.857,8.76,106.709,0,84.215,0C61.721,0,40.572,8.76,24.667,24.666C8.76,40.571-0.001,61.719,0,84.213 c0.001,22.494,8.762,43.642,24.669,59.549c15.906,15.905,37.054,24.665,59.549,24.665c22.493,0,43.64-8.759,59.544-24.663 c15.906-15.907,24.666-37.056,24.666-59.551C168.429,61.718,159.669,40.57,143.764,24.666z M35.275,133.156 C22.201,120.082,15,102.701,15,84.213c0-3.59,0.279-7.137,0.813-10.62c4.571,1.468,9.295,2.21,14.005,2.21 c11.892,0,23.668-4.61,32.524-13.466c12.062-12.063,31.691-12.062,43.754,0.003c12.061,12.06,12.059,31.685-0.003,43.747 c-12.364,12.363-16.445,30.416-11.269,46.531c-3.479,0.532-7.021,0.81-10.606,0.81C65.729,153.428,48.348,146.228,35.275,133.156z M133.154,133.158c-6.89,6.89-14.984,12.129-23.8,15.562c-3.832-11.023-1.164-23.52,7.344-32.026 c17.911-17.91,17.913-47.051,0.005-64.961C98.789,33.821,69.646,33.819,51.734,51.73c-8.507,8.507-21.005,11.177-32.026,7.345 c3.434-8.816,8.674-16.912,15.565-23.803C48.346,22.2,65.728,15,84.215,15c18.488,0,35.869,7.2,48.942,20.273 c13.072,13.071,20.271,30.451,20.27,48.94C153.428,102.702,146.228,120.084,133.154,133.158z"/>
   </svg>`,
@@ -37,8 +38,14 @@ export const SVG_ICONS = {
     <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12h1m16 0v0a1 1 0 0 0 1-1V7c0-1-.6-3-3-3s-3 2-3 3m5 5v2c0 1.138-.583 3.248-2.745 3.841M20 12H4m0 0v2c0 1.138.583 3.248 2.745 3.841M6 20l.745-2.159m0 0c.37.102.787.159 1.255.159h8a4.71 4.71 0 0 0 1.255-.159M18 20l-.745-2.159M15 7h-2m2 0h2"/>
   </svg>`,
 
+
+  // Energy / Lightning Bolt Silhouette
+  energy: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M11 21h-1l1-7H7.5c-.88 0-1.33-1.07-.71-1.69L14 3h1l-1 7h3.5c.88 0 1.33 1.07.71 1.69L11 21z"/>
+  </svg>`,
+
   // Cat Paw Silhouette
-  paw: `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+  paw: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
     <ellipse cx="12" cy="15.5" rx="5.5" ry="4.5"/>
     <ellipse cx="6" cy="9.5" rx="2.2" ry="3"/>
     <ellipse cx="10" cy="6" rx="2.2" ry="3"/>
@@ -51,25 +58,95 @@ export const SVG_ICONS = {
     <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
   </svg>`,
 
+  // Adoption Star Token Silhouette
+  star: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+  </svg>`,
+
+  // Magic Sparkle / Rare Silhouette
+  sparkle: `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+    <path d="M12 2L9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z"/>
+  </svg>`,
+
   // Shop / Awning Silhouette
   shop: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
     <path d="M20 4H4v2h16V4zm1 10v-2l-1-5H4l-1 5v2c0 .55.45 1 1 1v5c0 .55.45 1 1 1h14c.55 0 1-.45 1-1v-5c.55 0 1-.45 1-1zM6 18v-4h12v4H6z"/>
   </svg>`,
 
+  // Loving Home / Rehome Heart-House Silhouette
+  lovingHome: `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z"/>
+    <path d="M12 8.5c-.7 0-1.3.4-1.6.9-.3-.5-.9-.9-1.6-.9-1 0-1.8.8-1.8 1.8 0 1.2 1.5 2.5 3.4 3.7 1.9-1.2 3.4-2.5 3.4-3.7 0-1-.8-1.8-1.8-1.8z" fill="#ff758f"/>
+  </svg>`,
+
+  // Info / Roster Silhouette
+  info: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+  </svg>`,
+
+  // Carousel Left Arrow
+  arrowLeft: `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+  </svg>`,
+
+  // Carousel Right Arrow
+  arrowRight: `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+  </svg>`,
+
+  // Close X
+  close: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+  </svg>`,
+
+  // Time of Day Icons
+  morning: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M12 4.5a7.5 7.5 0 0 0-7.44 6.5H2v2h2.56a7.5 7.5 0 0 0 14.88 0H22v-2h-2.56A7.5 7.5 0 0 0 12 4.5zm0 13a5.5 5.5 0 0 1-5.46-5h10.92a5.5 5.5 0 0 1-5.46 5zM4.93 5.93l1.41 1.41-1.06 1.06-1.41-1.41 1.06-1.06zm14.14 0l1.06 1.06-1.41 1.41-1.06-1.06 1.41-1.41zM11 1v3h2V1h-2zM2 20h20v2H2v-2z"/>
+  </svg>`,
+
+  day: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <circle cx="12" cy="12" r="5"/>
+    <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>`,
+
+  sunset: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M12 15a6 6 0 0 0 5.9-5H6.1a6 6 0 0 0 5.9 5zm0-10a1 1 0 0 0 1-1V2a1 1 0 0 0-2 0v2a1 1 0 0 0 1 1zm-7.07 2.07a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-1.41-1.41a1 1 0 0 0-1.41 1.41l1.41 1.41zm14.14 0l1.41-1.41a1 1 0 0 0-1.41-1.41l-1.41 1.41a1 1 0 0 0 0 1.41 1 1 0 0 0 1.41 0zM2 18h20v2H2v-2zm2 3h16v2H4v-2z"/>
+  </svg>`,
+
+  night: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M12.3 2a10 10 0 0 0 1.9 19.8 10 10 0 0 0 7.8-3.8 1 1 0 0 0-.8-1.6 8 8 0 0 1-8.9-8.9 1 1 0 0 0-1.6-.8A10 10 0 0 0 12.3 2z"/>
+  </svg>`,
+
+  // Weather Icons
+  sunny: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <circle cx="12" cy="12" r="4"/>
+    <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>`,
+
+  rain: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/>
+    <path d="M8 21l-1 2m5-2l-1 2m5-2l-1 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>`,
+
+  snow: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M12 2v20m-10-10h20m-14.14-7.07l14.14 14.14m-14.14 0L19.07 4.93" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>`,
+
   // Area Icons
-  yard: `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+  yard: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
     <path d="M17 6c-3.3 0-6 2.7-6 6 0 .7.1 1.4.4 2H3v2h8.4c.5 1.2 1.4 2.2 2.6 2.7V21h2v-2.1c2.8-.6 5-3.1 5-6.9 0-3.3-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z"/>
   </svg>`,
 
-  shelter: `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+  shelter: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
     <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
   </svg>`,
 
-  sunroom: `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96a.996.996 0 0 0 0-1.41.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36l-1.06 1.06a.996.996 0 0 0 0 1.41c.39.39 1.03.39 1.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.02-.39-1.41 0z"/>
+  sunroom: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <circle cx="12" cy="12" r="4"/>
+    <path d="M12 2v3m0 14v3M4.22 4.22l2.12 2.12m11.32 11.32l2.12 2.12M2 12h3m14 0h3M4.22 19.78l2.12-2.12m11.32-11.32l2.12-2.12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
   </svg>`,
 
-  cafe: `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+  cafe: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
     <path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4z"/>
   </svg>`,
 
@@ -95,8 +172,19 @@ export const SVG_ICONS = {
     <circle cx="12" cy="18" r="2"/>
   </svg>`,
 
-  // Cat Face Silhouette
-  catFace: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-    <path d="M12 4C7.03 4 3 8.03 3 13c0 2.2.8 4.2 2.1 5.8L4 21l3.5-.8C9 20.7 10.4 21 12 21c4.97 0 9-4.03 9-9 0-2.3-.9-4.4-2.3-6L21 3l-4 1.5C15.4 4.2 13.7 4 12 4z"/>
+  // Camera / Adoption Card Snapshot
+  camera: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <circle cx="12" cy="12" r="3.2"/>
+    <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+  </svg>`,
+
+  // Lock Icon
+  lock: `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+    <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+  </svg>`,
+
+  // Gear / Automation Machine Icon
+  machine: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.484.484 0 0 0 14 2h-4c-.25 0-.46.18-.49.42l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.63 8.49c-.14.22-.08.5.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h4c.25 0 .46-.18.49-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.14-.22.07-.5-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
   </svg>`,
 };

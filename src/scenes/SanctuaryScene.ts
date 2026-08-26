@@ -10,9 +10,11 @@ import { InteractionSystem } from '../systems/InteractionSystem';
 import { WeatherManager } from '../systems/WeatherManager';
 import { MilestoneManager } from '../systems/MilestoneManager';
 import { GrowthSystem } from '../systems/GrowthSystem';
+import { AutomationSystem } from '../systems/AutomationSystem';
+import { BreedingSystem } from '../systems/BreedingSystem';
 import { tickCatNeeds } from '../systems/NeedsSystem';
 import { CatSprite } from '../entities/CatSprite';
-import { AUTOSAVE_INTERVAL_MS, AREA_INFO_MAP, FURNITURE_CATALOG, RARE_SUMMONS } from '../data/constants';
+import { AUTOSAVE_INTERVAL_MS, AREA_INFO_MAP, FURNITURE_CATALOG, RARE_SUMMONS, calculateRehomeLove } from '../data/constants';
 import { EventBus } from '../ui/EventBus';
 import { sound } from '../systems/SoundManager';
 import { exportCatCardAsPng } from '../systems/CardExport';
@@ -44,6 +46,8 @@ export class SanctuaryScene extends Phaser.Scene {
   private weather!: WeatherManager;
   private milestones!: MilestoneManager;
   private growth = new GrowthSystem();
+  private automation!: AutomationSystem;
+  private breeding!: BreedingSystem;
 
   private currentArea: CatArea = 'yard';
   private catSprites = new Map<string, CatSprite>();
@@ -58,6 +62,19 @@ export class SanctuaryScene extends Phaser.Scene {
   private particles: Array<{ x: number; y: number; speedY: number; speedX: number; size: number; alpha: number }> = [];
   private ambientEffects: AmbientEffectItem[] = [];
 
+  // Cat Drag & Drop Interaction System
+  private dragCandidate: {
+    cat: Cat;
+    sprite: CatSprite;
+    startX: number;
+    startY: number;
+    offsetX: number;
+    offsetY: number;
+    startTime: number;
+  } | null = null;
+  private isDraggingCat = false;
+  private currentDropTarget: CatSprite | null = null;
+
   constructor() {
     super('Sanctuary');
   }
@@ -71,11 +88,20 @@ export class SanctuaryScene extends Phaser.Scene {
 
     this.lastTick = this.time.now;
 
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      this.onScenePointerMove(pointer);
+    });
+
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      this.onScenePointerUp(pointer);
+    });
+
     this.time.addEvent({
       delay: AUTOSAVE_INTERVAL_MS,
       loop: true,
       callback: () => this.saveManager.save(this.state),
     });
+
 
     this.scale.on('resize', () => {
       this.drawCurrentArea();
@@ -112,6 +138,8 @@ export class SanctuaryScene extends Phaser.Scene {
     this.interactions = new InteractionSystem(this.love, this.journal);
     this.weather = new WeatherManager(this.state);
     this.milestones = new MilestoneManager(this.state);
+    this.automation = new AutomationSystem(this.state, this.love);
+    this.breeding = new BreedingSystem(this.state);
 
     if (loaded) {
       const summary = this.saveManager.applyOfflineProgress(this.state);
@@ -119,13 +147,14 @@ export class SanctuaryScene extends Phaser.Scene {
         EventBus.emit('offline-summary', summary);
       }
     } else {
-      // Warm onboarding: sanctuary starts with two cute cats in the Yard
+      // Warm onboarding: sanctuary starts with TWO adult cats in the Yard ready to pair & play
       const usedNames = new Set<string>();
-      this.state.cats.push(generateCat({ day: this.state.day, usedNames }));
-      this.state.cats.push(generateCat({ day: this.state.day, usedNames }));
-      this.love.add(25);
+      this.state.cats.push(generateCat({ day: this.state.day, usedNames, stage: 'adult' }));
+      this.state.cats.push(generateCat({ day: this.state.day, usedNames, stage: 'adult' }));
+      this.love.add(50);
     }
   }
+
 
   private initWeatherAndLighting(): void {
     this.dynamicEffectsGfx = this.add.graphics();
@@ -168,10 +197,13 @@ export class SanctuaryScene extends Phaser.Scene {
       currentArea: this.currentArea,
       cats: this.state.cats,
       furniture: this.state.furniture,
+      machines: this.state.machines,
+      strayDueAt: this.state.strayArrivalDueAt,
       milestones: this.milestones.getMilestones(),
       tokens: this.milestones.tokens,
     });
   }
+
 
   private areaBounds(): Phaser.Geom.Rectangle {
     const w = this.scale.width;
@@ -1032,16 +1064,120 @@ export class SanctuaryScene extends Phaser.Scene {
           break;
         }
         default: {
-          fGfx.fillStyle(0x354a21, 0.18);
-          fGfx.fillEllipse(fx, fy + 16, 42, 16);
-          const fText = this.add.text(fx, fy, item.emoji, {
-            fontSize: '32px',
+          const fText = this.add.text(fx, fy, item.bonusText || '✨', {
+            fontSize: '12px',
           }).setOrigin(0.5, 0.7).setDepth(fy);
           fText.name = 'area-bg';
         }
       }
     }
+
+    // Draw Installed Automation Machines
+    const installedMachines = this.automation.getMachinesInArea(this.currentArea);
+    for (const { def, level } of installedMachines) {
+      const mx = bounds.left + def.xPercent * bounds.width;
+      const my = bounds.top + def.yPercent * bounds.height;
+
+      const mGfx = this.add.graphics();
+      mGfx.name = 'area-bg';
+      mGfx.setDepth(my - 5);
+
+      // Soft Shadow
+      mGfx.fillStyle(0x000000, 0.22);
+      mGfx.fillEllipse(mx, my + 14, 48, 18);
+
+      switch (def.needType) {
+        case 'food': {
+          // Smart Feeder Station: Hopper + Bowl + LED
+          mGfx.fillStyle(0xd5bdaf, 1);
+          mGfx.fillRoundedRect(mx - 18, my - 28, 36, 32, 6);
+          mGfx.fillStyle(0xb7b7a4, 1);
+          mGfx.fillRoundedRect(mx - 15, my - 25, 30, 16, 4);
+          // Kibble Bowl
+          mGfx.fillStyle(0xe63946, 1);
+          mGfx.fillEllipse(mx, my + 4, 30, 14);
+          mGfx.fillStyle(0x6b4f2c, 1);
+          mGfx.fillEllipse(mx, my + 2, 24, 10);
+          // Power LED
+          mGfx.fillStyle(level === 3 ? 0xc77dff : level === 2 ? 0x06d6a0 : 0x48cae4, 1);
+          mGfx.fillCircle(mx + 10, my - 20, 3);
+          break;
+        }
+        case 'pet': {
+          // Rotating Cuddle Pad Station
+          mGfx.fillStyle(0xffcbf2, 1);
+          mGfx.fillEllipse(mx, my + 2, 42, 24);
+          mGfx.fillStyle(0xf72585, 0.6);
+          mGfx.fillEllipse(mx, my, 32, 18);
+          // Soft robotic arch
+          mGfx.lineStyle(3, 0xff758f, 0.9);
+          mGfx.beginPath();
+          mGfx.arc(mx, my - 8, 16, Math.PI, 0);
+          mGfx.strokePath();
+          break;
+        }
+        case 'brush': {
+          // Self-Grooming Arch
+          mGfx.fillStyle(0x52b788, 1);
+          mGfx.fillRect(mx - 18, my - 20, 8, 26);
+          mGfx.fillRect(mx + 10, my - 20, 8, 26);
+          mGfx.fillStyle(0x40916c, 1);
+          mGfx.fillRoundedRect(mx - 18, my - 28, 36, 12, 4);
+          // Bristles
+          mGfx.lineStyle(1.5, 0xd8f3dc, 0.8);
+          for (let i = -14; i <= 14; i += 4) {
+            mGfx.beginPath();
+            mGfx.moveTo(mx + i, my - 16);
+            mGfx.lineTo(mx + i, my - 8);
+            mGfx.strokePath();
+          }
+          break;
+        }
+        case 'toy': {
+          // Laser & Feather Toy Tower
+          mGfx.fillStyle(0x7209b7, 1);
+          mGfx.fillRoundedRect(mx - 8, my - 34, 16, 38, 4);
+          // Glowing top orb
+          mGfx.fillStyle(0xf72585, 1);
+          mGfx.fillCircle(mx, my - 36, 7);
+          // Laser beam to floor
+          mGfx.lineStyle(1, 0xff0054, 0.6);
+          mGfx.beginPath();
+          mGfx.moveTo(mx, my - 36);
+          mGfx.lineTo(mx + 18, my + 6);
+          mGfx.strokePath();
+          mGfx.fillStyle(0xff0054, 0.9);
+          mGfx.fillCircle(mx + 18, my + 6, 3);
+          break;
+        }
+        case 'wash': {
+          // Ultrasonic Bubble Mist Basin
+          mGfx.fillStyle(0x48cae4, 1);
+          mGfx.fillEllipse(mx, my + 4, 46, 22);
+          mGfx.fillStyle(0x90e0ef, 1);
+          mGfx.fillEllipse(mx, my + 2, 38, 16);
+          // Bubbles
+          mGfx.fillStyle(0xffffff, 0.8);
+          mGfx.fillCircle(mx - 8, my - 4, 4);
+          mGfx.fillCircle(mx + 6, my - 8, 3);
+          mGfx.fillCircle(mx + 12, my - 2, 5);
+          break;
+        }
+      }
+
+      // Tier Level Badge
+      const tierBadge = this.add.text(mx, my + 16, `T${level}`, {
+        fontFamily: '"Nunito", sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: level === 3 ? '#ffe66d' : '#ffffff',
+        backgroundColor: 'rgba(26, 18, 40, 0.8)',
+        padding: { left: 4, right: 4, top: 1, bottom: 1 },
+      }).setOrigin(0.5, 0).setDepth(my + 10);
+      tierBadge.name = 'area-bg';
+    }
   }
+
 
   private spawnCatsInCurrentArea(): void {
     for (const sprite of this.catSprites.values()) {
@@ -1063,19 +1199,39 @@ export class SanctuaryScene extends Phaser.Scene {
     const sprite = new CatSprite(this, cat, x, y, bounds);
     sprite.setSelectedTool(this.selectedTool);
 
-    sprite.on('pointerdown', () => {
-      this.onCatTapped(cat, sprite);
+    // Provide machines in current area to cat AI
+    const machines = this.automation.getMachinesInArea(this.currentArea).map((m) => ({
+      id: m.def.id,
+      needType: m.def.needType,
+      x: bounds.left + m.def.xPercent * bounds.width,
+      y: bounds.top + m.def.yPercent * bounds.height,
+    }));
+    sprite.setAvailableMachines(machines);
+    sprite.setOtherSpritesProvider(() => Array.from(this.catSprites.values()));
+    sprite.setMachineUseCallback((c, machineId) => {
+      const res = this.automation.useMachine(c, machineId);
+      if (res) {
+        sound.playSparkle();
+        EventBus.emit('toast', { message: res.message });
+        EventBus.emit('love-changed', { love: this.love.love });
+        this.saveManager.save(this.state);
+        this.notifyUiState();
+      }
+    });
+
+    sprite.on('cat-pointerdown', (ptr: Phaser.Input.Pointer) => {
+      this.onCatPointerDown(cat, sprite, ptr);
     });
 
     this.catSprites.set(cat.id, sprite);
   }
+
 
   private bindUiEvents(): void {
     EventBus.on('tool-selected', ({ tool }: { tool: string | null }) => {
       this.selectedTool = tool as ToolType | null;
       if (this.selectedTool) sound.playTap();
 
-      // Update all cat sprites with active tool for real-time need indicators
       for (const sprite of this.catSprites.values()) {
         sprite.setSelectedTool(this.selectedTool);
       }
@@ -1101,6 +1257,71 @@ export class SanctuaryScene extends Phaser.Scene {
 
     EventBus.on('buy-furniture', ({ furnitureId }: { furnitureId: string }) => {
       this.tryBuyFurniture(furnitureId);
+    });
+
+    EventBus.on('buy-machine', ({ machineId }: { machineId: string }) => {
+      if (this.automation.buyMachine(machineId)) {
+        this.saveManager.save(this.state);
+        this.drawCurrentArea();
+        this.spawnCatsInCurrentArea();
+        this.notifyUiState();
+      }
+    });
+
+    EventBus.on('upgrade-machine', ({ machineId }: { machineId: string }) => {
+      if (this.automation.upgradeMachine(machineId)) {
+        this.saveManager.save(this.state);
+        this.drawCurrentArea();
+        this.spawnCatsInCurrentArea();
+        this.notifyUiState();
+      }
+    });
+
+    EventBus.on('rehome-cat', ({ catId }: { catId: string }) => {
+      const catIndex = this.state.cats.findIndex((c) => c.id === catId);
+      if (catIndex === -1) return;
+      const cat = this.state.cats[catIndex];
+
+      const reward = calculateRehomeLove(cat);
+      this.love.add(reward.total);
+      this.state.totalLoveEarned += reward.total;
+      this.state.totalRehomedCats = (this.state.totalRehomedCats || 0) + 1;
+      this.state.totalRehomeLoveEarned = (this.state.totalRehomeLoveEarned || 0) + reward.total;
+
+      this.state.cats.splice(catIndex, 1);
+      const sprite = this.catSprites.get(catId);
+      if (sprite) {
+        sprite.destroy();
+        this.catSprites.delete(catId);
+      }
+
+      sound.playAdoptFanfare();
+      EventBus.emit('toast', {
+        message: `🏡 ${cat.name} found a loving forever home! (+${reward.total.toLocaleString()} 💗 Love)`,
+      });
+
+      // Check stray safety net
+      if (this.state.cats.length < 2 && !this.state.strayArrivalDueAt) {
+        this.state.strayArrivalDueAt = Date.now() + 60 * 60 * 1000;
+      }
+
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+    });
+
+    EventBus.on('breed-cats', ({ parentAId, parentBId }: { parentAId: string; parentBId: string }) => {
+      const parentA = this.state.cats.find((c) => c.id === parentAId);
+      const parentB = this.state.cats.find((c) => c.id === parentBId);
+      if (!parentA || !parentB) return;
+
+      const result = this.breeding.breed(parentA, parentB);
+      if (result) {
+        if (result.kitten.area === this.currentArea) {
+          this.spawnCatSprite(result.kitten, this.areaBounds());
+        }
+        this.saveManager.save(this.state);
+        this.notifyUiState();
+      }
     });
 
     EventBus.on('claim-milestone', ({ milestoneId }: { milestoneId: string }) => {
@@ -1156,6 +1377,7 @@ export class SanctuaryScene extends Phaser.Scene {
       }
     });
   }
+
 
   private switchArea(area: CatArea): void {
     if (!this.state.areas[area]?.unlocked) return;
@@ -1228,8 +1450,9 @@ export class SanctuaryScene extends Phaser.Scene {
 
     this.state.furniture.push(furnitureId);
     sound.playAdoptFanfare();
-    EventBus.emit('toast', { message: `✨ Placed ${item.emoji} ${item.name}!` });
+    EventBus.emit('toast', { message: `✨ Placed ${item.name} in the sanctuary!` });
     this.saveManager.save(this.state);
+
     this.notifyUiState();
     this.drawCurrentArea();
   }
@@ -1310,17 +1533,229 @@ export class SanctuaryScene extends Phaser.Scene {
     this.notifyUiState();
   }
 
-  private onCatTapped(cat: Cat, sprite: CatSprite): void {
-    if (!this.selectedTool) {
-      const pitchOffset = cat.stage === 'kitten' ? 5 : cat.stage === 'teen' ? 2 : Phaser.Math.Between(-2, 2);
-      sound.playMeow(pitchOffset);
-      sprite.showEmote(cat.stage === 'kitten' ? '🐾' : '❤️');
-      EventBus.emit('cat-info', { cat });
+  private onCatPointerDown(cat: Cat, sprite: CatSprite, pointer: Phaser.Input.Pointer): void {
+    if (this.selectedTool) {
+      this.interactWithCat(cat, sprite, this.selectedTool);
       return;
     }
 
-    this.interactWithCat(cat, sprite, this.selectedTool);
+    this.dragCandidate = {
+      cat,
+      sprite,
+      startX: pointer.worldX,
+      startY: pointer.worldY,
+      offsetX: pointer.worldX - sprite.x,
+      offsetY: pointer.worldY - sprite.y,
+      startTime: this.time.now,
+    };
+    this.isDraggingCat = false;
+    this.currentDropTarget = null;
   }
+
+  private onScenePointerMove(pointer: Phaser.Input.Pointer): void {
+    if (!this.dragCandidate) return;
+
+    const dx = pointer.worldX - this.dragCandidate.startX;
+    const dy = pointer.worldY - this.dragCandidate.startY;
+    const dist = Math.hypot(dx, dy);
+
+    if (!this.isDraggingCat && dist > 6) {
+      this.isDraggingCat = true;
+      this.dragCandidate.sprite.setDragged(true);
+      sound.playTap();
+    }
+
+    if (this.isDraggingCat) {
+      const bounds = this.areaBounds();
+      const newX = Phaser.Math.Clamp(pointer.worldX - this.dragCandidate.offsetX, bounds.left + 20, bounds.right - 20);
+      const newY = Phaser.Math.Clamp(pointer.worldY - this.dragCandidate.offsetY, bounds.top + 20, bounds.bottom - 20);
+      this.dragCandidate.sprite.setPosition(newX, newY);
+
+      let closestTarget: CatSprite | null = null;
+      let closestDist = 65;
+
+      for (const otherSprite of this.catSprites.values()) {
+        if (otherSprite.cat.id === this.dragCandidate.cat.id) continue;
+        const d = Phaser.Math.Distance.Between(newX, newY, otherSprite.x, otherSprite.y);
+        if (d < closestDist) {
+          closestDist = d;
+          closestTarget = otherSprite;
+        }
+      }
+
+      if (this.currentDropTarget && this.currentDropTarget !== closestTarget) {
+        this.currentDropTarget.highlightAsDropTarget(false);
+      }
+      this.currentDropTarget = closestTarget;
+      if (this.currentDropTarget) {
+        this.currentDropTarget.highlightAsDropTarget(true);
+      }
+    }
+  }
+
+  private onScenePointerUp(_pointer: Phaser.Input.Pointer): void {
+    if (!this.dragCandidate) return;
+
+
+    const { cat, sprite } = this.dragCandidate;
+    const target = this.currentDropTarget;
+
+    if (target) {
+      target.highlightAsDropTarget(false);
+    }
+
+    if (this.isDraggingCat) {
+      sprite.setDragged(false);
+
+      if (target) {
+        this.handleCatPairDrop(sprite, target);
+      } else {
+        this.tweens.add({
+          targets: sprite,
+          y: sprite.y + 4,
+          duration: 120,
+          yoyo: true,
+          ease: 'Quad.easeOut',
+        });
+      }
+    } else {
+      // Tap / click with no tool: cute meow & emote, does NOT open info modal
+      const pitchOffset = cat.stage === 'kitten' ? 5 : cat.stage === 'teen' ? 2 : Phaser.Math.Between(-2, 2);
+      sound.playMeow(pitchOffset);
+      sprite.showEmote(cat.stage === 'kitten' ? '🐾' : '❤️');
+    }
+
+    this.dragCandidate = null;
+    this.isDraggingCat = false;
+    this.currentDropTarget = null;
+  }
+
+  private handleCatPairDrop(spriteA: CatSprite, spriteB: CatSprite): void {
+    const catA = spriteA.cat;
+    const catB = spriteB.cat;
+    const midX = (spriteA.x + spriteB.x) / 2;
+    const midY = (spriteA.y + spriteB.y) / 2;
+
+    // 1. Two Adult Cats: Breeding Attempt!
+    if (catA.stage === 'adult' && catB.stage === 'adult') {
+      const check = this.breeding.canBreed(catA, catB);
+      if (check.eligible) {
+        sound.playAdoptFanfare();
+        spriteA.showEmote('💖');
+        spriteB.showEmote('💖');
+        this.createHeartBurst(midX, midY);
+
+        const result = this.breeding.breed(catA, catB);
+        if (result) {
+          const bounds = this.areaBounds();
+          const kx = Phaser.Math.Clamp(midX + Phaser.Math.Between(-15, 15), bounds.left + 25, bounds.right - 25);
+          const ky = Phaser.Math.Clamp(midY + 12, bounds.top + 25, bounds.bottom - 25);
+          this.spawnCatSprite(result.kitten, bounds);
+          const kittenSprite = this.catSprites.get(result.kitten.id);
+          if (kittenSprite) {
+            kittenSprite.setPosition(kx, ky);
+            kittenSprite.showEmote('🍼');
+          }
+
+          this.saveManager.save(this.state);
+          this.notifyUiState();
+        }
+      } else {
+        sound.playPurr();
+        spriteA.showEmote('💕');
+        spriteB.showEmote('💕');
+        EventBus.emit('toast', {
+          message: `🐾 ${catA.name} and ${catB.name} are cuddling! (${check.reason || 'Breeding on cooldown'})`,
+        });
+      }
+      return;
+    }
+
+    // 2. Adult + Kitten / Teen: Grooming & Comfort!
+    if ((catA.stage === 'adult' && catB.stage !== 'adult') || (catB.stage === 'adult' && catA.stage !== 'adult')) {
+      const adult = catA.stage === 'adult' ? catA : catB;
+      const young = catA.stage === 'adult' ? catB : catA;
+      const youngSprite = catA.stage === 'adult' ? spriteB : spriteA;
+      const adultSprite = catA.stage === 'adult' ? spriteA : spriteB;
+
+      young.cleanliness = Math.min(100, young.cleanliness + 30);
+      young.affection = Math.min(100, young.affection + 25);
+      young.happiness = Math.min(100, young.happiness + 20);
+      this.growth.addGrowth(young, 5);
+
+      adultSprite.showEmote('👅');
+      youngSprite.showEmote('✨');
+      sound.playPurr();
+
+      EventBus.emit('toast', {
+        message: `✨ ${adult.name} lovingly groomed and cared for ${young.name}!`,
+      });
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+      return;
+    }
+
+    // 3. Two Kittens / Teens: Play Session!
+    catA.fun = Math.min(100, catA.fun + 35);
+    catB.fun = Math.min(100, catB.fun + 35);
+    catA.affection = Math.min(100, catA.affection + 20);
+    catB.affection = Math.min(100, catB.affection + 20);
+
+    spriteA.showEmote('🧶');
+    spriteB.showEmote('🧶');
+    sound.playSparkle();
+
+    this.tweens.add({
+      targets: spriteA,
+      y: spriteA.y - 12,
+      duration: 150,
+      yoyo: true,
+      repeat: 2,
+      ease: 'Sine.easeInOut',
+    });
+    this.tweens.add({
+      targets: spriteB,
+      y: spriteB.y - 12,
+      duration: 150,
+      yoyo: true,
+      repeat: 2,
+      delay: 75,
+      ease: 'Sine.easeInOut',
+    });
+
+    EventBus.emit('toast', {
+      message: `🧶 ${catA.name} and ${catB.name} had a blast playing together!`,
+    });
+    this.saveManager.save(this.state);
+    this.notifyUiState();
+  }
+
+  private createHeartBurst(x: number, y: number): void {
+    const emojis = ['💖', '💕', '✨', '🐾', '🌸'];
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const dist = Phaser.Math.Between(30, 60);
+      const targetX = x + Math.cos(angle) * dist;
+      const targetY = y + Math.sin(angle) * dist - 20;
+
+      const heart = this.add.text(x, y, emojis[i % emojis.length], {
+        fontSize: `${Phaser.Math.Between(16, 24)}px`,
+      }).setOrigin(0.5).setDepth(9999);
+
+      this.tweens.add({
+        targets: heart,
+        x: targetX,
+        y: targetY,
+        alpha: 0,
+        scaleX: 1.4,
+        scaleY: 1.4,
+        duration: 1200 + Phaser.Math.Between(0, 300),
+        ease: 'Quad.easeOut',
+        onComplete: () => heart.destroy(),
+      });
+    }
+  }
+
 
   private interactWithCat(cat: Cat, sprite: CatSprite, tool: ToolType): void {
     sprite.recordInteraction(this.time.now);
@@ -1471,8 +1906,19 @@ export class SanctuaryScene extends Phaser.Scene {
       const periodSeconds = this.relationshipTickAccum / 1000;
       this.relationshipTickAccum = 0;
       this.tickRelationshipsAndEvents(periodSeconds);
+
+      // Stray Cat Safety Net Tick: ensure sanctuary always has at least 2 cats
+      const strayResult = this.breeding.tickStraySafetyNet();
+      if (strayResult) {
+        if (strayResult.cat.area === this.currentArea) {
+          this.spawnCatSprite(strayResult.cat, this.areaBounds());
+        }
+        this.saveManager.save(this.state);
+        this.notifyUiState();
+      }
     }
   }
+
 
   private updateAmbientAtmosphere(deltaSeconds: number): void {
     const bounds = this.areaBounds();
