@@ -519,7 +519,19 @@ export class UIManager {
             <canvas id="journal-cat-canvas" width="64" height="64" class="journal-avatar-canvas"></canvas>
           </div>
           <div class="journal-title-box">
-            <h2>${escapeHtml(cat.name)}</h2>
+            <div class="name-edit-row" id="name-display-row">
+              <h2 id="cat-name-display">${escapeHtml(cat.name)}</h2>
+              <button class="rename-cat-btn" id="rename-cat-btn" title="Rename Cat (200 Care Points 💗)">
+                <span class="svg-inline">${SVG_ICONS.edit}</span> Rename (200 💗)
+              </button>
+            </div>
+            <div class="rename-inline-box" id="rename-inline-box" style="display: none;">
+              <input type="text" id="rename-input" class="rename-input" maxlength="24" value="${escapeHtml(cat.name)}" placeholder="Enter new name..." />
+              <div class="rename-btn-group">
+                <button class="rename-confirm-btn" id="rename-confirm-btn">Save (200 💗)</button>
+                <button class="rename-cancel-btn" id="rename-cancel-btn">Cancel</button>
+              </div>
+            </div>
             <div class="coat-tag">${escapeHtml(skinName)} · ${stageLabel}</div>
             ${rareBadge}
           </div>
@@ -648,6 +660,65 @@ export class UIManager {
         EventBus.emit('instant-grow-cat', { catId: cat.id, cost: growCost });
         setTimeout(() => renderCurrentCat(), 200);
       });
+
+      // Rename Cat Action (200 Care Points)
+      const renameBtn = modal.querySelector('#rename-cat-btn') as HTMLButtonElement | null;
+      const renameBox = modal.querySelector('#rename-inline-box') as HTMLElement | null;
+      const nameRow = modal.querySelector('#name-display-row') as HTMLElement | null;
+      const renameInput = modal.querySelector('#rename-input') as HTMLInputElement | null;
+      const confirmBtn = modal.querySelector('#rename-confirm-btn') as HTMLButtonElement | null;
+      const cancelBtn = modal.querySelector('#rename-cancel-btn') as HTMLButtonElement | null;
+
+      if (renameBtn && renameBox && nameRow && renameInput && confirmBtn && cancelBtn) {
+        renameBtn.addEventListener('click', () => {
+          sound.playTap();
+          nameRow.style.display = 'none';
+          renameBox.style.display = 'flex';
+          renameInput.value = cat.name;
+          renameInput.focus();
+          renameInput.select();
+        });
+
+        cancelBtn.addEventListener('click', () => {
+          sound.playTap();
+          renameBox.style.display = 'none';
+          nameRow.style.display = 'flex';
+        });
+
+        const performRename = () => {
+          const newName = renameInput.value.trim();
+          if (!newName || newName === cat.name) {
+            renameBox.style.display = 'none';
+            nameRow.style.display = 'flex';
+            return;
+          }
+
+          if (this.currentLove < 200) {
+            sound.playTap();
+            this.showToast('Not enough Care Points. Need 200 💗 to rename.');
+            return;
+          }
+
+          sound.playSparkle();
+          sound.playCoin();
+          EventBus.emit('rename-cat', { catId: cat.id, newName, cost: 200 });
+          cat.name = newName;
+          const nameDisplay = modal.querySelector('#cat-name-display');
+          if (nameDisplay) nameDisplay.textContent = newName;
+          renameBox.style.display = 'none';
+          nameRow.style.display = 'flex';
+        };
+
+        confirmBtn.addEventListener('click', performRename);
+        renameInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            performRename();
+          } else if (e.key === 'Escape') {
+            renameBox.style.display = 'none';
+            nameRow.style.display = 'flex';
+          }
+        });
+      }
 
       const selectEl = modal.querySelector('#cat-area-select') as HTMLSelectElement;
       selectEl.addEventListener('change', () => {

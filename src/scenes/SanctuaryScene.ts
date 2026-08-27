@@ -242,6 +242,61 @@ export class SanctuaryScene extends Phaser.Scene {
     );
   }
 
+  private walkableBounds(area: CatArea = this.currentArea): Phaser.Geom.Rectangle {
+    const bounds = this.areaBounds();
+    switch (area) {
+      case 'shelter': {
+        // Upper wall wainscoting & stone fireplace
+        const wallHeight = Math.min(84, bounds.height * 0.28);
+        const topOffset = wallHeight + 18; // Below baseboard and fireplace hearth
+        const sidePadding = 32;            // Keep cats inside room walls
+        const bottomPadding = 24;          // Keep cats off bottom border
+        return new Phaser.Geom.Rectangle(
+          bounds.x + sidePadding,
+          bounds.y + topOffset,
+          Math.max(200, bounds.width - sidePadding * 2),
+          Math.max(180, bounds.height - topOffset - bottomPadding),
+        );
+      }
+      case 'sunroom': {
+        const winH = Math.min(100, bounds.height * 0.32);
+        const topOffset = winH + 16;
+        const sidePadding = 28;
+        const bottomPadding = 22;
+        return new Phaser.Geom.Rectangle(
+          bounds.x + sidePadding,
+          bounds.y + topOffset,
+          Math.max(200, bounds.width - sidePadding * 2),
+          Math.max(180, bounds.height - topOffset - bottomPadding),
+        );
+      }
+      case 'cafe': {
+        const wallH = Math.min(88, bounds.height * 0.28);
+        const topOffset = wallH + 20;
+        const sidePadding = 28;
+        const bottomPadding = 22;
+        return new Phaser.Geom.Rectangle(
+          bounds.x + sidePadding,
+          bounds.y + topOffset,
+          Math.max(200, bounds.width - sidePadding * 2),
+          Math.max(180, bounds.height - topOffset - bottomPadding),
+        );
+      }
+      case 'yard':
+      default: {
+        const topOffset = 36;
+        const sidePadding = 22;
+        const bottomPadding = 22;
+        return new Phaser.Geom.Rectangle(
+          bounds.x + sidePadding,
+          bounds.y + topOffset,
+          Math.max(200, bounds.width - sidePadding * 2),
+          Math.max(180, bounds.height - topOffset - bottomPadding),
+        );
+      }
+    }
+  }
+
   private drawCurrentArea(): void {
     this.children.getAll('name', 'area-bg').forEach((c) => c.destroy());
     this.ambientEffects = [];
@@ -264,7 +319,7 @@ export class SanctuaryScene extends Phaser.Scene {
     // Render Placed Furniture in this area
     this.drawPlacedFurniture();
 
-    const bounds = this.areaBounds();
+    const bounds = this.walkableBounds();
     if (this.kibbleBag) {
       this.kibbleBag.setBounds(bounds);
     }
@@ -274,6 +329,9 @@ export class SanctuaryScene extends Phaser.Scene {
     for (const sprite of this.catSprites.values()) {
       sprite.setAreaBounds(bounds);
       sprite.setSelectedTool(this.selectedTool);
+      // Ensure any cat is safely clamped within the floor area
+      sprite.x = Phaser.Math.Clamp(sprite.x, bounds.left + 24, bounds.right - 24);
+      sprite.y = Phaser.Math.Clamp(sprite.y, bounds.top + 24, bounds.bottom - 24);
     }
   }
 
@@ -1217,7 +1275,7 @@ export class SanctuaryScene extends Phaser.Scene {
     }
     this.catSprites.clear();
 
-    const bounds = this.areaBounds();
+    const bounds = this.walkableBounds();
     const areaCats = this.state.cats.filter((c) => c.area === this.currentArea);
 
     for (const cat of areaCats) {
@@ -1283,7 +1341,7 @@ export class SanctuaryScene extends Phaser.Scene {
 
       if (this.selectedTool === 'food') {
         if (!this.kibbleBag) {
-          const bounds = this.areaBounds();
+          const bounds = this.walkableBounds();
           this.kibbleBag = new KibbleBag(this, bounds.centerX, bounds.centerY, bounds);
           this.kibbleBag.onDropFood = (x, y) => this.spawnKibblePiece(x, y);
           this.kibbleBag.setScale(0);
@@ -1316,7 +1374,7 @@ export class SanctuaryScene extends Phaser.Scene {
 
       if (this.selectedTool === 'toy') {
         if (!this.toyBall) {
-          const bounds = this.areaBounds();
+          const bounds = this.walkableBounds();
           this.toyBall = new ToyBall(this, bounds.centerX, bounds.centerY, bounds);
           this.toyBall.setScale(0);
           this.tweens.add({
@@ -1410,6 +1468,25 @@ export class SanctuaryScene extends Phaser.Scene {
 
     EventBus.on('move-cat', ({ catId, toArea }: { catId: string; toArea: CatArea }) => {
       this.moveCat(catId, toArea);
+    });
+
+    EventBus.on('rename-cat', ({ catId, newName, cost }: { catId: string; newName: string; cost: number }) => {
+      const cat = this.state.cats.find((c) => c.id === catId);
+      if (!cat) return;
+
+      if (this.love.spend(cost)) {
+        cat.name = newName;
+        const sprite = this.catSprites.get(catId);
+        if (sprite) {
+          sprite.refreshVisuals();
+        }
+        this.saveManager.save(this.state);
+        this.notifyUiState();
+        EventBus.emit('love-changed', { love: this.love.love });
+        EventBus.emit('toast', { message: `✏️ Renamed cat to ${newName}! (-${cost} 💗)` });
+      } else {
+        EventBus.emit('toast', { message: `Not enough Care Points! Need ${cost} 💗.` });
+      }
     });
 
     EventBus.on('buy-furniture', ({ furnitureId }: { furnitureId: string }) => {
@@ -1645,7 +1722,7 @@ export class SanctuaryScene extends Phaser.Scene {
     sound.playTap();
 
     if (this.toyBall) {
-      const bounds = this.areaBounds();
+      const bounds = this.walkableBounds(area);
       this.toyBall.setBounds(bounds);
       this.toyBall.setPosition(bounds.centerX, bounds.centerY);
       this.toyBall.vx = 0;
@@ -1653,7 +1730,7 @@ export class SanctuaryScene extends Phaser.Scene {
     }
 
     if (this.kibbleBag) {
-      const bounds = this.areaBounds();
+      const bounds = this.walkableBounds(area);
       this.kibbleBag.setBounds(bounds);
       this.kibbleBag.setPosition(bounds.centerX, bounds.centerY);
     }
@@ -1772,7 +1849,7 @@ export class SanctuaryScene extends Phaser.Scene {
     this.state.cats.push(cat);
 
     if (targetArea === this.currentArea) {
-      this.spawnCatSprite(cat, this.areaBounds());
+      this.spawnCatSprite(cat, this.walkableBounds());
     }
 
     sound.playAdoptFanfare();
@@ -2220,7 +2297,7 @@ export class SanctuaryScene extends Phaser.Scene {
     this.state.cats.push(cat);
 
     if (targetAreaKey === this.currentArea) {
-      this.spawnCatSprite(cat, this.areaBounds());
+      this.spawnCatSprite(cat, this.walkableBounds());
     }
 
     sound.playAdoptFanfare();
@@ -2454,7 +2531,7 @@ export class SanctuaryScene extends Phaser.Scene {
       const strayResult = this.breeding.tickStraySafetyNet();
       if (strayResult) {
         if (strayResult.cat.area === this.currentArea) {
-          this.spawnCatSprite(strayResult.cat, this.areaBounds());
+          this.spawnCatSprite(strayResult.cat, this.walkableBounds());
         }
         this.saveManager.save(this.state);
         this.notifyUiState();

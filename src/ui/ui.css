@@ -816,6 +816,87 @@ body.tool-wash-active, body.tool-wash-active canvas {
   margin: 0 0 2px;
 }
 
+.name-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 2px;
+}
+
+.rename-cat-btn {
+  background: #fdf2f8;
+  color: #db2777;
+  border: 1px solid #fbcfe8;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 9px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.rename-cat-btn:hover {
+  background: #fce7f3;
+  transform: translateY(-1px);
+}
+
+.rename-inline-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.rename-input {
+  padding: 6px 10px;
+  border: 1.5px solid #ec4899;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--brown);
+  background: white;
+  outline: none;
+  box-shadow: 0 2px 6px rgba(236, 72, 153, 0.15);
+}
+
+.rename-btn-group {
+  display: flex;
+  gap: 6px;
+}
+
+.rename-confirm-btn {
+  background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 5px 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(219, 39, 119, 0.25);
+  transition: transform 0.1s ease;
+}
+
+.rename-confirm-btn:hover {
+  transform: translateY(-1px);
+}
+
+.rename-cancel-btn {
+  background: #f1f5f9;
+  color: #64748b;
+  border: none;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
 .coat-tag {
   font-size: 13px;
   font-weight: 700;
