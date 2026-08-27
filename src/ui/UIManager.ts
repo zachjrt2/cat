@@ -567,11 +567,11 @@ export class UIManager {
                 <span class="growth-pct${growthNearFull ? ' growth-pct-near' : ''}">${growthPct}%</span>
               </div>
               ${growthPaused
-                ? `<div class="growth-status growth-paused">Growth paused — keep needs met to continue growing!</div>`
-                : growthNearFull
-                  ? `<div class="growth-status growth-ready">Almost ready! Keep sanctuary care high (${Math.round(avgCare)}% avg) for faster growth.</div>`
-                  : `<div class="growth-status growth-tip">High sanctuary care gives up to 10x growth speed! (Current: ${growthMultiplier.toFixed(1)}x)</div>`
-              }
+            ? `<div class="growth-status growth-paused">Growth paused — keep needs met to continue growing!</div>`
+            : growthNearFull
+              ? `<div class="growth-status growth-ready">Almost ready! Keep sanctuary care high (${Math.round(avgCare)}% avg) for faster growth.</div>`
+              : `<div class="growth-status growth-tip">High sanctuary care gives up to 10x growth speed! (Current: ${growthMultiplier.toFixed(1)}x)</div>`
+          }
               <button class="instant-grow-btn" id="instant-grow-btn" ${this.currentLove < growCost ? 'disabled' : ''}>
                 <span class="svg-inline">${SVG_ICONS.sparkle}</span>
                 <span>Grow to ${cat.stage === 'kitten' ? 'Teen' : 'Adult'} (${growCost.toLocaleString()} CP 💗)</span>
@@ -1131,17 +1131,16 @@ export class UIManager {
         </div>
 
         <div class="shop-content">
-          ${
-            activeTab === 'areas'
-              ? this.renderShopAreasContent()
-              : activeTab === 'machines'
-                ? this.renderShopMachinesContent()
-                : activeTab === 'furniture'
-                  ? this.renderShopFurnitureContent()
-                  : activeTab === 'milestones'
-                    ? this.renderShopMilestonesContent()
-                    : this.renderShopUpgradesContent()
-          }
+          ${activeTab === 'areas'
+          ? this.renderShopAreasContent()
+          : activeTab === 'machines'
+            ? this.renderShopMachinesContent()
+            : activeTab === 'furniture'
+              ? this.renderShopFurnitureContent()
+              : activeTab === 'milestones'
+                ? this.renderShopMilestonesContent()
+                : this.renderShopUpgradesContent()
+        }
         </div>
 
         <button class="modal-close" id="shop-close-btn">Done</button>
@@ -1314,45 +1313,45 @@ export class UIManager {
       </div>
       <div class="machines-catalog-grid">
         ${AUTOMATION_CATALOG.map((m) => {
-          const areaUnlocked = this.areasState[m.area]?.unlocked;
-          const currentLevel = this.machinesState[m.id] || 0;
-          const areaMeta = AREA_INFO_MAP[m.area];
+      const areaUnlocked = this.areasState[m.area]?.unlocked;
+      const currentLevel = this.machinesState[m.id] || 0;
+      const areaMeta = AREA_INFO_MAP[m.area];
 
-          let statusBadge = '';
-          let actionBtn = '';
-          let tierCapText = 'Installs Tier 1 (Cares up to 50%)';
+      let statusBadge = '';
+      let actionBtn = '';
+      let tierCapText = 'Installs Tier 1 (Cares up to 50%)';
 
-          if (!areaUnlocked) {
-            statusBadge = `<span class="lock-badge">Locked Area</span>`;
-            actionBtn = `<button class="shop-action-btn" disabled>Unlock ${areaMeta.label}</button>`;
-          } else if (currentLevel === 0) {
-            const canAfford = this.currentLove >= m.baseCost;
-            statusBadge = `<span class="machine-unowned-badge">Not Installed</span>`;
-            actionBtn = `
+      if (!areaUnlocked) {
+        statusBadge = `<span class="lock-badge">Locked Area</span>`;
+        actionBtn = `<button class="shop-action-btn" disabled>Unlock ${areaMeta.label}</button>`;
+      } else if (currentLevel === 0) {
+        const canAfford = this.currentLove >= m.baseCost;
+        statusBadge = `<span class="machine-unowned-badge">Not Installed</span>`;
+        actionBtn = `
               <button class="shop-action-btn buy-machine-btn" data-machine-id="${m.id}" ${!canAfford ? 'disabled' : ''}>
                 Install Tier 1 (${m.baseCost.toLocaleString()} 💗)
               </button>
             `;
-          } else if (currentLevel < 3) {
-            const upgradeCost = currentLevel === 1 ? m.upgradeCostLvl2 : m.upgradeCostLvl3;
-            const nextCap = currentLevel === 1 ? '80%' : '100%';
-            tierCapText = `Current: Tier ${currentLevel} (Cares up to ${currentLevel === 1 ? '50%' : '80%'}) · Next: up to ${nextCap}`;
-            const canAfford = this.currentLove >= upgradeCost;
-            statusBadge = `<span class="unlocked-badge">Tier ${currentLevel} (up to ${currentLevel === 1 ? '50%' : '80%'})</span>`;
-            actionBtn = `
+      } else if (currentLevel < 3) {
+        const upgradeCost = currentLevel === 1 ? m.upgradeCostLvl2 : m.upgradeCostLvl3;
+        const nextCap = currentLevel === 1 ? '80%' : '100%';
+        tierCapText = `Current: Tier ${currentLevel} (Cares up to ${currentLevel === 1 ? '50%' : '80%'}) · Next: up to ${nextCap}`;
+        const canAfford = this.currentLove >= upgradeCost;
+        statusBadge = `<span class="unlocked-badge">Tier ${currentLevel} (up to ${currentLevel === 1 ? '50%' : '80%'})</span>`;
+        actionBtn = `
               <button class="shop-action-btn upgrade-machine-btn" data-machine-id="${m.id}" ${!canAfford ? 'disabled' : ''}>
                 Upgrade to Tier ${currentLevel + 1} (${upgradeCost.toLocaleString()} 💗)
               </button>
             `;
-          } else {
-            tierCapText = 'Current: Tier 3 Max (Cares up to 100%)';
-            statusBadge = `<span class="unlocked-badge tier-max-badge">Tier 3 Max (100%)</span>`;
-            actionBtn = `<span class="claimed-badge">✓ Maxed Out</span>`;
-          }
+      } else {
+        tierCapText = 'Current: Tier 3 Max (Cares up to 100%)';
+        statusBadge = `<span class="unlocked-badge tier-max-badge">Tier 3 Max (100%)</span>`;
+        actionBtn = `<span class="claimed-badge">✓ Maxed Out</span>`;
+      }
 
-          const needSvg = SVG_ICONS[m.needType] || SVG_ICONS.food;
+      const needSvg = SVG_ICONS[m.needType] || SVG_ICONS.food;
 
-          return `
+      return `
             <div class="shop-card machine-card ${currentLevel > 0 ? 'machine-active-card' : ''}">
               <div class="shop-card-info">
                 <div class="machine-title-row">
@@ -1369,7 +1368,7 @@ export class UIManager {
               </div>
             </div>
           `;
-        }).join('')}
+    }).join('')}
       </div>
     `;
   }
@@ -1412,20 +1411,20 @@ export class UIManager {
       <div class="milestones-intro">Complete sanctuary goals to earn Stars ⭐ for Cat Plinko!</div>
       <div class="milestones-list">
         ${this.milestonesList.map((m) => {
-          const isComplete = m.current >= m.target;
-          const isClaimed = m.claimed;
-          const pct = Math.min(100, Math.round((m.current / m.target) * 100));
+      const isComplete = m.current >= m.target;
+      const isClaimed = m.claimed;
+      const pct = Math.min(100, Math.round((m.current / m.target) * 100));
 
-          let actionBtn = '';
-          if (isClaimed) {
-            actionBtn = `<span class="claimed-badge">✓ Claimed</span>`;
-          } else if (isComplete) {
-            actionBtn = `<button class="claim-milestone-btn" data-milestone-id="${m.id}">Claim +${m.rewardTokens} ⭐</button>`;
-          } else {
-            actionBtn = `<span class="milestone-reward-pill">+${m.rewardTokens} ⭐</span>`;
-          }
+      let actionBtn = '';
+      if (isClaimed) {
+        actionBtn = `<span class="claimed-badge">✓ Claimed</span>`;
+      } else if (isComplete) {
+        actionBtn = `<button class="claim-milestone-btn" data-milestone-id="${m.id}">Claim +${m.rewardTokens} ⭐</button>`;
+      } else {
+        actionBtn = `<span class="milestone-reward-pill">+${m.rewardTokens} ⭐</span>`;
+      }
 
-          return `
+      return `
             <div class="milestone-card ${isClaimed ? 'claimed-card' : ''}">
               <div class="milestone-info">
                 <div class="milestone-title-row">
@@ -1440,7 +1439,7 @@ export class UIManager {
               </div>
             </div>
           `;
-        }).join('')}
+    }).join('')}
       </div>
     `;
   }
@@ -1456,19 +1455,17 @@ export class UIManager {
         <div class="shop-card-info">
           <h3>⭐ Passive Star Generation (Level ${currentLvl} / 5)</h3>
           <p>Generates <b>${currentLvl} Star${currentLvl > 1 ? 's' : ''} per hour</b> while offline (no accumulation limit).</p>
-          ${
-            isMax
-              ? `<div class="shop-card-meta"><span class="unlocked-badge">Maximum Level Reached (5 Stars/hr)</span></div>`
-              : `<div class="shop-card-meta">Next Level: <b>${nextDef.ratePerHour} Stars/hr</b> · Cost: <b>${nextDef.costCarePoints.toLocaleString()} CP 💗</b></div>`
-          }
+          ${isMax
+        ? `<div class="shop-card-meta"><span class="unlocked-badge">Maximum Level Reached (5 Stars/hr)</span></div>`
+        : `<div class="shop-card-meta">Next Level: <b>${nextDef.ratePerHour} Stars/hr</b> · Cost: <b>${nextDef.costCarePoints.toLocaleString()} CP 💗</b></div>`
+      }
         </div>
-        ${
-          !isMax && nextDef
-            ? `<button class="shop-action-btn upgrade-offline-stars-btn" ${this.currentLove < nextDef.costCarePoints ? 'disabled' : ''}>
+        ${!isMax && nextDef
+        ? `<button class="shop-action-btn upgrade-offline-stars-btn" ${this.currentLove < nextDef.costCarePoints ? 'disabled' : ''}>
                 Upgrade Rate (${nextDef.costCarePoints.toLocaleString()} 💗)
                </button>`
-            : ''
-        }
+        : ''
+      }
       </div>
 
       <!-- Consumable: Cat Perfume -->
@@ -1501,25 +1498,25 @@ export class UIManager {
       <div class="roster-intro">Assign cats to different areas to balance space and friendships:</div>
       <div class="roster-list">
         ${this.catsList.map((cat) => {
-          const skin = CAT_SKINS.find((s) => s.id === cat.color);
-          const currentMeta = AREA_INFO_MAP[cat.area];
+      const skin = CAT_SKINS.find((s) => s.id === cat.color);
+      const currentMeta = AREA_INFO_MAP[cat.area];
 
-          const options = AREA_KEYS.map((k) => {
-            const meta = AREA_INFO_MAP[k];
-            const isUnlocked = this.areasState[k]?.unlocked;
-            const isSelected = cat.area === k ? 'selected' : '';
-            const isDisabled = !isUnlocked ? 'disabled' : '';
-            return `<option value="${k}" ${isSelected} ${isDisabled}>${meta.label}${!isUnlocked ? ' (Locked)' : ''}</option>`;
-          }).join('');
+      const options = AREA_KEYS.map((k) => {
+        const meta = AREA_INFO_MAP[k];
+        const isUnlocked = this.areasState[k]?.unlocked;
+        const isSelected = cat.area === k ? 'selected' : '';
+        const isDisabled = !isUnlocked ? 'disabled' : '';
+        return `<option value="${k}" ${isSelected} ${isDisabled}>${meta.label}${!isUnlocked ? ' (Locked)' : ''}</option>`;
+      }).join('');
 
-          const stageBadge =
-            cat.stage === 'kitten'
-              ? '<span class="stage-tag-badge">Kitten</span>'
-              : cat.stage === 'teen'
-                ? '<span class="stage-tag-badge">Teen</span>'
-                : '<span class="stage-tag-badge adult-badge">Adult</span>';
+      const stageBadge =
+        cat.stage === 'kitten'
+          ? '<span class="stage-tag-badge">Kitten</span>'
+          : cat.stage === 'teen'
+            ? '<span class="stage-tag-badge">Teen</span>'
+            : '<span class="stage-tag-badge adult-badge">Adult</span>';
 
-          return `
+      return `
             <div class="roster-cat-row">
               <div class="roster-cat-info">
                 <div class="roster-title-row">
@@ -1535,7 +1532,7 @@ export class UIManager {
               </div>
             </div>
           `;
-        }).join('')}
+    }).join('')}
       </div>
     `;
   }
@@ -1543,14 +1540,14 @@ export class UIManager {
   private static avatarImageCache: Map<string, HTMLImageElement> = new Map();
 
   private startCatAvatarAnimation(canvas: HTMLCanvasElement | null, cat: Cat): () => void {
-    if (!canvas) return () => {};
+    if (!canvas) return () => { };
     const ctx = canvas.getContext('2d');
-    if (!ctx) return () => {};
+    if (!ctx) return () => { };
 
     ctx.imageSmoothingEnabled = false;
 
     const skinDef = CAT_SKINS.find((s) => s.id === cat.color);
-    if (!skinDef) return () => {};
+    if (!skinDef) return () => { };
 
     let stopped = false;
     let animReq: number | null = null;
@@ -1744,7 +1741,7 @@ export class UIManager {
     modal.className = 'modal options-modal';
     modal.innerHTML = `
       <h2>⚙️ Sanctuary Options & Sound</h2>
-      <div class="subtitle">Customize audio preferences and backup your sanctuary save data.</div>
+      <div class="subtitle">Thanks to <a href="https://pop-shop-packs.itch.io/" target="_blank" rel="noopener noreferrer">Pop shop</a> packs for the cats that inspired this game.</div>
 
       <!-- Sound Settings Section -->
       <div class="options-section">
@@ -1900,13 +1897,12 @@ export class UIManager {
         </div>
         ${starsHtml}
       </div>
-      ${
-        summary.headlines.length > 0
-          ? `<div class="offline-headlines-box">
+      ${summary.headlines.length > 0
+        ? `<div class="offline-headlines-box">
               <b>While you were away:</b>
               <ul>${summary.headlines.map((h) => `<li>${escapeHtml(h)}</li>`).join('')}</ul>
             </div>`
-          : ''
+        : ''
       }
       <button class="modal-close" id="close-offline-btn" style="margin-top:16px;">Cozy On!</button>
     `;
