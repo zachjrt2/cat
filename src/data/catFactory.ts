@@ -28,12 +28,13 @@ export interface GenerateCatOptions {
   day: number;
   usedNames?: Set<string>;
   forceRare?: boolean;
+  skinId?: string;
   stage?: import('./types').LifeStage;
   rng?: () => number;
 }
 
 export function generateCat(options: GenerateCatOptions): Cat {
-  const { day, usedNames, forceRare = false, stage = 'kitten', rng = Math.random } = options;
+  const { day, usedNames, forceRare = false, skinId, stage = 'kitten', rng = Math.random } = options;
 
   // 10% chance of rolling a rare cat naturally, or guaranteed if forceRare
   const isRareRoll = forceRare || rng() < 0.12;
@@ -41,7 +42,7 @@ export function generateCat(options: GenerateCatOptions): Cat {
     ? CAT_SKINS.filter((s) => s.isRare)
     : CAT_SKINS.filter((s) => !s.isRare);
 
-  const skin = randomFrom(pool, rng);
+  const skin = skinId ? (CAT_SKINS.find((s) => s.id === skinId) || randomFrom(pool, rng)) : randomFrom(pool, rng);
   const isRare = !!skin.isRare;
   const rareType = skin.rareType ?? null;
 

@@ -81,6 +81,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private availableMachines: AvailableMachineInfo[] = [];
   private otherSpritesProvider: (() => CatSprite[]) | null = null;
   private machineUseCallback: ((cat: Cat, machineId: string) => void) | null = null;
+  private chaseTarget: { x: number; y: number } | null = null;
 
   constructor(scene: Phaser.Scene, cat: Cat, x: number, y: number, bounds: Phaser.Geom.Rectangle) {
     super(scene, x, y);
@@ -249,15 +250,101 @@ export class CatSprite extends Phaser.GameObjects.Container {
     this.hoverGfx.clear();
     if (isTarget) {
       const scale = getScaleForStage(this.cat.stage);
-      const r = (getHitRadius(this.cat.stage) + 6) * scale;
+      const r = (getHitRadius(this.cat.stage) + 8) * scale;
       const centerY = 4.4 * (scale / BASE_SPRITE_SCALE);
-      this.hoverGfx.lineStyle(3, 0xff4d6d, 1);
+      this.hoverGfx.lineStyle(3, 0xff007f, 1);
       this.hoverGfx.strokeCircle(0, centerY, r);
-      this.hoverGfx.fillStyle(0xff758f, 0.25);
+      this.hoverGfx.fillStyle(0xff758f, 0.35);
       this.hoverGfx.fillCircle(0, centerY, r);
       this.hoverGfx.setAlpha(1);
     } else {
       this.hoverGfx.setAlpha(0);
+    }
+  }
+
+  /**
+   * Highlights this adult cat as an eligible breeding partner when another adult cat is picked up.
+   * If isReady is true, highlights with a bright romantic glow.
+   */
+  setBreedingPartnerHighlight(isPartner: boolean, isReady: boolean): void {
+    this.hoverGfx.clear();
+    if (isPartner) {
+      const scale = getScaleForStage(this.cat.stage);
+      const r = (getHitRadius(this.cat.stage) + 6) * scale;
+      const centerY = 4.4 * (scale / BASE_SPRITE_SCALE);
+
+      if (isReady) {
+        this.hoverGfx.lineStyle(3, 0xff3377, 0.95);
+        this.hoverGfx.strokeCircle(0, centerY, r);
+        this.hoverGfx.fillStyle(0xff6699, 0.22);
+        this.hoverGfx.fillCircle(0, centerY, r);
+      } else {
+        this.hoverGfx.lineStyle(2, 0xf59e0b, 0.75);
+        this.hoverGfx.strokeCircle(0, centerY, r);
+        this.hoverGfx.fillStyle(0xf59e0b, 0.12);
+        this.hoverGfx.fillCircle(0, centerY, r);
+      }
+      this.hoverGfx.setAlpha(1);
+    } else {
+      this.hoverGfx.setAlpha(0);
+    }
+  }
+
+  /**
+   * Displays breeding readiness using a progress bar above the cat.
+   * Empty/filling bar = pair is cooling down, full bar = ready to breed!
+   */
+  showBreedingReadinessBar(progressRatio: number, isReady: boolean): void {
+    const pct = Math.max(0, Math.min(1, progressRatio));
+    const barW = 32;
+    const barH = 6;
+    const radius = 3;
+
+    this.needIndicatorGfx.clear();
+    // Background shadow & border
+    this.needIndicatorGfx.fillStyle(0x000000, 0.55);
+    this.needIndicatorGfx.fillRoundedRect(-barW / 2, -barH / 2 + 1, barW, barH, radius);
+    this.needIndicatorGfx.fillStyle(0x1a1a24, 0.9);
+    this.needIndicatorGfx.fillRoundedRect(-barW / 2, -barH / 2, barW, barH, radius);
+
+    // Fill color
+    let fillColor = 0xf59e0b; // Amber while cooling down
+    if (isReady || pct >= 0.99) {
+      fillColor = 0x10b981; // Vibrant emerald when ready
+    } else if (pct > 0.5) {
+      fillColor = 0x38bdf8; // Sky blue intermediate
+    }
+
+    const fillW = Math.max(2, (barW - 2) * pct);
+    this.needIndicatorGfx.fillStyle(fillColor, 1);
+    this.needIndicatorGfx.fillRoundedRect(-barW / 2 + 1, -barH / 2 + 1, fillW, barH - 2, radius - 1);
+    this.needIndicatorGfx.lineStyle(1, isReady ? 0xffe066 : 0xffffff, isReady ? 0.8 : 0.4);
+    this.needIndicatorGfx.strokeRoundedRect(-barW / 2, -barH / 2, barW, barH, radius);
+
+    this.scene.tweens.add({
+      targets: this.needIndicatorContainer,
+      alpha: 1,
+      scaleX: isReady ? 1.1 : 1.0,
+      scaleY: isReady ? 1.1 : 1.0,
+      duration: 150,
+      ease: 'Quad.easeOut',
+    });
+  }
+
+  clearBreedingReadinessBar(): void {
+    if (this.currentSelectedTool) {
+      this.updateNeedIndicator();
+    } else {
+      this.hoverGfx.clear();
+      this.hoverGfx.setAlpha(0);
+      this.scene.tweens.add({
+        targets: this.needIndicatorContainer,
+        alpha: 0,
+        scaleX: 0.7,
+        scaleY: 0.7,
+        duration: 150,
+        ease: 'Quad.easeOut',
+      });
     }
   }
 
@@ -360,6 +447,44 @@ export class CatSprite extends Phaser.GameObjects.Container {
     if (ready) this.breedReadyHeartTimer = 2 + Math.random() * 4;
   }
 
+  setChaseTarget(x: number, y: number): void {
+    if (this.isDragged || this.cat.animationState === 'sleep') return;
+    this.chaseTarget = { x, y };
+    this.wanderTarget = null;
+  }
+
+  clearChaseTarget(): void {
+    this.chaseTarget = null;
+  }
+
+  isChasing(): boolean {
+    return this.chaseTarget !== null;
+  }
+
+  slinkAwayFrom(fromX: number, fromY: number, dt: number): void {
+    if (this.isDragged || this.cat.animationState === 'sleep') return;
+    this.chaseTarget = null;
+    this.wanderTarget = null;
+
+    const dx = this.x - fromX;
+    const dy = this.y - fromY;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 1) return;
+
+    // Slow, cautious walk away from brush
+    const speed = 36 * dt;
+    this.x += (dx / dist) * speed;
+    this.y += (dy / dist) * speed;
+
+    this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
+    this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
+
+    this.currentDirection = vectorToDirection(dx, dy);
+    this.cat.animationState = 'walk';
+    this.playCurrentAnimation();
+    this.setDepth(this.y);
+  }
+
   private playCurrentAnimation(): void {
     const animState = this.cat.animationState;
     const dir = this.currentDirection;
@@ -449,6 +574,23 @@ export class CatSprite extends Phaser.GameObjects.Container {
         this.wanderTimer = 2.0 + Math.random() * 2.5;
         this.playCurrentAnimation();
       }
+      return;
+    }
+
+    // ── Active Toy Ball Chase ─────────────────────────────────────────────
+    if (this.chaseTarget) {
+      const dist = Math.hypot(this.chaseTarget.x - this.x, this.chaseTarget.y - this.y);
+      if (dist > 12) {
+        const speed = (this.cat.stage === 'kitten' ? 140 : 165) * ((this.cat.majorTrait === 'zoomie' || this.cat.minorTrait === 'zoomie') ? 1.4 : 1) * dt;
+        this.x += ((this.chaseTarget.x - this.x) / dist) * speed;
+        this.y += ((this.chaseTarget.y - this.y) / dist) * speed;
+        this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
+        this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
+        this.currentDirection = vectorToDirection(this.chaseTarget.x - this.x, this.chaseTarget.y - this.y);
+        this.cat.animationState = 'run';
+        this.playCurrentAnimation();
+      }
+      this.setDepth(this.y);
       return;
     }
 

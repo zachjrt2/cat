@@ -231,6 +231,11 @@ html, body {
   border-style: dashed;
 }
 
+/* Wash Tool Bubble & Scrub Brush Cursor */
+body.tool-wash-active, body.tool-wash-active canvas {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Ctext y='26' font-size='26'%3E🫧%3C/text%3E%3C/svg%3E") 14 14, crosshair !important;
+}
+
 .area-count {
   font-size: 10.5px;
   background: rgba(77, 56, 39, 0.08);
@@ -385,38 +390,37 @@ html, body {
 }
 
 /* ---------- Toasts ---------- */
+/* ---------- Toasts / Card Deck ---------- */
 #toast-stack, .toast-stack {
   position: absolute;
-  left: 50%;
   top: 110px;
+  left: 50%;
   transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: center;
+  width: min(88vw, 360px);
+  height: 48px;
   pointer-events: none;
-  width: min(92vw, 400px);
-  z-index: 50;
+  z-index: 500;
 }
-
 
 .toast {
-  background: rgba(56, 42, 30, 0.92);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, rgba(46, 32, 22, 0.95), rgba(28, 18, 12, 0.96));
   color: #fff9f2;
-  padding: 9px 16px;
+  padding: 10px 16px;
   border-radius: 14px;
-  font-size: 13.5px;
-  font-weight: 600;
+  border: 1.5px solid rgba(255, 230, 200, 0.25);
+  font-size: 13px;
+  font-weight: 700;
   text-align: center;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(4px);
-  animation: toast-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-@keyframes toast-in {
-  from { opacity: 0; transform: translateY(-10px) scale(0.9); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(8px);
+  transition: transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1), opacity 0.3s ease, filter 0.3s ease;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
 }
 
 /* ---------- Modals ---------- */
@@ -1586,6 +1590,391 @@ html, body {
 .roster-btn-icon svg {
   width: 20px;
   height: 20px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ⭐ CAT PLINKO STYLES
+   ══════════════════════════════════════════════════════════════════ */
+.plinko-modal-backdrop {
+  z-index: 10050;
+}
+
+.plinko-modal {
+  max-width: 480px;
+  width: 94vw;
+  background: linear-gradient(180deg, #1e1b4b 0%, #0f172a 100%);
+  color: #f8fafc;
+  border: 1.5px solid rgba(56, 189, 248, 0.4);
+  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.75), 0 0 20px rgba(56, 189, 248, 0.2);
+  padding: 16px 18px;
+}
+
+.plinko-header {
+  margin-bottom: 12px;
+}
+
+.plinko-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.plinko-title-row h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #f8fafc;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.plinko-star-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  border-radius: 999px;
+  padding: 4px 12px;
+  color: #fbbf24;
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.plinko-star-badge svg {
+  width: 16px;
+  height: 16px;
+  fill: #fbbf24;
+}
+
+.plinko-subtitle {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.plinko-game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.plinko-canvas-wrapper {
+  background: #0f172a;
+  border-radius: 14px;
+  border: 2px solid rgba(56, 189, 248, 0.35);
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+}
+
+#plinko-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.plinko-controls-panel {
+  width: 100%;
+  background: rgba(30, 41, 59, 0.7);
+  border-radius: 12px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.plinko-wager-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12.5px;
+  color: #cbd5e1;
+}
+
+.plinko-win-rate-badge {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.plinko-wager-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plinko-step-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #334155;
+  color: #fff;
+  border: 1px solid #475569;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.plinko-step-btn:hover {
+  background: #475569;
+}
+
+#plinko-wager-input {
+  flex: 1;
+  height: 36px;
+  background: #0f172a;
+  border: 1.5px solid rgba(56, 189, 248, 0.4);
+  border-radius: 8px;
+  color: #fbbf24;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  padding: 0 8px;
+}
+
+.plinko-quick-bets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.plinko-chip-btn {
+  flex: 1;
+  min-width: 44px;
+  padding: 6px 4px;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #cbd5e1;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.plinko-chip-btn:hover {
+  background: #334155;
+  color: #fff;
+}
+
+.plinko-chip-btn.active {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: #f59e0b;
+  color: #fbbf24;
+}
+
+.plinko-odds-breakdown {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+}
+
+.odds-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: #94a3b8;
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+
+.odds-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.plinko-drop-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+  transition: all 0.2s ease;
+}
+
+.plinko-drop-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.55);
+}
+
+.plinko-drop-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.plinko-btn {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
+}
+
+.plinko-btn svg {
+  fill: #fff;
+}
+
+.plinko-reward-modal {
+  max-width: 400px;
+  text-align: center;
+  background: #ffffff;
+  color: var(--text-dark);
+}
+
+.plinko-cats-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 12px 0;
+}
+
+.plinko-cat-reward-card {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.reward-cat-title {
+  font-size: 14px;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+
+.reward-cat-trait, .reward-cat-favorite {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Offline Summary Styles */
+.offline-summary-modal {
+  max-width: 380px;
+}
+
+.offline-rewards-row {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0;
+  flex-wrap: wrap;
+}
+
+.offline-stat-pill {
+  flex: 1;
+  min-width: 140px;
+  padding: 12px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.cp-pill {
+  background: #fdf2f8;
+  border: 1.5px solid #fbcfe8;
+  color: #be185d;
+}
+
+.stars-pill {
+  background: #fefce8;
+  border: 1.5px solid #fef08a;
+  color: #a16207;
+}
+
+.offline-headlines-box {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  font-size: 12px;
+  color: #475569;
+  text-align: left;
+}
+
+.offline-headlines-box ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.offline-headlines-box li {
+  margin-bottom: 4px;
+}
+
+.growth-speed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  margin-top: 4px;
+}
+
+.instant-grow-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #a855f7, #7e22ce);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.3);
+  transition: all 0.15s ease;
+}
+
+.instant-grow-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #c084fc, #9333ea);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.45);
+}
+
+.instant-grow-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 

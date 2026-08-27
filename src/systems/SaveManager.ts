@@ -4,7 +4,8 @@ import { tickCatNeeds } from './NeedsSystem';
 
 export interface OfflineSummary {
   minutesAway: number;
-  loveEarned: number;
+  loveEarned: number; // Care Points
+  starsEarned: number;
   headlines: string[]; // e.g. "Mochi made a new friend."
 }
 
@@ -20,6 +21,7 @@ export function createNewGameState(): GameState {
     breedingCooldowns: {},
     strayArrivalDueAt: null,
     milestoneClaimedIds: [],
+    offlineStarLevel: 1,
     totalPetsGiven: 0,
     totalLoveEarned: 0,
     totalRehomedCats: 0,
@@ -50,6 +52,7 @@ export class SaveManager {
 
       // Migration checks
       if (typeof state.adoptionTokens !== 'number') state.adoptionTokens = 0;
+      if (typeof state.offlineStarLevel !== 'number' || state.offlineStarLevel < 1) state.offlineStarLevel = 1;
       if (!Array.isArray(state.furniture)) state.furniture = [];
       if (!state.machines || typeof state.machines !== 'object') state.machines = {};
       if (!state.breedingCooldowns || typeof state.breedingCooldowns !== 'object') state.breedingCooldowns = {};
@@ -96,21 +99,21 @@ export class SaveManager {
   }
 
   /**
-   * Simulates elapsed time using coarse per-minute steps (needs decay,
-   * sleep/wake cycling, and simple passive Love) rather than replaying the
-   * full simulation tick-by-tick. Capped to keep load times reasonable.
+   * Applies offline progression:
+   * 1. Needs decay & sleep cycling simulated in 5-minute steps (capped at maxMinutes for performance).
+   * 2. Passive Care Points: awards 1 CP/kitten, 2 CP/teen, 3 CP/adult ONLY for fully completed 10-minute intervals.
+   * 3. Passive Stars: uncapped generation at 1 to 5 Stars/hour based on offlineStarLevel.
    */
   applyOfflineProgress(state: GameState, maxMinutes = 8 * 60): OfflineSummary {
     const now = Date.now();
     const elapsedMs = Math.max(0, now - state.lastSavedAt);
-    const minutesAway = Math.min(elapsedMs / 60000, maxMinutes);
+    const totalMinutesAway = elapsedMs / 60000;
+    const cappedMinutesAway = Math.min(totalMinutesAway, maxMinutes);
 
-    let loveEarned = 0;
-    const headlines: string[] = [];
-    const STEP = 5; // simulate in 5-minute chunks for performance
-
-    for (let simulated = 0; simulated < minutesAway; simulated += STEP) {
-      const step = Math.min(STEP, minutesAway - simulated);
+    // 1. Simulate needs & sleep state for cats
+    const STEP = 5;
+    for (let simulated = 0; simulated < cappedMinutesAway; simulated += STEP) {
+      const step = Math.min(STEP, cappedMinutesAway - simulated);
       for (const cat of state.cats) {
         tickCatNeeds(cat, step);
 
@@ -119,35 +122,50 @@ export class SaveManager {
         } else if (cat.animationState === 'sleep' && cat.energy >= 95) {
           cat.animationState = 'sit';
         }
-
-        if (cat.animationState === 'sleep') {
-          const isLazy = cat.majorTrait === 'lazy' || cat.minorTrait === 'lazy';
-          loveEarned += (isLazy ? 0.1 : 0.05) * step;
-        }
       }
+    }
 
-      // Occasionally surface a headline event while away (cosmetic only).
-      if (state.cats.length > 0 && Math.random() < 0.15) {
-        const cat = state.cats[Math.floor(Math.random() * state.cats.length)];
-        const options = [
-          `${cat.name} made a new friend.`,
-          `${cat.name} slept soundly.`,
-          `${cat.name} found a feather.`,
-          `${cat.name} napped in a sunbeam.`,
-        ];
-        const headline = options[Math.floor(Math.random() * options.length)];
-        if (!headlines.includes(headline)) headlines.push(headline);
-      }
+    // 2. Care Points: award only for fully completed 10-minute intervals
+    const completed10MinIntervals = Math.floor(totalMinutesAway / 10);
+    let loveEarned = 0;
+    for (const cat of state.cats) {
+      const cpPer10Min = cat.stage === 'kitten' ? 1 : cat.stage === 'teen' ? 2 : 3;
+      loveEarned += cpPer10Min * completed10MinIntervals;
     }
 
     state.love += loveEarned;
     state.totalLoveEarned += loveEarned;
+
+    // 3. Passive Stars: uncapped generation based on offlineStarLevel (1..5 stars/hr)
+    const starRatePerHour = Math.max(1, Math.min(5, state.offlineStarLevel || 1));
+    const hoursAway = totalMinutesAway / 60;
+    const starsEarned = Math.floor(hoursAway * starRatePerHour);
+    if (starsEarned > 0) {
+      state.adoptionTokens = (state.adoptionTokens || 0) + starsEarned;
+    }
+
+    // Generate cosmetic headline events
+    const headlines: string[] = [];
+    if (state.cats.length > 0 && totalMinutesAway > 5) {
+      const sampleCats = [...state.cats].sort(() => Math.random() - 0.5).slice(0, 3);
+      for (const cat of sampleCats) {
+        const options = [
+          `${cat.name} napped peacefully and soaked up cozy sanctuary vibes.`,
+          `${cat.name} stretched in the warm sunbeams.`,
+          `${cat.name} generated love and cared for fellow sanctuary companions.`,
+          `${cat.name} watched butterflies drift by the garden.`,
+        ];
+        headlines.push(options[Math.floor(Math.random() * options.length)]);
+      }
+    }
+
     state.lastSavedAt = now;
 
     return {
-      minutesAway,
-      loveEarned: Math.round(loveEarned),
-      headlines: headlines.slice(0, 5),
+      minutesAway: Math.round(totalMinutesAway),
+      loveEarned,
+      starsEarned,
+      headlines,
     };
   }
 }

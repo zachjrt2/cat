@@ -1,10 +1,12 @@
 import type { Cat, GameState } from '../data/types';
-import { breedCats, generateCat } from '../data/catFactory';
+import { generateCat } from '../data/catFactory';
 import { sound } from './SoundManager';
 import { EventBus } from '../ui/EventBus';
 
+export const BREED_COOLDOWN_MS = 60_000; // 1 minute (60 seconds) cooldown per pair
+
 export interface BreedingResult {
-  kitten: Cat;
+  starsAwarded: number;
   parentA: Cat;
   parentB: Cat;
   message: string;
@@ -18,40 +20,45 @@ export interface StrayArrivalResult {
 export class BreedingSystem {
   constructor(private state: GameState) {}
 
-  private pairKey(a: Cat, b: Cat): string {
+  pairKey(a: Cat, b: Cat): string {
     return [a.id, b.id].sort().join(':');
   }
 
-  canBreed(parentA: Cat, parentB: Cat): { eligible: boolean; reason?: string } {
+  getPairCooldownProgress(parentA: Cat, parentB: Cat): { remainingMs: number; ratio: number; isReady: boolean; reason?: string } {
     if (parentA.id === parentB.id) {
-      return { eligible: false, reason: 'Cannot pair a cat with itself.' };
+      return { remainingMs: 0, ratio: 0, isReady: false, reason: 'Cannot pair a cat with itself.' };
     }
-
     if (parentA.stage !== 'adult' || parentB.stage !== 'adult') {
-      return { eligible: false, reason: 'Both cats must be fully grown adults to breed.' };
+      return { remainingMs: 0, ratio: 0, isReady: false, reason: 'Both cats must be fully grown adults.' };
     }
-
     if (parentA.area !== parentB.area) {
-      return { eligible: false, reason: 'Both cats must be residing in the same sanctuary area.' };
+      return { remainingMs: 0, ratio: 0, isReady: false, reason: 'Both cats must be in the same sanctuary area.' };
     }
 
-    const areaState = this.state.areas[parentA.area];
-    const catsInArea = this.state.cats.filter((c) => c.area === parentA.area).length;
-    if (areaState && catsInArea >= areaState.capacity) {
-      return { eligible: false, reason: 'This sanctuary area is currently at maximum capacity!' };
-    }
-
-    const BREED_COOLDOWN_MS = 30_000; // 30 seconds
     const key = this.pairKey(parentA, parentB);
     const lastBredAt = this.state.breedingCooldowns[key];
-    if (lastBredAt !== undefined && Date.now() - lastBredAt < BREED_COOLDOWN_MS) {
-      const secsLeft = Math.ceil((BREED_COOLDOWN_MS - (Date.now() - lastBredAt)) / 1000);
-      return { eligible: false, reason: `This pair is resting! Ready again in ${secsLeft}s.` };
+    if (lastBredAt === undefined) {
+      return { remainingMs: 0, ratio: 1.0, isReady: true };
     }
 
-    return { eligible: true };
+    const elapsed = Date.now() - lastBredAt;
+    if (elapsed >= BREED_COOLDOWN_MS) {
+      return { remainingMs: 0, ratio: 1.0, isReady: true };
+    }
+
+    const remainingMs = BREED_COOLDOWN_MS - elapsed;
+    const ratio = Math.max(0, Math.min(1, elapsed / BREED_COOLDOWN_MS));
+    const secsLeft = Math.ceil(remainingMs / 1000);
+    return { remainingMs, ratio, isReady: false, reason: `Pair is resting (${secsLeft}s left)` };
   }
 
+  canBreed(parentA: Cat, parentB: Cat): { eligible: boolean; reason?: string } {
+    const progress = this.getPairCooldownProgress(parentA, parentB);
+    if (!progress.isReady) {
+      return { eligible: false, reason: progress.reason || 'This breeding pair is on cooldown.' };
+    }
+    return { eligible: true };
+  }
 
   breed(parentA: Cat, parentB: Cat): BreedingResult | null {
     const check = this.canBreed(parentA, parentB);
@@ -60,20 +67,20 @@ export class BreedingSystem {
       return null;
     }
 
-    const usedNames = new Set(this.state.cats.map((c) => c.name));
-    const kitten = breedCats(parentA, parentB, this.state.day, usedNames);
+    // Award Stars directly instead of spawning kittens
+    const starsAwarded = 1;
+    this.state.adoptionTokens = (this.state.adoptionTokens || 0) + starsAwarded;
+    EventBus.emit('tokens-changed', { tokens: this.state.adoptionTokens });
 
-    this.state.cats.push(kitten);
     const key = this.pairKey(parentA, parentB);
-    this.state.breedingCooldowns[key] = Date.now(); // timestamp for 10s real-time cooldown
+    this.state.breedingCooldowns[key] = Date.now();
 
     sound.playAdoptFanfare();
-    const rarityLabel = kitten.isRare ? '✨ Rare ' : '';
-    const message = `🎉 ${parentA.name} & ${parentB.name} welcomed a sweet new ${rarityLabel}kitten: ${kitten.name}!`;
+    const message = `✨ ${parentA.name} & ${parentB.name} bonded deeply! (+${starsAwarded} Star ⭐ for Plinko)`;
     EventBus.emit('toast', { message });
 
     return {
-      kitten,
+      starsAwarded,
       parentA,
       parentB,
       message,

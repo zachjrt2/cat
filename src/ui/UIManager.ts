@@ -1,10 +1,11 @@
-import type { Cat, CatArea, Milestone, RareCatType, SanctuaryArea, TimeOfDay, ToolType, WeatherType } from '../data/types';
+import type { Cat, CatArea, GameState, Milestone, SanctuaryArea, TimeOfDay, ToolType, WeatherType } from '../data/types';
 import { EventBus } from './EventBus';
 import { sound } from '../systems/SoundManager';
 import { CAT_SKINS, CAT_MARKINGS } from '../data/catAssets';
 import { TRAITS } from '../data/traits';
 import { SVG_ICONS } from './icons';
-import { AREA_INFO_MAP, AUTOMATION_CATALOG, FURNITURE_CATALOG, RARE_SUMMONS, calculateRehomeLove } from '../data/constants';
+import { AREA_INFO_MAP, AUTOMATION_CATALOG, FURNITURE_CATALOG, OFFLINE_STAR_UPGRADES, calculateRehomeLove } from '../data/constants';
+import { PlinkoModal } from './PlinkoModal';
 
 const TOOLS: { id: ToolType; svg: string; label: string }[] = [
   { id: 'food', svg: SVG_ICONS.food, label: 'Food' },
@@ -43,6 +44,7 @@ export class UIManager {
   private ownedFurniture: string[] = [];
   private machinesState: Record<string, number> = {};
   private milestonesList: Milestone[] = [];
+  private offlineStarLevel = 1;
 
   constructor(container: HTMLElement) {
     this.root = container;
@@ -67,11 +69,11 @@ export class UIManager {
     hud.className = 'hud';
     hud.innerHTML = `
       <div class="hud-stats-group">
-        <div class="hud-love" title="Total Love">
+        <div class="hud-love" title="Care Points (CP)">
           <span class="hud-icon heart-icon">${SVG_ICONS.heart}</span>
           <span id="love-value">0</span>
         </div>
-        <div class="hud-tokens" id="tokens-pill" title="Adoption Tokens">
+        <div class="hud-tokens" id="tokens-pill" title="Stars (for Plinko!)">
           <span class="hud-icon star-icon">${SVG_ICONS.star}</span>
           <span id="tokens-value">0</span>
         </div>
@@ -85,6 +87,9 @@ export class UIManager {
       </div>
 
       <div class="hud-actions">
+        <button class="icon-btn plinko-btn" id="plinko-btn" title="⭐ Cat Plinko (Wager Stars to Discover Cats!)">
+          ${SVG_ICONS.sparkle}
+        </button>
         <button class="icon-btn shop-btn" id="shop-btn" title="Sanctuary Shop & Upgrades">
           ${SVG_ICONS.shop}
         </button>
@@ -101,6 +106,11 @@ export class UIManager {
     this.tokensEl = hud.querySelector('#tokens-value')!;
     this.timeWeatherBtn = hud.querySelector('#time-weather-btn')!;
     this.soundBtn = hud.querySelector('#sound-toggle-btn')!;
+
+    hud.querySelector('#plinko-btn')!.addEventListener('click', () => {
+      sound.playTap();
+      this.openPlinkoModal();
+    });
 
     // Start background music on first user gesture
     const startMusicOnce = () => {
@@ -183,6 +193,7 @@ export class UIManager {
     this.root.querySelectorAll('.tool-btn').forEach((el) => el.classList.remove('selected'));
     this.selectedTool = alreadySelected ? null : tool;
     if (!alreadySelected) btn.classList.add('selected');
+    document.body.classList.toggle('tool-wash-active', this.selectedTool === 'wash');
     EventBus.emit('tool-selected', { tool: this.selectedTool });
   }
 
@@ -208,6 +219,8 @@ export class UIManager {
     this.rosterBtn = btn;
   }
 
+  private activeToasts: { el: HTMLElement; timerId: number }[] = [];
+
   private buildToastStack(): void {
     const stack = document.createElement('div');
     stack.id = 'toast-stack';
@@ -216,17 +229,72 @@ export class UIManager {
     this.toastStack = stack;
   }
 
-
   showToast(message: string): void {
     const el = document.createElement('div');
     el.className = 'toast';
     el.innerHTML = message;
+
+    const item = {
+      el,
+      timerId: 0,
+    };
+
+    // Click to dismiss
+    el.addEventListener('click', () => {
+      sound.playTap();
+      this.dismissToast(item);
+    });
+
+    // Auto-expire after 3.8s
+    item.timerId = window.setTimeout(() => {
+      this.dismissToast(item);
+    }, 3800);
+
+    // Newest one is added to the bottom of the deck
+    this.activeToasts.push(item);
     this.toastStack.appendChild(el);
+
+    this.updateToastDeck();
+  }
+
+  private dismissToast(item: { el: HTMLElement; timerId: number }): void {
+    const idx = this.activeToasts.indexOf(item);
+    if (idx === -1) return;
+
+    window.clearTimeout(item.timerId);
+    this.activeToasts.splice(idx, 1);
+
+    // Animate the expired card up & out
+    item.el.style.opacity = '0';
+    item.el.style.transform = 'translate(0px, -22px) scale(0.92)';
+    item.el.style.pointerEvents = 'none';
+
     setTimeout(() => {
-      el.style.opacity = '0';
-      el.style.transform = 'translateY(-10px)';
-      setTimeout(() => el.remove(), 300);
-    }, 3000);
+      item.el.remove();
+    }, 300);
+
+    // Underlying cards immediately move up into position
+    this.updateToastDeck();
+  }
+
+  private updateToastDeck(): void {
+    const maxVisible = 4;
+
+    this.activeToasts.forEach((item, index) => {
+      // index 0 is the top card currently in front
+      // subsequent cards are offset down (+Y) and a tiny bit to the right (+X)
+      const offsetX = index * 4; // Tiny bit to the right
+      const offsetY = index * 8; // Down
+      const scale = Math.max(0.88, 1 - index * 0.03);
+      const opacity = index >= maxVisible ? 0 : Math.max(0.68, 1 - index * 0.12);
+      const zIndex = 100 - index;
+
+      item.el.style.zIndex = String(zIndex);
+      item.el.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+      item.el.style.opacity = String(opacity);
+      item.el.style.filter = index === 0 ? 'none' : `brightness(${Math.max(0.82, 1 - index * 0.07)})`;
+      item.el.style.pointerEvents = index === 0 ? 'auto' : 'none';
+    });
   }
 
   private bindBusEvents(): void {
@@ -270,6 +338,7 @@ export class UIManager {
         machines?: Record<string, number>;
         milestones: Milestone[];
         tokens: number;
+        offlineStarLevel?: number;
       }) => {
         this.areasState = payload.areas;
         this.currentArea = payload.currentArea;
@@ -278,6 +347,7 @@ export class UIManager {
         this.machinesState = payload.machines ?? {};
         this.milestonesList = payload.milestones ?? [];
         this.currentTokens = payload.tokens ?? 0;
+        this.offlineStarLevel = payload.offlineStarLevel ?? 1;
         this.tokensEl.textContent = this.currentTokens.toString();
         this.renderAreaNav();
       },
@@ -287,7 +357,7 @@ export class UIManager {
 
     EventBus.on('cat-info', ({ cat }: { cat: Cat }) => this.openJournal(cat));
 
-    EventBus.on('offline-summary', (summary: { minutesAway: number; loveEarned: number; headlines: string[] }) => {
+    EventBus.on('offline-summary', (summary: { minutesAway: number; loveEarned: number; starsEarned?: number; headlines: string[] }) => {
       this.showOfflineSummary(summary);
     });
   }
@@ -318,6 +388,32 @@ export class UIManager {
     const backdrop = this.createBackdrop();
     const modal = document.createElement('div');
     modal.className = 'modal journal-modal carousel-modal';
+
+    let isNavigating = false;
+    const navigateToCat = (newIndex: number, direction: 'next' | 'prev') => {
+      if (isNavigating) return;
+      isNavigating = true;
+      sound.playTap();
+      modal.style.transition = 'transform 0.16s ease-out, opacity 0.16s ease-out';
+      modal.style.transform = direction === 'next' ? 'translateX(-80px) rotate(-3deg)' : 'translateX(80px) rotate(3deg)';
+      modal.style.opacity = '0';
+
+      setTimeout(() => {
+        currentIndex = newIndex;
+        renderCurrentCat();
+        modal.style.transition = 'none';
+        modal.style.transform = direction === 'next' ? 'translateX(80px) rotate(3deg)' : 'translateX(-80px) rotate(-3deg)';
+        modal.style.opacity = '0';
+        requestAnimationFrame(() => {
+          modal.style.transition = 'transform 0.22s cubic-bezier(0.34, 1.35, 0.64, 1), opacity 0.22s ease-out';
+          modal.style.transform = 'translateX(0px) rotate(0deg)';
+          modal.style.opacity = '1';
+          setTimeout(() => {
+            isNavigating = false;
+          }, 220);
+        });
+      }, 160);
+    };
 
     const renderCurrentCat = () => {
       const cat = this.catsList[currentIndex];
@@ -365,6 +461,14 @@ export class UIManager {
       const growthNearFull = cat.growthProgress >= 85;
       const growthPct = Math.round(cat.growthProgress);
 
+      const totalCare = this.catsList.reduce((sum, c) => sum + (c.hunger + c.cleanliness + c.affection + c.fun) / 4, 0);
+      const avgCare = this.catsList.length > 0 ? totalCare / this.catsList.length : 100;
+      const growthMultiplier = Math.max(1, avgCare / 10);
+
+      const growCost = cat.stage === 'kitten'
+        ? Math.max(10, Math.round(100 * (1 - cat.growthProgress / 100)))
+        : Math.max(30, Math.round(300 * (1 - cat.growthProgress / 100)));
+
       const growthHtml =
         cat.stage === 'adult'
           ? `<div class="growth-box"><span class="stage-tag-badge adult-badge">Fully Grown Adult</span></div>`
@@ -373,6 +477,7 @@ export class UIManager {
               <div class="growth-label-row">
                 <span class="stage-tag-badge">${stageLabel}</span>
                 <span class="growth-next-text">${nextStageText}</span>
+                <span class="growth-speed-badge">⚡ ${growthMultiplier.toFixed(1)}x Speed</span>
               </div>
               <div class="growth-track-wrap">
                 <div class="progress-track growth-track">
@@ -383,9 +488,13 @@ export class UIManager {
               ${growthPaused
                 ? `<div class="growth-status growth-paused">Growth paused — keep needs met to continue growing!</div>`
                 : growthNearFull
-                  ? `<div class="growth-status growth-ready">Almost ready! Keep caring and ${cat.name} will grow soon.</div>`
-                  : `<div class="growth-status growth-tip">Keep ${cat.name} happy and well-cared-for to help them grow.</div>`
+                  ? `<div class="growth-status growth-ready">Almost ready! Keep sanctuary care high (${Math.round(avgCare)}% avg) for faster growth.</div>`
+                  : `<div class="growth-status growth-tip">High sanctuary care gives up to 10x growth speed! (Current: ${growthMultiplier.toFixed(1)}x)</div>`
               }
+              <button class="instant-grow-btn" id="instant-grow-btn" ${this.currentLove < growCost ? 'disabled' : ''}>
+                <span class="svg-inline">${SVG_ICONS.sparkle}</span>
+                <span>Grow to ${cat.stage === 'kitten' ? 'Teen' : 'Adult'} (${growCost.toLocaleString()} CP 💗)</span>
+              </button>
             </div>
           `;
 
@@ -465,14 +574,14 @@ export class UIManager {
             <span class="need-pct-hunger">${Math.round(cat.hunger)}%</span>
           </div>
           <div class="need-bar-item">
-            <span class="need-label"><span class="svg-inline">${SVG_ICONS.wash}</span> Clean</span>
-            <div class="progress-track"><div class="progress-fill fill-clean" style="width: ${cat.cleanliness}%"></div></div>
-            <span class="need-pct-clean">${Math.round(cat.cleanliness)}%</span>
-          </div>
-          <div class="need-bar-item">
             <span class="need-label"><span class="svg-inline">${SVG_ICONS.pet}</span> Affection</span>
             <div class="progress-track"><div class="progress-fill fill-affection" style="width: ${cat.affection}%"></div></div>
             <span class="need-pct-affection">${Math.round(cat.affection)}%</span>
+          </div>
+          <div class="need-bar-item">
+            <span class="need-label"><span class="svg-inline">${SVG_ICONS.brush}</span> Cleanliness</span>
+            <div class="progress-track"><div class="progress-fill fill-clean" style="width: ${cat.cleanliness}%"></div></div>
+            <span class="need-pct-clean">${Math.round(cat.cleanliness)}%</span>
           </div>
           <div class="need-bar-item">
             <span class="need-label"><span class="svg-inline">${SVG_ICONS.toy}</span> Fun</span>
@@ -525,15 +634,19 @@ export class UIManager {
 
       // Carousel Navigation Event Listeners
       modal.querySelector('#prev-cat-btn')?.addEventListener('click', () => {
-        sound.playTap();
-        currentIndex = (currentIndex - 1 + this.catsList.length) % this.catsList.length;
-        renderCurrentCat();
+        const nextIdx = (currentIndex - 1 + this.catsList.length) % this.catsList.length;
+        navigateToCat(nextIdx, 'prev');
       });
 
       modal.querySelector('#next-cat-btn')?.addEventListener('click', () => {
+        const nextIdx = (currentIndex + 1) % this.catsList.length;
+        navigateToCat(nextIdx, 'next');
+      });
+
+      modal.querySelector('#instant-grow-btn')?.addEventListener('click', () => {
         sound.playTap();
-        currentIndex = (currentIndex + 1) % this.catsList.length;
-        renderCurrentCat();
+        EventBus.emit('instant-grow-cat', { catId: cat.id, cost: growCost });
+        setTimeout(() => renderCurrentCat(), 200);
       });
 
       const selectEl = modal.querySelector('#cat-area-select') as HTMLSelectElement;
@@ -605,36 +718,136 @@ export class UIManager {
       this.drawCatAvatar(modal.querySelector('#journal-cat-canvas') as HTMLCanvasElement, cat);
     };
 
-    // Touch Swipe Navigation for mobile & touchscreens
+    // Robust Touch & Drag Gesture System with Deadzone & Ease-in Progression
+    const DEADZONE_PX = 20;
+    const SWIPE_TRIGGER_PX = 85;
     let touchStartX = 0;
-    modal.addEventListener('touchstart', (e) => {
-      touchStartX = e.changedTouches[0].screenX;
-    }, { passive: true });
+    let touchStartY = 0;
+    let currentDx = 0;
+    let gestureLock: 'horizontal' | 'vertical' | null = null;
+    let isTouching = false;
 
-    modal.addEventListener('touchend', (e) => {
-      const touchEndX = e.changedTouches[0].screenX;
-      const diff = touchEndX - touchStartX;
-      if (Math.abs(diff) > 48) {
-        sound.playTap();
-        if (diff < 0) {
-          currentIndex = (currentIndex + 1) % this.catsList.length;
-        } else {
-          currentIndex = (currentIndex - 1 + this.catsList.length) % this.catsList.length;
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      currentDx = 0;
+      gestureLock = null;
+      isTouching = true;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isTouching || e.touches.length !== 1) return;
+      const x = e.touches[0].clientX;
+      const y = e.touches[0].clientY;
+      const dx = x - touchStartX;
+      const dy = y - touchStartY;
+
+      if (gestureLock === null) {
+        if (Math.hypot(dx, dy) > 12) {
+          // Strictly require dominant horizontal movement (> 2.0x vertical) and past initial motion
+          if (Math.abs(dx) > Math.abs(dy) * 2.0 && Math.abs(dx) > DEADZONE_PX) {
+            gestureLock = 'horizontal';
+          } else {
+            // Allow native vertical scrolling of modal
+            gestureLock = 'vertical';
+          }
         }
-        renderCurrentCat();
       }
-    }, { passive: true });
+
+      if (gestureLock === 'horizontal') {
+        currentDx = dx;
+        const absDx = Math.abs(dx);
+
+        if (absDx <= DEADZONE_PX) {
+          modal.style.transition = 'none';
+          modal.style.transform = 'translateX(0px) rotate(0deg)';
+          modal.style.opacity = '1';
+        } else {
+          // Ease-in drag curve: starts very subtly past deadzone, becoming progressively more pronounced
+          const excess = absDx - DEADZONE_PX;
+          const progress = Math.min(1.6, excess / 80);
+          const easeInFactor = Math.pow(progress, 1.5);
+          const dir = Math.sign(dx);
+
+          const dragX = dir * easeInFactor * 65;
+          const dragRotate = dir * easeInFactor * 3.5;
+          const dragAlpha = Math.max(0.55, 1 - easeInFactor * 0.28);
+
+          modal.style.transition = 'none';
+          modal.style.transform = `translateX(${dragX}px) rotate(${dragRotate}deg)`;
+          modal.style.opacity = String(dragAlpha);
+        }
+
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+
+    const onTouchEnd = () => {
+      if (!isTouching) return;
+      isTouching = false;
+
+      if (gestureLock === 'horizontal') {
+        if (currentDx <= -SWIPE_TRIGGER_PX && this.catsList.length > 1) {
+          const nextIdx = (currentIndex + 1) % this.catsList.length;
+          modal.style.transition = 'transform 0.18s ease-out, opacity 0.18s ease-out';
+          modal.style.transform = 'translateX(-120%) rotate(-6deg)';
+          modal.style.opacity = '0';
+          sound.playTap();
+          setTimeout(() => {
+            currentIndex = nextIdx;
+            renderCurrentCat();
+            modal.style.transition = 'none';
+            modal.style.transform = 'translateX(60px) rotate(3deg)';
+            modal.style.opacity = '0';
+            requestAnimationFrame(() => {
+              modal.style.transition = 'transform 0.24s cubic-bezier(0.34, 1.35, 0.64, 1), opacity 0.22s ease-out';
+              modal.style.transform = 'translateX(0px) rotate(0deg)';
+              modal.style.opacity = '1';
+            });
+          }, 180);
+        } else if (currentDx >= SWIPE_TRIGGER_PX && this.catsList.length > 1) {
+          const prevIdx = (currentIndex - 1 + this.catsList.length) % this.catsList.length;
+          modal.style.transition = 'transform 0.18s ease-out, opacity 0.18s ease-out';
+          modal.style.transform = 'translateX(120%) rotate(6deg)';
+          modal.style.opacity = '0';
+          sound.playTap();
+          setTimeout(() => {
+            currentIndex = prevIdx;
+            renderCurrentCat();
+            modal.style.transition = 'none';
+            modal.style.transform = 'translateX(-60px) rotate(-3deg)';
+            modal.style.opacity = '0';
+            requestAnimationFrame(() => {
+              modal.style.transition = 'transform 0.24s cubic-bezier(0.34, 1.35, 0.64, 1), opacity 0.22s ease-out';
+              modal.style.transform = 'translateX(0px) rotate(0deg)';
+              modal.style.opacity = '1';
+            });
+          }, 180);
+        } else {
+          modal.style.transition = 'transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1), opacity 0.2s ease';
+          modal.style.transform = 'translateX(0px) rotate(0deg)';
+          modal.style.opacity = '1';
+        }
+      }
+
+      gestureLock = null;
+      currentDx = 0;
+    };
+
+    modal.addEventListener('touchstart', onTouchStart, { passive: true });
+    modal.addEventListener('touchmove', onTouchMove, { passive: false });
+    modal.addEventListener('touchend', onTouchEnd, { passive: true });
+    modal.addEventListener('touchcancel', onTouchEnd, { passive: true });
 
     // Keyboard Left/Right Navigation
     const keyHandler = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') {
-        sound.playTap();
-        currentIndex = (currentIndex - 1 + this.catsList.length) % this.catsList.length;
-        renderCurrentCat();
+        const prevIdx = (currentIndex - 1 + this.catsList.length) % this.catsList.length;
+        navigateToCat(prevIdx, 'prev');
       } else if (e.key === 'ArrowRight') {
-        sound.playTap();
-        currentIndex = (currentIndex + 1) % this.catsList.length;
-        renderCurrentCat();
+        const nextIdx = (currentIndex + 1) % this.catsList.length;
+        navigateToCat(nextIdx, 'next');
       } else if (e.key === 'Escape') {
         backdrop.remove();
         window.removeEventListener('keydown', keyHandler);
@@ -705,18 +918,22 @@ export class UIManager {
     this.root.appendChild(backdrop);
   }
 
-  private openShopModal(defaultTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'rare' | 'sort' = 'areas'): void {
+  private openShopModal(defaultTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' | 'plinko' | 'sort' = 'areas'): void {
     const backdrop = this.createBackdrop();
     const modal = document.createElement('div');
     modal.className = 'modal shop-modal';
 
-    const renderTabs = (activeTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'rare' | 'sort') => {
+    const renderTabs = (activeTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' | 'plinko' | 'sort', preserveScroll = true) => {
+      const savedModalScroll = preserveScroll ? modal.scrollTop : 0;
+      const contentEl = modal.querySelector('.shop-content');
+      const savedContentScroll = preserveScroll && contentEl ? contentEl.scrollTop : 0;
+
       modal.innerHTML = `
         <div class="shop-header">
           <h2>Sanctuary Emporium</h2>
           <div class="shop-balances">
-            <span class="shop-love-balance"><span class="svg-inline">${SVG_ICONS.heart}</span> <b>${this.currentLove.toLocaleString()}</b></span>
-            <span class="shop-tokens-balance"><span class="svg-inline">${SVG_ICONS.star}</span> <b>${this.currentTokens}</b></span>
+            <span class="shop-love-balance" title="Care Points (CP)"><span class="svg-inline">${SVG_ICONS.heart}</span> <b>${this.currentLove.toLocaleString()} CP</b></span>
+            <span class="shop-tokens-balance" title="Stars (Plinko currency)"><span class="svg-inline">${SVG_ICONS.star}</span> <b>${this.currentTokens} ⭐</b></span>
           </div>
         </div>
 
@@ -725,7 +942,8 @@ export class UIManager {
           <button class="shop-tab-btn ${activeTab === 'machines' ? 'active' : ''}" id="tab-machines-btn"><span class="svg-inline">${SVG_ICONS.machine}</span> Automation</button>
           <button class="shop-tab-btn ${activeTab === 'furniture' ? 'active' : ''}" id="tab-furniture-btn"><span class="svg-inline">${SVG_ICONS.shop}</span> Decor</button>
           <button class="shop-tab-btn ${activeTab === 'milestones' ? 'active' : ''}" id="tab-milestones-btn"><span class="svg-inline">${SVG_ICONS.star}</span> Goals</button>
-          <button class="shop-tab-btn ${activeTab === 'rare' ? 'active' : ''}" id="tab-rare-btn"><span class="svg-inline">${SVG_ICONS.sparkle}</span> Rares</button>
+          <button class="shop-tab-btn ${activeTab === 'upgrades' ? 'active' : ''}" id="tab-upgrades-btn"><span class="svg-inline">${SVG_ICONS.sparkle}</span> Upgrades</button>
+          <button class="shop-tab-btn ${activeTab === 'plinko' ? 'active' : ''}" id="tab-plinko-btn"><span class="svg-inline">${SVG_ICONS.star}</span> Plinko</button>
           <button class="shop-tab-btn ${activeTab === 'sort' ? 'active' : ''}" id="tab-sort-btn"><span class="svg-inline">${SVG_ICONS.paw}</span> Sort</button>
         </div>
 
@@ -739,38 +957,52 @@ export class UIManager {
                   ? this.renderShopFurnitureContent()
                   : activeTab === 'milestones'
                     ? this.renderShopMilestonesContent()
-                    : activeTab === 'rare'
-                      ? this.renderShopRareSummonsContent()
-                      : this.renderShopSortContent()
+                    : activeTab === 'upgrades'
+                      ? this.renderShopUpgradesContent()
+                      : activeTab === 'plinko'
+                        ? this.renderShopPlinkoContent()
+                        : this.renderShopSortContent()
           }
         </div>
 
         <button class="modal-close" id="shop-close-btn">Done</button>
       `;
 
+      if (preserveScroll) {
+        modal.scrollTop = savedModalScroll;
+        const newContentEl = modal.querySelector('.shop-content');
+        if (newContentEl && savedContentScroll > 0) {
+          newContentEl.scrollTop = savedContentScroll;
+        }
+      }
+
       modal.querySelector('#tab-areas-btn')?.addEventListener('click', () => {
         sound.playTap();
-        renderTabs('areas');
+        renderTabs('areas', false);
       });
       modal.querySelector('#tab-machines-btn')?.addEventListener('click', () => {
         sound.playTap();
-        renderTabs('machines');
+        renderTabs('machines', false);
       });
       modal.querySelector('#tab-furniture-btn')?.addEventListener('click', () => {
         sound.playTap();
-        renderTabs('furniture');
+        renderTabs('furniture', false);
       });
       modal.querySelector('#tab-milestones-btn')?.addEventListener('click', () => {
         sound.playTap();
-        renderTabs('milestones');
+        renderTabs('milestones', false);
       });
-      modal.querySelector('#tab-rare-btn')?.addEventListener('click', () => {
+      modal.querySelector('#tab-upgrades-btn')?.addEventListener('click', () => {
         sound.playTap();
-        renderTabs('rare');
+        renderTabs('upgrades', false);
+      });
+      modal.querySelector('#tab-plinko-btn')?.addEventListener('click', () => {
+        sound.playTap();
+        renderTabs('plinko', false);
       });
       modal.querySelector('#tab-sort-btn')?.addEventListener('click', () => {
         sound.playTap();
-        renderTabs('sort');
+        renderTabs('sort', false);
       });
 
       modal.querySelector('#shop-close-btn')?.addEventListener('click', () => {
@@ -783,7 +1015,7 @@ export class UIManager {
         btn.addEventListener('click', () => {
           const areaKey = (btn as HTMLElement).dataset.area as CatArea;
           EventBus.emit('unlock-area', { area: areaKey });
-          setTimeout(() => renderTabs('areas'), 200);
+          setTimeout(() => renderTabs('areas', true), 200);
         });
       });
 
@@ -792,7 +1024,7 @@ export class UIManager {
         btn.addEventListener('click', () => {
           const areaKey = (btn as HTMLElement).dataset.area as CatArea;
           EventBus.emit('upgrade-capacity', { area: areaKey });
-          setTimeout(() => renderTabs('areas'), 200);
+          setTimeout(() => renderTabs('areas', true), 200);
         });
       });
 
@@ -802,7 +1034,7 @@ export class UIManager {
           const machineId = (btn as HTMLElement).dataset.machineId;
           if (machineId) {
             EventBus.emit('buy-machine', { machineId });
-            setTimeout(() => renderTabs('machines'), 200);
+            setTimeout(() => renderTabs('machines', true), 200);
           }
         });
       });
@@ -812,7 +1044,7 @@ export class UIManager {
           const machineId = (btn as HTMLElement).dataset.machineId;
           if (machineId) {
             EventBus.emit('upgrade-machine', { machineId });
-            setTimeout(() => renderTabs('machines'), 200);
+            setTimeout(() => renderTabs('machines', true), 200);
           }
         });
       });
@@ -823,7 +1055,7 @@ export class UIManager {
           const furnitureId = (btn as HTMLElement).dataset.furnitureId;
           if (furnitureId) {
             EventBus.emit('buy-furniture', { furnitureId });
-            setTimeout(() => renderTabs('furniture'), 200);
+            setTimeout(() => renderTabs('furniture', true), 200);
           }
         });
       });
@@ -834,20 +1066,22 @@ export class UIManager {
           const milestoneId = (btn as HTMLElement).dataset.milestoneId;
           if (milestoneId) {
             EventBus.emit('claim-milestone', { milestoneId });
-            setTimeout(() => renderTabs('milestones'), 200);
+            setTimeout(() => renderTabs('milestones', true), 200);
           }
         });
       });
 
-      // Bind Rare Summon buttons
-      modal.querySelectorAll('.summon-rare-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const rareType = (btn as HTMLElement).dataset.rareType as RareCatType;
-          if (rareType) {
-            EventBus.emit('summon-rare-cat', { rareType });
-            setTimeout(() => renderTabs('rare'), 200);
-          }
-        });
+      // Bind Upgrade Offline Stars button
+      modal.querySelector('.upgrade-offline-stars-btn')?.addEventListener('click', () => {
+        EventBus.emit('upgrade-offline-stars', {});
+        setTimeout(() => renderTabs('upgrades', true), 200);
+      });
+
+      // Bind Launch Plinko Button
+      modal.querySelector('.launch-plinko-btn')?.addEventListener('click', () => {
+        sound.playTap();
+        backdrop.remove();
+        this.openPlinkoModal();
       });
 
       // Bind Cat Move Dropdowns
@@ -858,13 +1092,15 @@ export class UIManager {
           const toArea = target.value as CatArea;
           if (catId && toArea) {
             EventBus.emit('move-cat', { catId, toArea });
-            setTimeout(() => renderTabs('sort'), 200);
+            const cat = this.catsList.find((c) => c.id === catId);
+            if (cat) cat.area = toArea;
+            renderTabs('sort', true);
           }
         });
       });
     };
 
-    renderTabs(defaultTab);
+    renderTabs(defaultTab, false);
     backdrop.appendChild(modal);
     this.root.appendChild(backdrop);
   }
@@ -1011,7 +1247,7 @@ export class UIManager {
 
   private renderShopMilestonesContent(): string {
     return `
-      <div class="milestones-intro">Complete sanctuary milestones to earn Adoption Tokens for legendary cats!</div>
+      <div class="milestones-intro">Complete sanctuary goals to earn Stars ⭐ for Cat Plinko!</div>
       <div class="milestones-list">
         ${this.milestonesList.map((m) => {
           const isComplete = m.current >= m.target;
@@ -1047,27 +1283,45 @@ export class UIManager {
     `;
   }
 
-  private renderShopRareSummonsContent(): string {
-    return `
-      <div class="rares-intro">Summon guaranteed Legendary &amp; Rare Cats using Adoption Tokens:</div>
-      <div class="rares-list">
-        ${RARE_SUMMONS.map((summon) => {
-          const canAfford = this.currentTokens >= summon.tokenCost;
-          const skin = CAT_SKINS.find((s) => s.id === summon.skinId);
+  private renderShopUpgradesContent(): string {
+    const currentLvl = this.offlineStarLevel || 1;
+    const isMax = currentLvl >= 5;
+    const nextDef = OFFLINE_STAR_UPGRADES[currentLvl];
 
-          return `
-            <div class="shop-card rare-summon-card">
-              <div class="shop-card-info">
-                <h3><span class="svg-inline">${SVG_ICONS.sparkle}</span> ${summon.name} · ${summon.title}</h3>
-                <p>${summon.description}</p>
-                <div class="shop-card-meta">Fur Style: <b>${skin?.label || summon.skinId}</b></div>
-              </div>
-              <button class="shop-action-btn summon-rare-btn" data-rare-type="${summon.id}" ${!canAfford ? 'disabled' : ''}>
-                Summon Cat (${summon.tokenCost} ⭐)
-              </button>
-            </div>
-          `;
-        }).join('')}
+    return `
+      <div class="milestones-intro">Spend Care Points (CP) to upgrade passive Star generation while offline:</div>
+      <div class="shop-card ${isMax ? 'unlocked-card' : ''}" style="margin-top:10px;">
+        <div class="shop-card-info">
+          <h3>⭐ Passive Star Generation (Level ${currentLvl} / 5)</h3>
+          <p>Generates <b>${currentLvl} Star${currentLvl > 1 ? 's' : ''} per hour</b> while offline (no accumulation limit).</p>
+          ${
+            isMax
+              ? `<div class="shop-card-meta"><span class="unlocked-badge">Maximum Level Reached (5 Stars/hr)</span></div>`
+              : `<div class="shop-card-meta">Next Level: <b>${nextDef.ratePerHour} Stars/hr</b> · Cost: <b>${nextDef.costCarePoints.toLocaleString()} CP 💗</b></div>`
+          }
+        </div>
+        ${
+          !isMax && nextDef
+            ? `<button class="shop-action-btn upgrade-offline-stars-btn" ${this.currentLove < nextDef.costCarePoints ? 'disabled' : ''}>
+                Upgrade Rate (${nextDef.costCarePoints.toLocaleString()} 💗)
+               </button>`
+            : ''
+        }
+      </div>
+    `;
+  }
+
+  private renderShopPlinkoContent(): string {
+    return `
+      <div class="shop-card" style="margin-top:10px;text-align:center;padding:24px 16px;">
+        <div style="font-size:36px;margin-bottom:8px;">⭐ 🐾 🎰</div>
+        <h3 style="font-size:18px;margin-bottom:6px;">Cat Plinko Machine</h3>
+        <p style="font-size:13px;color:var(--text-dark);max-width:320px;margin:0 auto 16px;">
+          Wager Stars earned from breeding and sanctuary goals to drop balls down the cosmic pegboard and discover sweet new cats!
+        </p>
+        <button class="shop-action-btn launch-plinko-btn" style="padding:12px 24px;font-size:15px;margin:0 auto;display:inline-flex;align-items:center;gap:8px;">
+          <span class="svg-inline">${SVG_ICONS.sparkle}</span> Launch Plinko Machine
+        </button>
       </div>
     `;
   }
@@ -1147,26 +1401,6 @@ export class UIManager {
         };
       }
     };
-  }
-
-  private showOfflineSummary(summary: { minutesAway: number; loveEarned: number; headlines: string[] }): void {
-    const backdrop = this.createBackdrop();
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    const minutes = Math.round(summary.minutesAway);
-    modal.innerHTML = `
-      <h2><span class="svg-inline">${SVG_ICONS.paw}</span> Welcome Back!</h2>
-      <div class="subtitle">You were away for ${minutes} minute${minutes === 1 ? '' : 's'}.</div>
-      <div class="journal-stat offline-love-stat">While you were away<br/><b>+${summary.loveEarned} 💗 Love</b></div>
-      ${summary.headlines.length ? `<ul class="headline-list">${summary.headlines.map((h) => `<li>${escapeHtml(h)}</li>`).join('')}</ul>` : ''}
-      <button class="modal-close" id="offline-close-btn">Collect &amp; Play</button>
-    `;
-    modal.querySelector('#offline-close-btn')!.addEventListener('click', () => {
-      sound.playPurr();
-      backdrop.remove();
-    });
-    backdrop.appendChild(modal);
-    this.root.appendChild(backdrop);
   }
 
   private openSoundPanel(): void {
@@ -1268,6 +1502,72 @@ export class UIManager {
       sound.playTap();
       backdrop.remove();
     });
+    backdrop.appendChild(modal);
+    this.root.appendChild(backdrop);
+  }
+
+  private openPlinkoModal(): void {
+    const gameState: GameState = {
+      love: this.currentLove,
+      adoptionTokens: this.currentTokens,
+      cats: this.catsList,
+      areas: this.areasState,
+      furniture: this.ownedFurniture,
+      machines: this.machinesState,
+      breedingCooldowns: {},
+      milestoneClaimedIds: [],
+      offlineStarLevel: this.offlineStarLevel,
+      totalPetsGiven: 0,
+      totalLoveEarned: 0,
+      totalRehomedCats: 0,
+      totalRehomeLoveEarned: 0,
+      timeOfDay: this.currentTimeOfDay,
+      weather: this.currentWeather,
+      day: 1,
+      lastSavedAt: Date.now(),
+      createdAt: Date.now(),
+    };
+    new PlinkoModal(this.root, gameState).open();
+  }
+
+  private showOfflineSummary(summary: { minutesAway: number; loveEarned: number; starsEarned?: number; headlines: string[] }): void {
+    const backdrop = this.createBackdrop();
+    const modal = document.createElement('div');
+    modal.className = 'modal offline-summary-modal';
+
+    const starsHtml = (summary.starsEarned || 0) > 0
+      ? `<div class="offline-stat-pill stars-pill">
+          <span class="svg-inline">${SVG_ICONS.star}</span>
+          <span><b>+${summary.starsEarned}</b> Stars for Plinko</span>
+         </div>`
+      : '';
+
+    modal.innerHTML = `
+      <h2>🏡 Welcome Back!</h2>
+      <div class="subtitle" style="margin-bottom:10px;">You were away for ~<b>${summary.minutesAway}</b> minutes.</div>
+      <div class="offline-rewards-row">
+        <div class="offline-stat-pill cp-pill">
+          <span class="svg-inline">${SVG_ICONS.heart}</span>
+          <span><b>+${summary.loveEarned.toLocaleString()}</b> Care Points</span>
+        </div>
+        ${starsHtml}
+      </div>
+      ${
+        summary.headlines.length > 0
+          ? `<div class="offline-headlines-box">
+              <b>While you were away:</b>
+              <ul>${summary.headlines.map((h) => `<li>${escapeHtml(h)}</li>`).join('')}</ul>
+            </div>`
+          : ''
+      }
+      <button class="modal-close" id="close-offline-btn" style="margin-top:16px;">Cozy On!</button>
+    `;
+
+    modal.querySelector('#close-offline-btn')?.addEventListener('click', () => {
+      sound.playTap();
+      backdrop.remove();
+    });
+
     backdrop.appendChild(modal);
     this.root.appendChild(backdrop);
   }

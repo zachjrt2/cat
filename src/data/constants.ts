@@ -437,21 +437,45 @@ export interface MilestoneDef {
 }
 
 export const MILESTONES_DEF: MilestoneDef[] = [
-  { id: 'adopt_3', title: 'First Whiskers', description: 'Adopt 3 cats into your sanctuary.', type: 'cats', target: 3, rewardTokens: 1 },
-  { id: 'adopt_8', title: 'Growing Family', description: 'Adopt 8 cats into your sanctuary.', type: 'cats', target: 8, rewardTokens: 2 },
-  { id: 'adopt_15', title: 'Full House', description: 'Adopt 15 cats into your sanctuary.', type: 'cats', target: 15, rewardTokens: 3 },
-  { id: 'adopt_30', title: 'Cat Paradise', description: 'Adopt 30 cats into your sanctuary.', type: 'cats', target: 30, rewardTokens: 5 },
+  // Cats Ownership Chain
+  { id: 'adopt_1', title: 'First Steps', description: 'Welcome your 1st cat into the sanctuary.', type: 'cats', target: 1, rewardTokens: 3 },
+  { id: 'adopt_3', title: 'First Whiskers', description: 'Have 3 cats in your sanctuary.', type: 'cats', target: 3, rewardTokens: 3 },
+  { id: 'adopt_8', title: 'Growing Family', description: 'Have 8 cats in your sanctuary.', type: 'cats', target: 8, rewardTokens: 6 },
+  { id: 'adopt_15', title: 'Full House', description: 'Have 15 cats in your sanctuary.', type: 'cats', target: 15, rewardTokens: 9 },
+  { id: 'adopt_30', title: 'Cat Paradise', description: 'Have 30 cats in your sanctuary.', type: 'cats', target: 30, rewardTokens: 15 },
   
-  { id: 'pets_25', title: 'Gentle Hands', description: 'Give 25 pets to your cats.', type: 'pets', target: 25, rewardTokens: 1 },
-  { id: 'pets_100', title: 'Purr Master', description: 'Give 100 pets to your cats.', type: 'pets', target: 100, rewardTokens: 2 },
-  { id: 'pets_300', title: 'Cuddle Champion', description: 'Give 300 pets to your cats.', type: 'pets', target: 300, rewardTokens: 4 },
+  // Pets / Care Chain
+  { id: 'pets_12', title: 'Gentle Touch', description: 'Give 12 loving pets to your cats.', type: 'pets', target: 12, rewardTokens: 3 },
+  { id: 'pets_25', title: 'Gentle Hands', description: 'Give 25 loving pets to your cats.', type: 'pets', target: 25, rewardTokens: 3 },
+  { id: 'pets_100', title: 'Purr Master', description: 'Give 100 loving pets to your cats.', type: 'pets', target: 100, rewardTokens: 6 },
+  { id: 'pets_300', title: 'Cuddle Champion', description: 'Give 300 loving pets to your cats.', type: 'pets', target: 300, rewardTokens: 12 },
 
-  { id: 'friends_2', title: 'Kindred Spirits', description: 'Have 2 pairs of cats become Best Friends.', type: 'friends', target: 2, rewardTokens: 1 },
-  { id: 'friends_6', title: 'Bonded Sanctuary', description: 'Have 6 pairs of cats become Best Friends.', type: 'friends', target: 6, rewardTokens: 3 },
+  // Friendship Chain
+  { id: 'friends_1', title: 'First Bond', description: 'Have 1 pair of cats become Best Friends.', type: 'friends', target: 1, rewardTokens: 3 },
+  { id: 'friends_2', title: 'Kindred Spirits', description: 'Have 2 pairs of cats become Best Friends.', type: 'friends', target: 2, rewardTokens: 3 },
+  { id: 'friends_6', title: 'Bonded Sanctuary', description: 'Have 6 pairs of cats become Best Friends.', type: 'friends', target: 6, rewardTokens: 9 },
 
-  { id: 'love_200', title: 'Warm Feelings', description: 'Generate 200 total Love.', type: 'love', target: 200, rewardTokens: 1 },
-  { id: 'love_1000', title: 'Heart Overflowing', description: 'Generate 1,000 total Love.', type: 'love', target: 1000, rewardTokens: 3 },
-  { id: 'love_5000', title: 'Infinite Affection', description: 'Generate 5,000 total Love.', type: 'love', target: 5000, rewardTokens: 5 },
+  // Care Points (Love) Generation Chain
+  { id: 'love_100', title: 'Tender Glow', description: 'Generate 100 total Care Points.', type: 'love', target: 100, rewardTokens: 3 },
+  { id: 'love_200', title: 'Warm Feelings', description: 'Generate 200 total Care Points.', type: 'love', target: 200, rewardTokens: 3 },
+  { id: 'love_1000', title: 'Heart Overflowing', description: 'Generate 1,000 total Care Points.', type: 'love', target: 1000, rewardTokens: 9 },
+  { id: 'love_5000', title: 'Infinite Affection', description: 'Generate 5,000 total Care Points.', type: 'love', target: 5000, rewardTokens: 15 },
+];
+
+export interface OfflineStarUpgradeDef {
+  level: number;
+  ratePerHour: number;
+  costCarePoints: number;
+  name: string;
+  description: string;
+}
+
+export const OFFLINE_STAR_UPGRADES: OfflineStarUpgradeDef[] = [
+  { level: 1, ratePerHour: 1, costCarePoints: 0, name: 'Starlit Whispers', description: 'Gathers 1 Star per hour while offline.' },
+  { level: 2, ratePerHour: 2, costCarePoints: 1000, name: 'Celestial Harmony', description: 'Increases offline Star generation to 2 Stars per hour.' },
+  { level: 3, ratePerHour: 3, costCarePoints: 5000, name: 'Astral Resonance', description: 'Increases offline Star generation to 3 Stars per hour.' },
+  { level: 4, ratePerHour: 4, costCarePoints: 25000, name: 'Cosmic Compassion', description: 'Increases offline Star generation to 4 Stars per hour.' },
+  { level: 5, ratePerHour: 5, costCarePoints: 125000, name: 'Infinite Starlight', description: 'Maximum offline rate: 5 Stars per hour.' },
 ];
 
 export interface RareSummonDef {

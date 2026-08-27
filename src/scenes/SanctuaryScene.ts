@@ -14,7 +14,10 @@ import { AutomationSystem } from '../systems/AutomationSystem';
 import { BreedingSystem } from '../systems/BreedingSystem';
 import { tickCatNeeds } from '../systems/NeedsSystem';
 import { CatSprite } from '../entities/CatSprite';
-import { AUTOSAVE_INTERVAL_MS, AREA_INFO_MAP, FURNITURE_CATALOG, RARE_SUMMONS, calculateRehomeLove } from '../data/constants';
+import { ToyBall } from '../entities/ToyBall';
+import { KibbleBag, KibblePiece } from '../entities/KibbleBag';
+import { AUTOSAVE_INTERVAL_MS, AREA_INFO_MAP, FURNITURE_CATALOG, RARE_SUMMONS, OFFLINE_STAR_UPGRADES, calculateRehomeLove } from '../data/constants';
+import { BREED_COOLDOWN_MS } from '../systems/BreedingSystem';
 import { EventBus } from '../ui/EventBus';
 import { sound } from '../systems/SoundManager';
 import { exportCatCardAsPng } from '../systems/CardExport';
@@ -48,11 +51,18 @@ export class SanctuaryScene extends Phaser.Scene {
   private growth = new GrowthSystem();
   private automation!: AutomationSystem;
   private breeding!: BreedingSystem;
+  private onlineProgressionAccumMs = 0;
 
   private currentArea: CatArea = 'yard';
   private catSprites = new Map<string, CatSprite>();
   private selectedTool: ToolType | null = null;
+  private toyBall: ToyBall | null = null;
+  private kibbleBag: KibbleBag | null = null;
+  private kibblePieces: KibblePiece[] = [];
+  private washBrushFollower: Phaser.GameObjects.Container | null = null;
   private lastTick = 0;
+  private lastWashLoveTime = 0;
+  private lastBubbleSpawnTime = 0;
   private relationshipTickAccum = 0;
   private animTimer = 0;
 
@@ -87,6 +97,22 @@ export class SanctuaryScene extends Phaser.Scene {
     this.bindUiEvents();
 
     this.lastTick = this.time.now;
+
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.selectedTool === 'toy' && this.toyBall && !this.toyBall.isDragging) {
+        const bounds = this.areaBounds();
+        if (bounds.contains(pointer.x, pointer.y)) {
+          const dx = pointer.x - this.toyBall.x;
+          const dy = pointer.y - this.toyBall.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 24) {
+            const speed = Math.min(650, dist * 3.5);
+            this.toyBall.kick((dx / dist) * speed, (dy / dist) * speed);
+            sound.playTap();
+          }
+        }
+      }
+    });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       this.onScenePointerMove(pointer);
@@ -239,6 +265,12 @@ export class SanctuaryScene extends Phaser.Scene {
     this.drawPlacedFurniture();
 
     const bounds = this.areaBounds();
+    if (this.kibbleBag) {
+      this.kibbleBag.setBounds(bounds);
+    }
+    if (this.toyBall) {
+      this.toyBall.setBounds(bounds);
+    }
     for (const sprite of this.catSprites.values()) {
       sprite.setAreaBounds(bounds);
       sprite.setSelectedTool(this.selectedTool);
@@ -1227,6 +1259,19 @@ export class SanctuaryScene extends Phaser.Scene {
   }
 
 
+  private spawnKibblePiece(targetX: number, targetY: number, fromX?: number, fromY?: number): void {
+    const startX = fromX ?? (this.kibbleBag ? this.kibbleBag.x : targetX);
+    const startY = fromY ?? (this.kibbleBag ? this.kibbleBag.y - 14 : targetY - 10);
+
+    if (this.kibblePieces.length >= 30) {
+      const oldest = this.kibblePieces.shift();
+      oldest?.despawn();
+    }
+
+    const piece = new KibblePiece(this, startX, startY, targetX, targetY);
+    this.kibblePieces.push(piece);
+  }
+
   private bindUiEvents(): void {
     EventBus.on('tool-selected', ({ tool }: { tool: string | null }) => {
       this.selectedTool = tool as ToolType | null;
@@ -1234,6 +1279,118 @@ export class SanctuaryScene extends Phaser.Scene {
 
       for (const sprite of this.catSprites.values()) {
         sprite.setSelectedTool(this.selectedTool);
+      }
+
+      if (this.selectedTool === 'food') {
+        if (!this.kibbleBag) {
+          const bounds = this.areaBounds();
+          this.kibbleBag = new KibbleBag(this, bounds.centerX, bounds.centerY, bounds);
+          this.kibbleBag.onDropFood = (x, y) => this.spawnKibblePiece(x, y);
+          this.kibbleBag.setScale(0);
+          this.tweens.add({
+            targets: this.kibbleBag,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 250,
+            ease: 'Back.easeOut',
+          });
+          sound.playPop();
+          EventBus.emit('toast', { message: '🥣 Kibble Bag ready! Drag it around to drop food for hungry cats!' });
+        }
+      } else {
+        if (this.kibbleBag) {
+          this.tweens.add({
+            targets: this.kibbleBag,
+            scaleX: 0,
+            scaleY: 0,
+            alpha: 0,
+            duration: 150,
+            ease: 'Quad.easeIn',
+            onComplete: () => {
+              this.kibbleBag?.destroy();
+              this.kibbleBag = null;
+            },
+          });
+        }
+      }
+
+      if (this.selectedTool === 'toy') {
+        if (!this.toyBall) {
+          const bounds = this.areaBounds();
+          this.toyBall = new ToyBall(this, bounds.centerX, bounds.centerY, bounds);
+          this.toyBall.setScale(0);
+          this.tweens.add({
+            targets: this.toyBall,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 250,
+            ease: 'Back.easeOut',
+          });
+          sound.playPop();
+          EventBus.emit('toast', { message: '🧶 Threw a Toy Ball! Drag and toss it around for cats to chase!' });
+        }
+      } else {
+        if (this.toyBall) {
+          this.tweens.add({
+            targets: this.toyBall,
+            scaleX: 0,
+            scaleY: 0,
+            alpha: 0,
+            duration: 150,
+            ease: 'Quad.easeIn',
+            onComplete: () => {
+              this.toyBall?.destroy();
+              this.toyBall = null;
+            },
+          });
+          for (const sprite of this.catSprites.values()) {
+            sprite.clearChaseTarget();
+          }
+        }
+      }
+
+      if (this.selectedTool === 'wash') {
+        if (!this.washBrushFollower) {
+          const container = this.add.container(400, 300);
+          container.setDepth(99999);
+
+          const gfx = this.add.graphics();
+          // Wooden Brush Handle
+          gfx.fillStyle(0xd4a373, 1);
+          gfx.fillRoundedRect(-6, -28, 12, 22, 4);
+          gfx.fillStyle(0xbc6c25, 1);
+          gfx.fillCircle(0, -22, 3);
+
+          // Brush Head (Sponge / Foam)
+          gfx.fillStyle(0x48cae4, 0.95);
+          gfx.fillRoundedRect(-16, -6, 32, 20, 7);
+          gfx.fillStyle(0x90e0ef, 1);
+          gfx.fillRoundedRect(-14, -4, 28, 16, 5);
+
+          // Soft Suds / Bristles
+          gfx.fillStyle(0xffffff, 0.95);
+          gfx.fillCircle(-10, 14, 5);
+          gfx.fillCircle(-4, 15, 6);
+          gfx.fillCircle(4, 15, 6);
+          gfx.fillCircle(10, 14, 5);
+
+          // Cute floating bubbles
+          gfx.fillStyle(0x72efdd, 0.85);
+          gfx.fillCircle(12, -8, 4);
+          gfx.fillStyle(0xffffff, 0.95);
+          gfx.fillCircle(11, -9, 1.5);
+
+          container.add(gfx);
+          container.setScale(1.25);
+          this.washBrushFollower = container;
+
+          EventBus.emit('toast', { message: '🫧 Wash brush active! Drag it over cats to scrub and clean them!' });
+        }
+      } else {
+        if (this.washBrushFollower) {
+          this.washBrushFollower.destroy();
+          this.washBrushFollower = null;
+        }
       }
     });
 
@@ -1346,11 +1503,68 @@ export class SanctuaryScene extends Phaser.Scene {
 
       const result = this.breeding.breed(parentA, parentB);
       if (result) {
-        if (result.kitten.area === this.currentArea) {
-          this.spawnCatSprite(result.kitten, this.areaBounds());
-        }
         this.saveManager.save(this.state);
         this.notifyUiState();
+      }
+    });
+
+    EventBus.on('cat-acquired-from-plinko', ({ cat }: { cat: Cat }) => {
+      if (cat.area === this.currentArea) {
+        this.spawnCatSprite(cat, this.areaBounds());
+      }
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+    });
+
+    EventBus.on('upgrade-offline-stars', () => {
+      const currentLevel = this.state.offlineStarLevel || 1;
+      if (currentLevel >= 5) return;
+      const nextUpgrade = OFFLINE_STAR_UPGRADES[currentLevel];
+      if (!nextUpgrade) return;
+
+      if (this.love.spend(nextUpgrade.costCarePoints)) {
+        this.state.offlineStarLevel = currentLevel + 1;
+        sound.playAdoptFanfare();
+        EventBus.emit('toast', { message: `⭐ Upgraded offline rate to ${this.state.offlineStarLevel} Stars/hr!` });
+        this.saveManager.save(this.state);
+        this.notifyUiState();
+      } else {
+        EventBus.emit('toast', { message: `Need ${nextUpgrade.costCarePoints.toLocaleString()} Care Points for this upgrade.` });
+      }
+    });
+
+    EventBus.on('instant-grow-cat', ({ catId, cost }: { catId: string; cost: number }) => {
+      const cat = this.state.cats.find((c) => c.id === catId);
+      if (!cat || cat.stage === 'adult') return;
+      if (this.love.spend(cost)) {
+        if (cat.stage === 'kitten') {
+          cat.stage = 'teen';
+          cat.growthProgress = 0;
+          cat.journal.entries.push({
+            day: this.state.day,
+            timestamp: Date.now(),
+            message: 'Grew into an active, playful Teen cat with a burst of Care Points!',
+          });
+        } else if (cat.stage === 'teen') {
+          cat.stage = 'adult';
+          cat.growthProgress = 100;
+          cat.journal.entries.push({
+            day: this.state.day,
+            timestamp: Date.now(),
+            message: 'Fully matured into a majestic Adult cat!',
+          });
+        }
+        sound.playAdoptFanfare();
+        const sprite = this.catSprites.get(cat.id);
+        if (sprite) {
+          sprite.refreshVisuals();
+          sprite.showEmote('✨');
+        }
+        EventBus.emit('toast', { message: `✨ ${cat.name} grew to ${cat.stage === 'teen' ? 'Teen' : 'Adult'} stage!` });
+        this.saveManager.save(this.state);
+        this.notifyUiState();
+      } else {
+        EventBus.emit('toast', { message: `Need ${cost.toLocaleString()} Care Points to grow ${cat.name}.` });
       }
     });
 
@@ -1413,6 +1627,25 @@ export class SanctuaryScene extends Phaser.Scene {
     if (!this.state.areas[area]?.unlocked) return;
     this.currentArea = area;
     sound.playTap();
+
+    if (this.toyBall) {
+      const bounds = this.areaBounds();
+      this.toyBall.setBounds(bounds);
+      this.toyBall.setPosition(bounds.centerX, bounds.centerY);
+      this.toyBall.vx = 0;
+      this.toyBall.vy = 0;
+    }
+
+    if (this.kibbleBag) {
+      const bounds = this.areaBounds();
+      this.kibbleBag.setBounds(bounds);
+      this.kibbleBag.setPosition(bounds.centerX, bounds.centerY);
+    }
+    for (const piece of this.kibblePieces) {
+      piece.destroy();
+    }
+    this.kibblePieces = [];
+
     this.drawCurrentArea();
     this.spawnCatsInCurrentArea();
     this.notifyUiState();
@@ -1583,6 +1816,51 @@ export class SanctuaryScene extends Phaser.Scene {
   }
 
   private onScenePointerMove(pointer: Phaser.Input.Pointer): void {
+    // ── Wash Brush Follower Position Update ──────────────────────────────
+    if (this.washBrushFollower) {
+      this.washBrushFollower.setPosition(pointer.worldX, pointer.worldY);
+      if (pointer.isDown || Math.hypot(pointer.velocity.x, pointer.velocity.y) > 15) {
+        this.washBrushFollower.rotation = Math.sin(this.animTimer * 16) * 0.22;
+      } else {
+        this.washBrushFollower.rotation = 0;
+      }
+    }
+
+    // ── Wash Tool Active Drag / Scrubbing ────────────────────────────────
+    if (this.selectedTool === 'wash') {
+      const px = pointer.worldX;
+      const py = pointer.worldY;
+      const now = this.time.now;
+      const dt = Math.max(0.016, (this.game.loop.delta || 16) / 1000);
+
+      for (const sprite of this.catSprites.values()) {
+        if (sprite.isCurrentlyDragged()) continue;
+        const dist = Phaser.Math.Distance.Between(px, py, sprite.x, sprite.y);
+        if (dist < 65) {
+          this.spawnSoapBubbles(px, py);
+
+          const wasDirty = sprite.cat.cleanliness < 98;
+          sprite.cat.cleanliness = Math.min(100, sprite.cat.cleanliness + 2.5);
+          sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 0.35);
+
+          if (wasDirty && (!this.lastWashLoveTime || now - this.lastWashLoveTime > 300)) {
+            this.lastWashLoveTime = now;
+            this.love.add(3);
+            this.state.totalLoveEarned += 3;
+            this.growth.addGrowth(sprite.cat, 2);
+            EventBus.emit('love-changed', { love: this.love.love });
+            sound.playBubble();
+            sprite.showEmote('🫧');
+          }
+
+          // Cat slowly walks away from the brush
+          sprite.slinkAwayFrom(px, py, dt);
+          sprite.refreshVisuals();
+          this.notifyUiState();
+        }
+      }
+    }
+
     if (!this.dragCandidate) return;
 
     const dx = pointer.worldX - this.dragCandidate.startX;
@@ -1593,6 +1871,11 @@ export class SanctuaryScene extends Phaser.Scene {
       this.isDraggingCat = true;
       this.dragCandidate.sprite.setDragged(true);
       sound.playTap();
+
+      // If dragging an adult cat, visually highlight all ready adult partners & show readiness bars
+      if (this.dragCandidate.cat.stage === 'adult') {
+        this.showBreedingPartnersFor(this.dragCandidate.cat);
+      }
     }
 
     if (this.isDraggingCat) {
@@ -1623,6 +1906,41 @@ export class SanctuaryScene extends Phaser.Scene {
     }
   }
 
+  private spawnSoapBubbles(x: number, y: number): void {
+    if (this.lastBubbleSpawnTime && this.time.now - this.lastBubbleSpawnTime < 50) return;
+    this.lastBubbleSpawnTime = this.time.now;
+
+    for (let i = 0; i < 2; i++) {
+      const bubble = this.add.graphics();
+      const r = Phaser.Math.Between(4, 10);
+      const offsetX = Phaser.Math.Between(-14, 14);
+      const offsetY = Phaser.Math.Between(-12, 12);
+
+      bubble.setPosition(x + offsetX, y + offsetY);
+      bubble.setDepth(y + 120);
+
+      // Iridescent bubble: translucent cyan/pink ring + glossy highlight
+      bubble.fillStyle(0x70d6ff, 0.45);
+      bubble.fillCircle(0, 0, r);
+      bubble.lineStyle(1.5, 0xff99c8, 0.75);
+      bubble.strokeCircle(0, 0, r);
+      bubble.fillStyle(0xffffff, 0.85);
+      bubble.fillCircle(-r * 0.35, -r * 0.35, r * 0.28);
+
+      this.tweens.add({
+        targets: bubble,
+        y: bubble.y - Phaser.Math.Between(25, 50),
+        x: bubble.x + Phaser.Math.Between(-12, 12),
+        alpha: { from: 0.9, to: 0 },
+        scaleX: { from: 0.7, to: 1.25 },
+        scaleY: { from: 0.7, to: 1.25 },
+        duration: Phaser.Math.Between(400, 650),
+        ease: 'Cubic.easeOut',
+        onComplete: () => bubble.destroy(),
+      });
+    }
+  }
+
   private onScenePointerUp(_pointer: Phaser.Input.Pointer): void {
     if (!this.dragCandidate) return;
 
@@ -1633,6 +1951,9 @@ export class SanctuaryScene extends Phaser.Scene {
     if (target) {
       target.highlightAsDropTarget(false);
     }
+
+    // Always clear temporary breeding partner highlights and readiness bars
+    this.clearAllBreedingPartners();
 
     if (this.isDraggingCat) {
       sprite.setDragged(false);
@@ -1666,7 +1987,7 @@ export class SanctuaryScene extends Phaser.Scene {
     const midX = (spriteA.x + spriteB.x) / 2;
     const midY = (spriteA.y + spriteB.y) / 2;
 
-    // 1. Two Adult Cats: Breeding Attempt!
+    // 1. Two Adult Cats: Breeding Attempt (generates Stars)!
     if (catA.stage === 'adult' && catB.stage === 'adult') {
       const check = this.breeding.canBreed(catA, catB);
       if (check.eligible) {
@@ -1677,23 +1998,9 @@ export class SanctuaryScene extends Phaser.Scene {
 
         const result = this.breeding.breed(catA, catB);
         if (result) {
-          const bounds = this.areaBounds();
-          const kx = Phaser.Math.Clamp(midX + Phaser.Math.Between(-15, 15), bounds.left + 25, bounds.right - 25);
-          const ky = Phaser.Math.Clamp(midY + 12, bounds.top + 25, bounds.bottom - 25);
-          this.spawnCatSprite(result.kitten, bounds);
-          const kittenSprite = this.catSprites.get(result.kitten.id);
-          if (kittenSprite) {
-            kittenSprite.setPosition(kx, ky);
-            kittenSprite.showEmote('🍼');
-          }
-          // Birth sounds: pop + kitten birth meow
-          sound.playPop();
-          setTimeout(() => sound.playKittenMeow(true), 350);
-
           this.saveManager.save(this.state);
           this.notifyUiState();
         }
-
       } else {
         sound.playPurr();
         spriteA.showEmote('💕');
@@ -1764,6 +2071,25 @@ export class SanctuaryScene extends Phaser.Scene {
     this.notifyUiState();
   }
 
+  private showBreedingPartnersFor(dragCat: Cat): void {
+    if (dragCat.stage !== 'adult') return;
+    for (const otherSprite of this.catSprites.values()) {
+      if (otherSprite.cat.id === dragCat.id) continue;
+      if (otherSprite.cat.stage !== 'adult') continue;
+      if (otherSprite.cat.area !== dragCat.area) continue;
+
+      const progress = this.breeding.getPairCooldownProgress(dragCat, otherSprite.cat);
+      otherSprite.setBreedingPartnerHighlight(true, progress.isReady);
+      otherSprite.showBreedingReadinessBar(progress.ratio, progress.isReady);
+    }
+  }
+
+  private clearAllBreedingPartners(): void {
+    for (const sprite of this.catSprites.values()) {
+      sprite.clearBreedingReadinessBar();
+    }
+  }
+
   private createHeartBurst(x: number, y: number): void {
     const emojis = ['💖', '💕', '✨', '🐾', '🌸'];
     for (let i = 0; i < 8; i++) {
@@ -1812,6 +2138,7 @@ export class SanctuaryScene extends Phaser.Scene {
     switch (tool) {
       case 'food':
         sound.playCrunch();
+        this.spawnKibblePiece(sprite.x, sprite.y + 8);
         sprite.showEmote(result.loveEarned > 0 ? '🐟' : '😋');
         break;
       case 'pet':
@@ -1828,6 +2155,8 @@ export class SanctuaryScene extends Phaser.Scene {
         break;
       case 'wash':
         sound.playBubble();
+        this.spawnSoapBubbles(sprite.x, sprite.y);
+        sprite.slinkAwayFrom(sprite.x, sprite.y + 12, 0.4);
         sprite.showEmote(result.loveEarned > 0 ? '🫧' : '✨');
         break;
     }
@@ -1907,6 +2236,121 @@ export class SanctuaryScene extends Phaser.Scene {
       sprite.update(deltaMs);
     }
 
+    // Update Interactive Toy Ball and Cat Chase AI
+    if (this.toyBall) {
+      this.toyBall.update(deltaSeconds);
+      const ballSpeed = Math.hypot(this.toyBall.vx, this.toyBall.vy);
+      const isMoving = ballSpeed > 25 || this.toyBall.isDragging;
+
+      for (const sprite of this.catSprites.values()) {
+        if (sprite.cat.animationState === 'sleep' || sprite.isCurrentlyDragged()) {
+          sprite.clearChaseTarget();
+          continue;
+        }
+
+        const dist = Phaser.Math.Distance.Between(sprite.x, sprite.y, this.toyBall.x, this.toyBall.y);
+
+        if (isMoving && dist < 320) {
+          sprite.setChaseTarget(this.toyBall.x, this.toyBall.y);
+        } else if (!isMoving && dist > 40 && sprite.isChasing()) {
+          sprite.clearChaseTarget();
+        }
+
+        // Cat catches & bats the ball
+        if (dist <= 30 && this.toyBall.canBeBatted) {
+          const kickAngle = Phaser.Math.Between(0, 360) * (Math.PI / 180);
+          const kickPower = Phaser.Math.Between(260, 420);
+          this.toyBall.kick(Math.cos(kickAngle) * kickPower, Math.sin(kickAngle) * kickPower);
+
+          // Fast Fun meter gain!
+          sprite.cat.fun = Math.min(100, sprite.cat.fun + 22);
+          sprite.cat.affection = Math.min(100, sprite.cat.affection + 6);
+          sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 8);
+          this.growth.addGrowth(sprite.cat, 8);
+
+          // Award Care Points
+          this.love.add(5);
+          this.state.totalLoveEarned += 5;
+          EventBus.emit('love-changed', { love: this.love.love });
+
+          sound.playMeow(sprite.cat.stage === 'kitten' ? 4 : 2);
+          sound.playSparkle();
+          sprite.triggerPlayState(1.8);
+          sprite.showEmote('🧶');
+          sprite.refreshVisuals();
+          this.notifyUiState();
+        }
+      }
+    }
+
+    // ── Update Kibble Bag & Cat Food Eating AI ─────────────────────────────
+    if (this.kibbleBag) {
+      this.kibbleBag.update();
+    }
+
+    if (this.kibblePieces.length > 0) {
+      this.kibblePieces = this.kibblePieces.filter((p) => p.active && !p.isEaten);
+    }
+
+    if (this.kibblePieces.length > 0) {
+      // Check if any awake, non-dragged cat in the sanctuary area is hungry (hunger < 98)
+      const anyCatHungry = Array.from(this.catSprites.values()).some(
+        (sprite) => sprite.cat.animationState !== 'sleep' && !sprite.isCurrentlyDragged() && sprite.cat.hunger < 98
+      );
+
+      for (const piece of this.kibblePieces) {
+        piece.updateNoHungry(deltaSeconds, anyCatHungry);
+      }
+
+      for (const sprite of this.catSprites.values()) {
+        if (sprite.cat.animationState === 'sleep' || sprite.isCurrentlyDragged()) {
+          continue;
+        }
+
+        // Hungry cats prioritize finding food (hunger < 98)
+        if (sprite.cat.hunger < 98) {
+          let nearestPiece: KibblePiece | null = null;
+          let minDist = 999999;
+
+          for (const piece of this.kibblePieces) {
+            if (!piece.active || piece.isEaten) continue;
+            const dist = Phaser.Math.Distance.Between(sprite.x, sprite.y, piece.x, piece.y);
+            if (dist < minDist) {
+              minDist = dist;
+              nearestPiece = piece;
+            }
+          }
+
+          if (nearestPiece) {
+            if (minDist <= 22) {
+              sprite.clearChaseTarget();
+              nearestPiece.eat();
+              sound.playCrunch();
+
+              const wasVeryHungry = sprite.cat.hunger < 50;
+              sprite.cat.hunger = Math.min(100, sprite.cat.hunger + 32);
+              sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 8);
+              sprite.cat.affection = Math.min(100, sprite.cat.affection + 4);
+              this.growth.addGrowth(sprite.cat, 6);
+
+              // Award Care Points
+              this.love.add(3);
+              this.state.totalLoveEarned += 3;
+              EventBus.emit('love-changed', { love: this.love.love });
+
+              // Eating chew state & emote
+              sprite.triggerPlayState(1.4);
+              sprite.showEmote(wasVeryHungry ? '🐟' : '😋');
+              sprite.refreshVisuals();
+              this.notifyUiState();
+            } else if (minDist < 650) {
+              sprite.setChaseTarget(nearestPiece.x, nearestPiece.y);
+            }
+          }
+        }
+      }
+    }
+
     // Tick needs for ALL cats in the sanctuary
     for (const cat of this.state.cats) {
       tickCatNeeds(cat, deltaMinutes);
@@ -1935,6 +2379,25 @@ export class SanctuaryScene extends Phaser.Scene {
       EventBus.emit('love-changed', { love: this.love.love });
     }
 
+    // 1-minute Online Passive Care Points Progression (Kitten: 1CP/10m, Teen: 2CP/10m, Adult: 3CP/10m)
+    this.onlineProgressionAccumMs += deltaMs;
+    if (this.onlineProgressionAccumMs >= 60_000) {
+      const minutes = this.onlineProgressionAccumMs / 60_000;
+      this.onlineProgressionAccumMs = 0;
+
+      let exactCp = 0;
+      for (const cat of this.state.cats) {
+        const cpPerMin = cat.stage === 'kitten' ? 0.1 : cat.stage === 'teen' ? 0.2 : 0.3;
+        exactCp += cpPerMin * minutes;
+      }
+      const roundedCp = Math.ceil(exactCp);
+      if (roundedCp > 0) {
+        this.love.add(roundedCp);
+        this.state.totalLoveEarned += roundedCp;
+        EventBus.emit('love-changed', { love: this.love.love });
+      }
+    }
+
     this.relationshipTickAccum += deltaMs;
     if (this.relationshipTickAccum > 4000) {
       const periodSeconds = this.relationshipTickAccum / 1000;
@@ -1952,7 +2415,6 @@ export class SanctuaryScene extends Phaser.Scene {
       }
 
       // Update breed-ready heart emote for adult cats in the current area
-      const BREED_COOLDOWN_MS = 30_000;
       const now = Date.now();
       for (const [catId, sprite] of this.catSprites.entries()) {
         const cat = this.state.cats.find((c) => c.id === catId);
