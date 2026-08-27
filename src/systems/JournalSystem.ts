@@ -20,9 +20,6 @@ export class JournalSystem {
       case 'pet':
         cat.journal.totalPetsReceived += 1;
         break;
-      case 'brush':
-        cat.journal.totalTimesBrushed += 1;
-        break;
       case 'wash':
         cat.journal.totalTimesWashed += 1;
         break;

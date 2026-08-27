@@ -62,6 +62,7 @@ export class SanctuaryScene extends Phaser.Scene {
   private washBrushFollower: Phaser.GameObjects.Container | null = null;
   private lastTick = 0;
   private lastWashLoveTime = 0;
+  private lastPetLoveTime = 0;
   private lastBubbleSpawnTime = 0;
   private relationshipTickAccum = 0;
   private animTimer = 0;
@@ -1919,6 +1920,47 @@ export class SanctuaryScene extends Phaser.Scene {
       }
     }
 
+    // ── Pet Tool Active Click & Drag Petting ─────────────────────────────
+    if (this.selectedTool === 'pet' && pointer.isDown) {
+      const px = pointer.worldX;
+      const py = pointer.worldY;
+      const now = this.time.now;
+
+      for (const sprite of this.catSprites.values()) {
+        if (sprite.isCurrentlyDragged()) continue;
+        const dist = Phaser.Math.Distance.Between(px, py, sprite.x, sprite.y);
+        if (dist < 60) {
+          if (!this.lastPetLoveTime || now - this.lastPetLoveTime > 240) {
+            this.lastPetLoveTime = now;
+
+            const wasNeedy = sprite.cat.affection < 98;
+            sprite.cat.affection = Math.min(100, sprite.cat.affection + 5.0);
+            sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 1.5);
+            sprite.cat.energy = Math.min(100, sprite.cat.energy + 0.5);
+
+            // Lay down comfortably while being petted
+            sprite.triggerLayDown(5.5);
+
+            // Spawn floating heart burst / sparkles
+            this.spawnPetHeart(px, py);
+
+            if (wasNeedy) {
+              this.love.add(3);
+              this.state.totalLoveEarned += 3;
+              this.state.totalPetsGiven = (this.state.totalPetsGiven || 0) + 1;
+              this.growth.addGrowth(sprite.cat, 2);
+              EventBus.emit('love-changed', { love: this.love.love });
+            }
+
+            sound.playPurr();
+            sprite.showEmote(wasNeedy ? '❤️' : '🥰');
+            sprite.refreshVisuals();
+            this.notifyUiState();
+          }
+        }
+      }
+    }
+
     // ── Wash Tool Active Drag / Scrubbing ────────────────────────────────
     if (this.selectedTool === 'wash') {
       const px = pointer.worldX;
@@ -1997,6 +2039,28 @@ export class SanctuaryScene extends Phaser.Scene {
         this.currentDropTarget.highlightAsDropTarget(true);
       }
     }
+  }
+
+  private spawnPetHeart(x: number, y: number): void {
+    const emojis = ['❤️', '💖', '💕', '✨', '🐾'];
+    const emoji = emojis[Phaser.Math.Between(0, emojis.length - 1)];
+    const text = this.add.text(
+      x + Phaser.Math.Between(-12, 12),
+      y + Phaser.Math.Between(-8, 8),
+      emoji,
+      { fontSize: `${Phaser.Math.Between(16, 22)}px` }
+    ).setOrigin(0.5).setDepth(y + 150);
+
+    this.tweens.add({
+      targets: text,
+      y: text.y - Phaser.Math.Between(28, 48),
+      x: text.x + Phaser.Math.Between(-10, 10),
+      alpha: { from: 1, to: 0 },
+      scale: { from: 0.7, to: 1.25 },
+      duration: 650,
+      ease: 'Cubic.easeOut',
+      onComplete: () => text.destroy(),
+    });
   }
 
   private spawnSoapBubbles(x: number, y: number): void {
@@ -2236,11 +2300,9 @@ export class SanctuaryScene extends Phaser.Scene {
         break;
       case 'pet':
         sound.playPurr();
+        this.spawnPetHeart(sprite.x, sprite.y - 12);
+        sprite.triggerLayDown(5.5);
         sprite.showEmote(result.loveEarned > 0 ? '❤️' : '🥰');
-        break;
-      case 'brush':
-        sound.playSparkle();
-        sprite.showEmote(result.loveEarned > 0 ? '✨' : '😸');
         break;
       case 'toy':
         sound.playMeow(cat.stage === 'kitten' ? 4 : 2);

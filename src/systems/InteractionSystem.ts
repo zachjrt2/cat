@@ -28,9 +28,6 @@ export class InteractionSystem {
       case 'pet':
         currentVal = cat.affection;
         break;
-      case 'brush':
-        currentVal = cat.cleanliness;
-        break;
       case 'toy':
         currentVal = cat.fun;
         break;
@@ -50,9 +47,6 @@ export class InteractionSystem {
         break;
       case 'pet':
         cat.affection = Math.min(100, cat.affection + NEED_RESTORE_AMOUNT);
-        break;
-      case 'brush':
-        cat.cleanliness = Math.min(100, cat.cleanliness + NEED_RESTORE_AMOUNT);
         break;
       case 'toy':
         cat.fun = Math.min(100, cat.fun + NEED_RESTORE_AMOUNT);
@@ -76,8 +70,6 @@ export class InteractionSystem {
         return `${cat.name} is already full!`;
       case 'pet':
         return `${cat.name} is feeling well loved!`;
-      case 'brush':
-        return `${cat.name} is already nicely brushed!`;
       case 'toy':
         return `${cat.name} is already happily entertained!`;
       case 'wash':
@@ -91,8 +83,6 @@ export class InteractionSystem {
         return `${cat.name} enjoyed a meal.`;
       case 'pet':
         return `${cat.name} purrs happily.`;
-      case 'brush':
-        return `${cat.name} looks tidy now.`;
       case 'toy':
         return `${cat.name} is playing!`;
       case 'wash':

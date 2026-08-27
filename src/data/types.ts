@@ -31,7 +31,7 @@ export type CatAnimationState =
   | 'play'     // Toy Interaction
   | 'pounce';  // Pounce leap attack
 
-export type ToolType = 'food' | 'pet' | 'brush' | 'toy' | 'wash';
+export type ToolType = 'food' | 'pet' | 'toy' | 'wash';
 
 export interface JournalEntry {
   day: number;

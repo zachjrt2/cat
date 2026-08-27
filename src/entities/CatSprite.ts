@@ -393,7 +393,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
     switch (this.currentSelectedTool) {
       case 'food': val = this.cat.hunger; break;
       case 'pet': val = this.cat.affection; break;
-      case 'brush': case 'wash': val = this.cat.cleanliness; break;
+      case 'wash': val = this.cat.cleanliness; break;
       case 'toy': val = this.cat.fun; break;
     }
 
@@ -441,6 +441,17 @@ export class CatSprite extends Phaser.GameObjects.Container {
     if (this.cat.animationState === 'sleep') return;
     this.wanderTarget = null;
     this.cat.animationState = 'play';
+    this.wanderTimer = durationSeconds;
+    this.playCurrentAnimation();
+  }
+
+  triggerLayDown(durationSeconds = 5.5): void {
+    if (this.isDragged || this.cat.animationState === 'sleep') return;
+    this.wanderTarget = null;
+    this.chaseTarget = null;
+    if (this.chasingCatSprite) this.stopCatChase(false);
+    if (this.fleeingFromCatSprite) this.fleeingFromCatSprite = null;
+    this.cat.animationState = 'lay';
     this.wanderTimer = durationSeconds;
     this.playCurrentAnimation();
   }

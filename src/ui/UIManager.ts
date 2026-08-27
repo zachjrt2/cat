@@ -10,7 +10,6 @@ import { PlinkoModal } from './PlinkoModal';
 const TOOLS: { id: ToolType; svg: string; label: string }[] = [
   { id: 'food', svg: SVG_ICONS.food, label: 'Food' },
   { id: 'pet', svg: SVG_ICONS.pet, label: 'Pet' },
-  { id: 'brush', svg: SVG_ICONS.brush, label: 'Brush' },
   { id: 'toy', svg: SVG_ICONS.toy, label: 'Toy' },
   { id: 'wash', svg: SVG_ICONS.wash, label: 'Wash' },
 ];
@@ -194,6 +193,7 @@ export class UIManager {
     this.selectedTool = alreadySelected ? null : tool;
     if (!alreadySelected) btn.classList.add('selected');
     document.body.classList.toggle('tool-wash-active', this.selectedTool === 'wash');
+    document.body.classList.toggle('tool-pet-active', this.selectedTool === 'pet');
     EventBus.emit('tool-selected', { tool: this.selectedTool });
   }
 
@@ -567,9 +567,6 @@ export class UIManager {
             <button class="quick-care-btn quick-pet" data-tool="pet" title="Pet ${escapeHtml(cat.name)}">
               <span class="qc-icon">${SVG_ICONS.pet}</span><span>Pet</span>
             </button>
-            <button class="quick-care-btn quick-brush" data-tool="brush" title="Brush ${escapeHtml(cat.name)}">
-              <span class="qc-icon">${SVG_ICONS.brush}</span><span>Brush</span>
-            </button>
             <button class="quick-care-btn quick-toy" data-tool="toy" title="Play with ${escapeHtml(cat.name)}">
               <span class="qc-icon">${SVG_ICONS.toy}</span><span>Toy</span>
             </button>
@@ -591,7 +588,7 @@ export class UIManager {
             <span class="need-pct-affection">${Math.round(cat.affection)}%</span>
           </div>
           <div class="need-bar-item">
-            <span class="need-label"><span class="svg-inline">${SVG_ICONS.brush}</span> Cleanliness</span>
+            <span class="need-label"><span class="svg-inline">${SVG_ICONS.wash}</span> Cleanliness</span>
             <div class="progress-track"><div class="progress-fill fill-clean" style="width: ${cat.cleanliness}%"></div></div>
             <span class="need-pct-clean">${Math.round(cat.cleanliness)}%</span>
           </div>
