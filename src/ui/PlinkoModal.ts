@@ -64,6 +64,8 @@ export class PlinkoModal {
   open(): void {
     if (this.backdrop) this.close();
 
+    EventBus.on('tokens-changed', this.handleTokensChanged);
+
     const backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop plinko-modal-backdrop';
     backdrop.addEventListener('click', (e) => {
@@ -85,7 +87,18 @@ export class PlinkoModal {
     this.startPhysicsLoop();
   }
 
+  private handleTokensChanged = ({ tokens }: { tokens: number }) => {
+    this.state.adoptionTokens = tokens;
+    const balEl = this.backdrop?.querySelector('#plinko-star-balance');
+    if (balEl) balEl.textContent = String(tokens);
+    const dropBtn = this.backdrop?.querySelector('#plinko-drop-btn') as HTMLButtonElement;
+    if (dropBtn && !this.isDropping) {
+      dropBtn.disabled = tokens < this.wager;
+    }
+  };
+
   close(): void {
+    EventBus.off('tokens-changed', this.handleTokensChanged);
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
@@ -354,7 +367,8 @@ export class PlinkoModal {
     }
 
     // Deduct Stars
-    this.state.adoptionTokens -= this.wager;
+    this.state.adoptionTokens = Math.max(0, (this.state.adoptionTokens || 0) - this.wager);
+    EventBus.emit('spend-tokens', { amount: this.wager });
     EventBus.emit('tokens-changed', { tokens: this.state.adoptionTokens });
     sound.playCoin();
 
@@ -373,7 +387,7 @@ export class PlinkoModal {
       x: startX,
       y: 18,
       vx: (Math.random() - 0.5) * 2,
-      vy: 1.5,
+      vy: 1.0,
       r: 7,
       active: true,
       trail: [],
@@ -411,9 +425,9 @@ export class PlinkoModal {
     if (!this.ball || !this.ball.active) return;
 
     const b = this.ball;
-    const gravity = 0.28;
-    const friction = 0.985;
-    const restitution = 0.58;
+    const gravity = 0.20;
+    const friction = 0.988;
+    const restitution = 0.70;
 
     b.vy += gravity;
     b.vx *= friction;
@@ -427,10 +441,10 @@ export class PlinkoModal {
     // Side wall collisions
     if (b.x - b.r < 12) {
       b.x = 12 + b.r;
-      b.vx = Math.abs(b.vx) * restitution + 0.5;
+      b.vx = Math.abs(b.vx) * restitution + 0.6;
     } else if (b.x + b.r > this.width - 12) {
       b.x = this.width - 12 - b.r;
-      b.vx = -Math.abs(b.vx) * restitution - 0.5;
+      b.vx = -Math.abs(b.vx) * restitution - 0.6;
     }
 
     // Peg collisions
@@ -451,8 +465,8 @@ export class PlinkoModal {
 
         // Velocity reflection
         const dot = b.vx * nx + b.vy * ny;
-        b.vx = (b.vx - 2 * dot * nx) * restitution + (Math.random() - 0.5) * 0.8;
-        b.vy = (b.vy - 2 * dot * ny) * restitution + (Math.random() - 0.5) * 0.4;
+        b.vx = (b.vx - 2 * dot * nx) * restitution + (Math.random() - 0.5) * 0.9;
+        b.vy = (b.vy - 2 * dot * ny) * restitution + (Math.random() - 0.5) * 0.5;
 
         peg.flash = 1.0;
         sound.playTap();

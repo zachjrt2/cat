@@ -1509,11 +1509,27 @@ export class SanctuaryScene extends Phaser.Scene {
     });
 
     EventBus.on('cat-acquired-from-plinko', ({ cat }: { cat: Cat }) => {
+      if (!this.state.cats.some((c) => c.id === cat.id)) {
+        this.state.cats.push(cat);
+      }
       if (cat.area === this.currentArea) {
         this.spawnCatSprite(cat, this.areaBounds());
       }
       this.saveManager.save(this.state);
       this.notifyUiState();
+    });
+
+    EventBus.on('spend-tokens', ({ amount }: { amount: number }) => {
+      this.state.adoptionTokens = Math.max(0, (this.state.adoptionTokens || 0) - amount);
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+    });
+
+    EventBus.on('tokens-changed', ({ tokens }: { tokens: number }) => {
+      if (this.state.adoptionTokens !== tokens) {
+        this.state.adoptionTokens = tokens;
+        this.saveManager.save(this.state);
+      }
     });
 
     EventBus.on('upgrade-offline-stars', () => {

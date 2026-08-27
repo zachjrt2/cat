@@ -75,6 +75,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   // Breed-ready heart emote timer (adults only)
   private breedReadyHeartTimer = 15 + Math.random() * 15;
   private isBreedReady = false;
+  private crowdCheckTimer = 1.0 + Math.random() * 2.0;
 
   // AI & Social Interaction Support
   private targetMachineId: string | null = null;
@@ -594,6 +595,24 @@ export class CatSprite extends Phaser.GameObjects.Container {
       return;
     }
 
+    // ── Anti-Crowding / Group Dispersion Check ────────────────────────────
+    // If 3 or more cats gather in a tight bunch (or 2 stacked within 45px), disperse to open space
+    this.crowdCheckTimer -= dt;
+    if (this.crowdCheckTimer <= 0) {
+      this.crowdCheckTimer = 1.5 + Math.random() * 2.0;
+      if (!this.chaseTarget) {
+        const crowd = this.getNearbyCrowdInfo(85);
+        if (crowd.count >= 2 || (crowd.count >= 1 && this.getNearbyCrowdInfo(45).count >= 1)) {
+          // Crowd of 3+ cats (or tightly packed) -> walk away to a spacious area
+          this.wanderTarget = this.findLeastCrowdedPosition();
+          this.targetMachineId = null;
+          this.cat.animationState = 'walk';
+          this.wanderTimer = 5.0 + Math.random() * 3.0;
+          this.playCurrentAnimation();
+        }
+      }
+    }
+
     this.wanderTimer -= dt;
     if (this.wanderTimer <= 0) this.pickNewWanderTarget();
     if (this.wanderTarget) {
@@ -631,7 +650,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
           this.wanderTimer = 1.8 + Math.random() * 2.0;
           if (this.otherSpritesProvider) {
             const friend = this.otherSpritesProvider().find(o => o !== this && o.cat.animationState !== 'sleep' && Math.hypot(o.x - this.x, o.y - this.y) < 65 && (this.cat.friendshipIds[o.cat.id] ?? 0) >= 25);
-            if (friend) { friend.triggerPlayState(2.5); friend.showEmote('🎉'); this.showEmote('🧶'); }
+            if (friend && friend.getNearbyCrowdInfo(65).count <= 1) { friend.triggerPlayState(2.5); friend.showEmote('🎉'); this.showEmote('🧶'); }
           }
         } else {
           this.cat.animationState = roll < playChance + 0.32 ? 'sit' : roll < playChance + 0.58 ? 'look' : 'lay';
@@ -651,14 +670,86 @@ export class CatSprite extends Phaser.GameObjects.Container {
     this.setDepth(this.y);
   }
 
+  getNearbyCrowdInfo(radius = 80): { count: number; avgX: number; avgY: number } {
+    if (!this.otherSpritesProvider) return { count: 0, avgX: this.x, avgY: this.y };
+    const others = this.otherSpritesProvider();
+    let count = 0;
+    let sumX = 0;
+    let sumY = 0;
+
+    for (const o of others) {
+      if (o === this || o.isCurrentlyDragged() || o.cat.animationState === 'sleep') continue;
+      const d = Math.hypot(o.x - this.x, o.y - this.y);
+      if (d < radius) {
+        count++;
+        sumX += o.x;
+        sumY += o.y;
+      }
+    }
+
+    return {
+      count,
+      avgX: count > 0 ? sumX / count : this.x,
+      avgY: count > 0 ? sumY / count : this.y,
+    };
+  }
+
+  private findLeastCrowdedPosition(): Phaser.Math.Vector2 {
+    const padding = 28;
+    const minX = this.bounds.left + padding;
+    const maxX = this.bounds.right - padding;
+    const minY = this.bounds.top + padding;
+    const maxY = this.bounds.bottom - padding;
+
+    if (!this.otherSpritesProvider) {
+      return new Phaser.Math.Vector2(Phaser.Math.Between(minX, maxX), Phaser.Math.Between(minY, maxY));
+    }
+
+    const others = this.otherSpritesProvider().filter((o) => o !== this && !o.isCurrentlyDragged());
+
+    let bestPos = new Phaser.Math.Vector2(Phaser.Math.Between(minX, maxX), Phaser.Math.Between(minY, maxY));
+    let bestCrowdScore = 999999;
+
+    for (let i = 0; i < 7; i++) {
+      const candX = Phaser.Math.Between(minX, maxX);
+      const candY = Phaser.Math.Between(minY, maxY);
+      let score = 0;
+
+      for (const o of others) {
+        const dist = Math.hypot(o.x - candX, o.y - candY);
+        if (dist < 110) {
+          score += (110 - dist);
+        }
+      }
+
+      if (score < bestCrowdScore) {
+        bestCrowdScore = score;
+        bestPos = new Phaser.Math.Vector2(candX, candY);
+      }
+    }
+
+    return bestPos;
+  }
+
   private pickNewWanderTarget(): void {
+    const crowd = this.getNearbyCrowdInfo(80);
+    // If crowded by 2+ other cats (group of 3+), immediately move away to open space
+    if (crowd.count >= 2) {
+      this.wanderTarget = this.findLeastCrowdedPosition();
+      this.targetMachineId = null;
+      this.cat.animationState = 'walk';
+      this.wanderTimer = 5.5 + Math.random() * 2.5;
+      this.playCurrentAnimation();
+      return;
+    }
+
     if (this.availableMachines.length > 0) {
       let targetNeed: string | null = null;
       if (this.cat.hunger < 45) targetNeed = 'food';
       else if (this.cat.cleanliness < 45) targetNeed = 'wash';
       else if (this.cat.affection < 45) targetNeed = 'pet';
       else if (this.cat.fun < 45) targetNeed = 'toy';
-      const machine = targetNeed ? this.availableMachines.find(m => m.needType === targetNeed) : null;
+      const machine = targetNeed ? this.availableMachines.find((m) => m.needType === targetNeed) : null;
       if (machine && Math.random() < 0.7) {
         this.targetMachineId = machine.id;
         this.wanderTarget = new Phaser.Math.Vector2(machine.x, machine.y);
@@ -668,17 +759,26 @@ export class CatSprite extends Phaser.GameObjects.Container {
         return;
       }
     }
-    if (this.otherSpritesProvider && Math.random() < 0.4) {
+
+    if (this.otherSpritesProvider && Math.random() < 0.35) {
       const bestFriendId = this.cat.journal?.bestFriendId;
-      const friend = bestFriendId ? this.otherSpritesProvider().find(s => s.cat.id === bestFriendId) : null;
+      const friend = bestFriendId ? this.otherSpritesProvider().find((s) => s.cat.id === bestFriendId) : null;
       if (friend) {
-        this.wanderTarget = new Phaser.Math.Vector2(Phaser.Math.Clamp(friend.x + Phaser.Math.Between(-35, 35), this.bounds.left + 24, this.bounds.right - 24), Phaser.Math.Clamp(friend.y + Phaser.Math.Between(-25, 25), this.bounds.top + 24, this.bounds.bottom - 24));
-        this.cat.animationState = 'walk';
-        this.wanderTimer = 6.0;
-        this.playCurrentAnimation();
-        return;
+        // Only visit friend if the friend is currently alone (forms a cute cozy pair of 2, never crowds)
+        const friendCrowd = friend.getNearbyCrowdInfo(65);
+        if (friendCrowd.count === 0) {
+          this.wanderTarget = new Phaser.Math.Vector2(
+            Phaser.Math.Clamp(friend.x + Phaser.Math.Between(-35, 35), this.bounds.left + 24, this.bounds.right - 24),
+            Phaser.Math.Clamp(friend.y + Phaser.Math.Between(-25, 25), this.bounds.top + 24, this.bounds.bottom - 24)
+          );
+          this.cat.animationState = 'walk';
+          this.wanderTimer = 6.0;
+          this.playCurrentAnimation();
+          return;
+        }
       }
     }
+
     const isKitten = this.cat.stage === 'kitten';
     if ((this.cat.majorTrait === 'mischievous' && this.cat.fun > 50 && Math.random() < 0.2) || (isKitten && this.cat.fun > 50 && Math.random() < 0.15)) {
       this.cat.animationState = 'play';
@@ -686,15 +786,19 @@ export class CatSprite extends Phaser.GameObjects.Container {
       this.playCurrentAnimation();
       return;
     }
+
     if (Math.random() < (isKitten ? 0.22 : 0.38)) {
-      this.wanderTarget = null;
-      const r = Math.random();
-      this.cat.animationState = r < 0.45 ? 'sit' : r < 0.75 ? 'look' : (this.cat.majorTrait === 'lazy' || this.cat.minorTrait === 'lazy' ? 'lay' : 'sit');
-      this.wanderTimer = 2.0 + Math.random() * 3.0;
-      this.playCurrentAnimation();
-      return;
+      if (crowd.count < 2) {
+        this.wanderTarget = null;
+        const r = Math.random();
+        this.cat.animationState = r < 0.45 ? 'sit' : r < 0.75 ? 'look' : (this.cat.majorTrait === 'lazy' || this.cat.minorTrait === 'lazy' ? 'lay' : 'sit');
+        this.wanderTimer = 2.0 + Math.random() * 3.0;
+        this.playCurrentAnimation();
+        return;
+      }
     }
-    this.wanderTarget = new Phaser.Math.Vector2(Phaser.Math.Between(this.bounds.left + 24, this.bounds.right - 24), Phaser.Math.Between(this.bounds.top + 24, this.bounds.bottom - 24));
+
+    this.wanderTarget = this.findLeastCrowdedPosition();
     this.cat.animationState = (isKitten && Math.random() < 0.45) || (!isKitten && Math.random() < 0.12) ? 'run' : 'walk';
     this.wanderTimer = 6.5;
     this.playCurrentAnimation();
