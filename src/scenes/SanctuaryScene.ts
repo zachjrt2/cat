@@ -2610,8 +2610,14 @@ export class SanctuaryScene extends Phaser.Scene {
   }
 
   update(time: number): void {
-    const deltaMs = time - this.lastTick;
+    if (!this.lastTick || this.lastTick <= 0) {
+      this.lastTick = time;
+    }
+    const rawDeltaMs = time - this.lastTick;
     this.lastTick = time;
+
+    // Guard against negative delta or massive pause delta on mobile wake
+    const deltaMs = Phaser.Math.Clamp(rawDeltaMs, 0, 100);
     const deltaSeconds = deltaMs / 1000;
     const deltaMinutes = deltaMs / 60000;
     this.animTimer += deltaSeconds;
@@ -2621,9 +2627,13 @@ export class SanctuaryScene extends Phaser.Scene {
     this.updateWeatherAndLighting(deltaSeconds);
     this.updateAmbientAtmosphere(deltaSeconds);
 
-    // Update sprites currently visible in active area
+    // Update sprites currently visible in active area with error isolation
     for (const sprite of this.catSprites.values()) {
-      sprite.update(deltaMs);
+      try {
+        sprite.update(deltaMs);
+      } catch (err) {
+        console.warn('CatSprite update warning:', err);
+      }
     }
 
     // ── Continuous Wash Brush Proximity Avoidance ──────────────────────────

@@ -723,8 +723,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
     // Slow, cautious walk away from brush
     const speed = 40 * dt * speedMult;
-    this.x += (dx / dist) * speed;
-    this.y += (dy / dist) * speed;
+    const safeDist = Math.max(0.01, dist);
+    this.x += (dx / safeDist) * speed;
+    this.y += (dy / safeDist) * speed;
 
     this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
     this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
@@ -950,6 +951,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   update(deltaMs: number): void {
+    if (isNaN(this.x) || !isFinite(this.x)) this.x = (this.bounds.left + this.bounds.right) / 2;
+    if (isNaN(this.y) || !isFinite(this.y)) this.y = (this.bounds.top + this.bounds.bottom) / 2;
+
     if (this.isDragged) {
       this.setDepth(850);
       return;
@@ -958,7 +962,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
       this.setDepth(Math.min(840, this.y));
       return;
     }
-    const dt = deltaMs / 1000;
+    const dt = Math.min(0.1, Math.max(0, deltaMs / 1000));
     const startX = this.x;
     const startY = this.y;
 
@@ -1059,8 +1063,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
         } else {
           // Run passionately toward mate
           const speed = 220 * dt;
-          this.x += (dx / dist) * speed;
-          this.y += (dy / dist) * speed;
+          const safeDist = Math.max(0.01, dist);
+          this.x += (dx / safeDist) * speed;
+          this.y += (dy / safeDist) * speed;
           this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
           this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
           this.currentDirection = vectorToDirection(dx, dy);
@@ -1081,8 +1086,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
         const dist = Math.hypot(dx, dy);
         if (dist > 6) {
           const speed = 175 * dt;
-          this.x += (dx / dist) * speed;
-          this.y += (dy / dist) * speed;
+          const safeDist = Math.max(0.01, dist);
+          this.x += (dx / safeDist) * speed;
+          this.y += (dy / safeDist) * speed;
           this.currentDirection = vectorToDirection(dx, dy);
           this.cat.animationState = 'run';
           this.playCurrentAnimation();
@@ -1294,8 +1300,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
           this.cat.animationState = 'walk';
         }
         const speed = (this.cat.animationState === 'run' ? 88 : 34) * ((this.cat.majorTrait === 'zoomie' || this.cat.minorTrait === 'zoomie') ? 1.35 : 1) * (this.cat.mutation === 'tiny' ? 1.25 : 1) * dt;
-        this.x += ((this.wanderTarget.x - this.x) / dist) * speed;
-        this.y += ((this.wanderTarget.y - this.y) / dist) * speed;
+        const safeDist = Math.max(0.01, dist);
+        this.x += ((this.wanderTarget.x - this.x) / safeDist) * speed;
+        this.y += ((this.wanderTarget.y - this.y) / safeDist) * speed;
         this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
         this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
         this.currentDirection = vectorToDirection(this.wanderTarget.x - this.x, this.wanderTarget.y - this.y);
