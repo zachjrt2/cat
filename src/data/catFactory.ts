@@ -38,6 +38,73 @@ export interface GenerateCatOptions {
 }
 
 /**
+ * Picks a unique cat name from CAT_NAMES that does not clash with any usedNames or existingCats.
+ * If all base names are exhausted, automatically appends sequential Roman numerals (II, III, IV...)
+ * to guarantee 100% duplicate protection.
+ */
+export function generateUniqueCatName(
+  usedNames?: Set<string>,
+  existingCats?: Cat[],
+  rng: () => number = Math.random,
+  preferredBaseName?: string,
+): string {
+  const activeUsed = new Set<string>();
+  if (usedNames) {
+    usedNames.forEach((n) => activeUsed.add(n.toLowerCase().trim()));
+  }
+  if (existingCats) {
+    existingCats.forEach((c) => activeUsed.add(c.name.toLowerCase().trim()));
+  }
+
+  // If a preferred base name is requested (e.g. for rare breeds)
+  if (preferredBaseName) {
+    const baseClean = preferredBaseName.trim();
+    if (!activeUsed.has(baseClean.toLowerCase())) {
+      if (usedNames) usedNames.add(baseClean);
+      return baseClean;
+    }
+    const romanNumerals = ['II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+    for (const roman of romanNumerals) {
+      const candidate = `${baseClean} ${roman}`;
+      if (!activeUsed.has(candidate.toLowerCase())) {
+        if (usedNames) usedNames.add(candidate);
+        return candidate;
+      }
+    }
+  }
+
+  // 1. Try picking from completely unused names in the library
+  const availableNames = CAT_NAMES.filter((n) => !activeUsed.has(n.toLowerCase().trim()));
+  if (availableNames.length > 0) {
+    const picked = randomFrom(availableNames, rng);
+    if (usedNames) usedNames.add(picked);
+    return picked;
+  }
+
+  // 2. If all 350+ base names are taken, pick a random base name and append Roman numerals
+  const baseName = randomFrom(CAT_NAMES, rng);
+  const romanNumerals = ['II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+  for (const roman of romanNumerals) {
+    const candidate = `${baseName} ${roman}`;
+    if (!activeUsed.has(candidate.toLowerCase().trim())) {
+      if (usedNames) usedNames.add(candidate);
+      return candidate;
+    }
+  }
+
+  // 3. Fallback numerical suffix
+  let counter = 2;
+  while (true) {
+    const candidate = `${baseName} #${counter}`;
+    if (!activeUsed.has(candidate.toLowerCase().trim())) {
+      if (usedNames) usedNames.add(candidate);
+      return candidate;
+    }
+    counter++;
+  }
+}
+
+/**
  * Selects a (skin, marking) pair with strong bias against identical visual duplicates
  * that already exist in the sanctuary.
  */
@@ -122,16 +189,7 @@ export function generateCat(options: GenerateCatOptions): Cat {
   }
 
   const [majorTrait, minorTrait] = pickTwoDistinctTraits(rng);
-
-  let name = randomFrom(CAT_NAMES, rng);
-  if (usedNames) {
-    let attempts = 0;
-    while (usedNames.has(name) && attempts < 30) {
-      name = randomFrom(CAT_NAMES, rng);
-      attempts += 1;
-    }
-    usedNames.add(name);
-  }
+  const name = generateUniqueCatName(usedNames, existingCats, rng);
 
   const cat: Cat = {
     id: makeId(),
@@ -273,15 +331,7 @@ export function breedCats(
     }
   }
 
-  let name = randomFrom(CAT_NAMES, rng);
-  if (usedNames) {
-    let attempts = 0;
-    while (usedNames.has(name) && attempts < 30) {
-      name = randomFrom(CAT_NAMES, rng);
-      attempts += 1;
-    }
-    usedNames.add(name);
-  }
+  const name = generateUniqueCatName(usedNames, [parentA, parentB], rng);
 
   const kitten: Cat = {
     id: makeId(),
@@ -361,13 +411,8 @@ export function generateRareCat(
   }
 
   const [majorTrait, minorTrait] = pickTwoDistinctTraits();
-  let name = rareSkin.label.split(' ')[0];
-  if (usedNames) {
-    if (usedNames.has(name)) {
-      name = `${name} II`;
-    }
-    usedNames.add(name);
-  }
+  const rawBaseName = rareSkin.label.split(' ')[0];
+  const name = generateUniqueCatName(usedNames, existingCats, Math.random, rawBaseName);
 
   const mutChance = options.mutationChance ?? 0.15;
   let mutation: CatMutationType | null = options.mutation ?? null;

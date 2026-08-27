@@ -1001,7 +1001,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
     // ── Mutation Ambient Particle & Color Updates ───────────────────────────
     if (this.cat.mutation === 'chromatic') {
-      this.chromaticHue = (this.chromaticHue + dt * 65) % 360;
+      this.chromaticHue = (this.chromaticHue + dt * 80) % 360;
       const color = Phaser.Display.Color.HSLToColor(this.chromaticHue / 360, 0.85, 0.65);
       this.baseSprite.setTint(color.color);
       if (this.markingSprite) this.markingSprite.setTint(color.color);
@@ -1009,21 +1009,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
     this.mutationEmitterTimer -= dt;
     if (this.mutationEmitterTimer <= 0) {
-      if (this.cat.mutation === 'stinky' && this.cat.animationState !== 'sleep') {
-        this.mutationEmitterTimer = 10 + Math.random() * 14;
-        this.spawnStinkyPuff();
-      } else if (this.cat.mutation === 'sparkly') {
-        this.mutationEmitterTimer = 0.35 + Math.random() * 0.25;
-        this.spawnSparkleParticle();
-      } else if (this.cat.mutation === 'flaming' && (this.cat.animationState === 'walk' || this.cat.animationState === 'run')) {
-        this.mutationEmitterTimer = 0.22 + Math.random() * 0.2;
-        this.spawnEmberParticle();
-      } else if (this.cat.mutation === 'frosted') {
-        this.mutationEmitterTimer = 0.5 + Math.random() * 0.4;
-        this.spawnFrostParticle();
-      } else {
-        this.mutationEmitterTimer = 1.2;
-      }
+      this.spawnMutationParticles();
     }
 
     // ── Active Perfume Breeding Frenzy AI ───────────────────────────────
@@ -1508,25 +1494,73 @@ export class CatSprite extends Phaser.GameObjects.Container {
     this.playCurrentAnimation();
   }
 
+  private spawnMutationParticles(): void {
+    const mut = this.cat.mutation;
+    const isSleeping = this.cat.animationState === 'sleep';
+
+    if (mut === 'sparkly') {
+      this.mutationEmitterTimer = 0.09 + Math.random() * 0.08;
+      this.spawnSparkleParticle();
+      if (Math.random() < 0.4) this.spawnSparkleStar();
+    } else if (mut === 'flaming') {
+      this.mutationEmitterTimer = 0.08 + Math.random() * 0.07;
+      this.spawnEmberParticle();
+      if (Math.random() < 0.5) this.spawnFlameTongue();
+    } else if (mut === 'frosted') {
+      this.mutationEmitterTimer = 0.12 + Math.random() * 0.10;
+      this.spawnFrostParticle();
+      if (Math.random() < 0.4) this.spawnSnowflakeParticle();
+    } else if (mut === 'gilded') {
+      this.mutationEmitterTimer = 0.10 + Math.random() * 0.09;
+      this.spawnGildedParticle();
+    } else if (mut === 'angelic') {
+      this.mutationEmitterTimer = 0.14 + Math.random() * 0.12;
+      this.spawnAngelicParticle();
+    } else if (mut === 'chromatic') {
+      this.mutationEmitterTimer = 0.10 + Math.random() * 0.08;
+      this.spawnChromaticParticle();
+    } else if (mut === 'stinky' && !isSleeping) {
+      this.mutationEmitterTimer = 0.75 + Math.random() * 0.65;
+      this.spawnStinkyPuff();
+    } else if (mut === 'inverted') {
+      this.mutationEmitterTimer = 0.12 + Math.random() * 0.10;
+      this.spawnInvertedParticle();
+    } else if (mut === 'giant') {
+      this.mutationEmitterTimer = 0.28 + Math.random() * 0.22;
+      this.spawnGiantTremorParticle();
+    } else if (mut === 'tiny') {
+      this.mutationEmitterTimer = 0.12 + Math.random() * 0.10;
+      this.spawnTinyFairyParticle();
+    } else if (this.cat.isRare || this.cat.rareType || this.cat.color === 'ghost_0' || this.cat.color === 'radioactive_0' || this.cat.color === 'gold_0') {
+      this.mutationEmitterTimer = 0.18 + Math.random() * 0.14;
+      this.spawnRareAuraParticle();
+    } else {
+      this.mutationEmitterTimer = 1.0;
+    }
+  }
+
   private spawnStinkyPuff(): void {
     const puff = this.scene.add.graphics();
-    puff.setDepth(this.y + 2);
-    const px = this.x + Phaser.Math.Between(-8, 8);
-    const py = this.y + 8;
-    puff.fillStyle(0x4ade80, 0.65);
-    puff.fillCircle(0, 0, 5.5);
-    puff.fillStyle(0x22c55e, 0.75);
-    puff.fillCircle(-2.5, -1.5, 3.5);
-    puff.fillCircle(3, 1, 3);
+    puff.setDepth(this.y + 4);
+    const px = this.x + Phaser.Math.Between(-10, 10);
+    const py = this.y + 6;
+    puff.fillStyle(0x4ade80, 0.75);
+    puff.fillCircle(0, 0, Phaser.Math.Between(5, 7.5));
+    puff.fillStyle(0x22c55e, 0.85);
+    puff.fillCircle(-3, -2, 4);
+    puff.fillCircle(3.5, 1.5, 3.5);
+    puff.fillStyle(0x15803d, 0.9);
+    puff.fillCircle(1, -2, 2.5);
     puff.setPosition(px, py);
 
     this.scene.tweens.add({
       targets: puff,
-      y: py - 26,
-      scaleX: 1.8,
-      scaleY: 1.8,
+      y: py - Phaser.Math.Between(28, 42),
+      x: px + (Math.random() - 0.5) * 16,
+      scaleX: 1.9,
+      scaleY: 1.9,
       alpha: 0,
-      duration: 1400,
+      duration: 1200,
       ease: 'Sine.easeOut',
       onComplete: () => puff.destroy(),
     });
@@ -1534,61 +1568,350 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
   private spawnSparkleParticle(): void {
     const glint = this.scene.add.graphics();
-    glint.setDepth(this.y + 2);
-    const px = this.x + Phaser.Math.Between(-14, 14);
-    const py = this.y + Phaser.Math.Between(-16, 12);
-    glint.fillStyle(0xfde047, 0.9);
-    glint.fillCircle(0, 0, Phaser.Math.Between(1.8, 3.2));
+    glint.setDepth(this.y + 3);
+    const px = this.x + Phaser.Math.Between(-18, 18);
+    const py = this.y + Phaser.Math.Between(-18, 14);
+    const colors = [0xf472b6, 0xc084fc, 0xfde047, 0x38bdf8, 0xffffff];
+    const color = Phaser.Math.RND.pick(colors);
+    const r = Phaser.Math.FloatBetween(2.0, 4.2);
+
+    glint.fillStyle(color, 0.95);
+    glint.fillCircle(0, 0, r);
     glint.setPosition(px, py);
 
     this.scene.tweens.add({
       targets: glint,
-      y: py - 14,
-      scaleX: 1.4,
-      scaleY: 1.4,
+      y: py - Phaser.Math.Between(12, 24),
+      x: px + (Math.random() - 0.5) * 10,
+      scaleX: 1.5,
+      scaleY: 1.5,
       alpha: 0,
-      duration: 550,
+      duration: 650,
       ease: 'Quad.easeOut',
       onComplete: () => glint.destroy(),
     });
   }
 
+  private spawnSparkleStar(): void {
+    const star = this.scene.add.graphics();
+    star.setDepth(this.y + 4);
+    const px = this.x + Phaser.Math.Between(-16, 16);
+    const py = this.y + Phaser.Math.Between(-16, 10);
+    const color = Phaser.Math.RND.pick([0xffffff, 0xfde047, 0xf472b6, 0xa855f7]);
+    const size = Phaser.Math.Between(4, 7);
+
+    star.fillStyle(color, 0.95);
+    // 4-point star diamond
+    star.beginPath();
+    star.moveTo(0, -size);
+    star.lineTo(size * 0.3, -size * 0.3);
+    star.lineTo(size, 0);
+    star.lineTo(size * 0.3, size * 0.3);
+    star.lineTo(0, size);
+    star.lineTo(-size * 0.3, size * 0.3);
+    star.lineTo(-size, 0);
+    star.lineTo(-size * 0.3, -size * 0.3);
+    star.closePath();
+    star.fillPath();
+    star.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: star,
+      y: py - Phaser.Math.Between(16, 30),
+      angle: 90,
+      scaleX: 1.3,
+      scaleY: 1.3,
+      alpha: 0,
+      duration: 750,
+      ease: 'Sine.easeOut',
+      onComplete: () => star.destroy(),
+    });
+  }
+
   private spawnEmberParticle(): void {
     const ember = this.scene.add.graphics();
-    ember.setDepth(this.y + 1);
-    const px = this.x + Phaser.Math.Between(-10, 10);
-    const py = this.y + 12 + Phaser.Math.Between(-3, 3);
-    ember.fillStyle(Phaser.Math.RND.pick([0xf97316, 0xfbbf24, 0xef4444]), 0.85);
-    ember.fillCircle(0, 0, Phaser.Math.Between(1.5, 2.5));
+    ember.setDepth(this.y + 3);
+    const px = this.x + Phaser.Math.Between(-14, 14);
+    const py = this.y + Phaser.Math.Between(0, 14);
+    ember.fillStyle(Phaser.Math.RND.pick([0xff4500, 0xf97316, 0xfbbf24, 0xffedd5]), 0.9);
+    ember.fillCircle(0, 0, Phaser.Math.FloatBetween(2.0, 3.8));
     ember.setPosition(px, py);
 
     this.scene.tweens.add({
       targets: ember,
-      y: py - 10,
-      x: px + (Math.random() - 0.5) * 6,
+      y: py - Phaser.Math.Between(18, 36),
+      x: px + (Math.random() - 0.5) * 14,
+      scaleX: 0.3,
+      scaleY: 0.3,
       alpha: 0,
-      duration: 400,
+      duration: 550,
+      ease: 'Cubic.easeOut',
       onComplete: () => ember.destroy(),
+    });
+  }
+
+  private spawnFlameTongue(): void {
+    const flame = this.scene.add.graphics();
+    flame.setDepth(this.y + 3);
+    const px = this.x + Phaser.Math.Between(-12, 12);
+    const py = this.y + Phaser.Math.Between(-4, 12);
+    const color = Phaser.Math.RND.pick([0xff5722, 0xff9800, 0xffeb3b]);
+    flame.fillStyle(color, 0.85);
+    flame.fillEllipse(0, 0, 4, 8);
+    flame.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: flame,
+      y: py - 24,
+      scaleX: 0.2,
+      scaleY: 1.8,
+      alpha: 0,
+      duration: 480,
+      ease: 'Quad.easeOut',
+      onComplete: () => flame.destroy(),
     });
   }
 
   private spawnFrostParticle(): void {
     const frost = this.scene.add.graphics();
-    frost.setDepth(this.y + 2);
-    const px = this.x + Phaser.Math.Between(-14, 14);
-    const py = this.y - 18 + Phaser.Math.Between(0, 8);
-    frost.fillStyle(Phaser.Math.RND.pick([0xe0f2fe, 0xbae6fd, 0xffffff]), 0.8);
-    frost.fillCircle(0, 0, Phaser.Math.Between(1.5, 2.8));
+    frost.setDepth(this.y + 3);
+    const px = this.x + Phaser.Math.Between(-18, 18);
+    const py = this.y - Phaser.Math.Between(10, 24);
+    frost.fillStyle(Phaser.Math.RND.pick([0xe0f2fe, 0x7dd3fc, 0x38bdf8, 0xffffff]), 0.9);
+    frost.fillCircle(0, 0, Phaser.Math.FloatBetween(2.0, 3.6));
     frost.setPosition(px, py);
 
     this.scene.tweens.add({
       targets: frost,
-      y: py + 22,
-      x: px + (Math.random() - 0.5) * 8,
+      y: py + Phaser.Math.Between(20, 34),
+      x: px + (Math.random() - 0.5) * 16,
+      scaleX: 0.4,
+      scaleY: 0.4,
       alpha: 0,
-      duration: 900,
+      duration: 850,
       ease: 'Sine.easeIn',
       onComplete: () => frost.destroy(),
+    });
+  }
+
+  private spawnSnowflakeParticle(): void {
+    const snow = this.scene.add.graphics();
+    snow.setDepth(this.y + 3);
+    const px = this.x + Phaser.Math.Between(-16, 16);
+    const py = this.y - Phaser.Math.Between(12, 22);
+    snow.lineStyle(1.5, 0xffffff, 0.9);
+    const r = 3.5;
+    // 6-point snowflake cross
+    snow.lineBetween(0, -r, 0, r);
+    snow.lineBetween(-r * 0.866, -r * 0.5, r * 0.866, r * 0.5);
+    snow.lineBetween(-r * 0.866, r * 0.5, r * 0.866, -r * 0.5);
+    snow.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: snow,
+      y: py + Phaser.Math.Between(22, 38),
+      angle: 180,
+      alpha: 0,
+      duration: 1100,
+      ease: 'Sine.easeInOut',
+      onComplete: () => snow.destroy(),
+    });
+  }
+
+  private spawnGildedParticle(): void {
+    const gold = this.scene.add.graphics();
+    gold.setDepth(this.y + 3);
+    const px = this.x + Phaser.Math.Between(-16, 16);
+    const py = this.y + Phaser.Math.Between(-16, 12);
+    const color = Phaser.Math.RND.pick([0xfde047, 0xfacc15, 0xeab308, 0xffffff]);
+
+    if (Math.random() < 0.5) {
+      // Coin glint
+      gold.fillStyle(color, 0.95);
+      gold.fillCircle(0, 0, Phaser.Math.FloatBetween(2.2, 4.0));
+      gold.lineStyle(1, 0xca8a04, 0.8);
+      gold.strokeCircle(0, 0, Phaser.Math.FloatBetween(2.2, 4.0));
+    } else {
+      // 4-point gold glint star
+      const s = 4.5;
+      gold.fillStyle(color, 0.95);
+      gold.beginPath();
+      gold.moveTo(0, -s);
+      gold.lineTo(s * 0.25, -s * 0.25);
+      gold.lineTo(s, 0);
+      gold.lineTo(s * 0.25, s * 0.25);
+      gold.lineTo(0, s);
+      gold.lineTo(-s * 0.25, s * 0.25);
+      gold.lineTo(-s, 0);
+      gold.lineTo(-s * 0.25, -s * 0.25);
+      gold.closePath();
+      gold.fillPath();
+    }
+    gold.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: gold,
+      y: py - Phaser.Math.Between(14, 26),
+      scaleX: 1.4,
+      scaleY: 1.4,
+      angle: 45,
+      alpha: 0,
+      duration: 650,
+      ease: 'Quad.easeOut',
+      onComplete: () => gold.destroy(),
+    });
+  }
+
+  private spawnAngelicParticle(): void {
+    const angel = this.scene.add.graphics();
+    angel.setDepth(this.y + 4);
+    const px = this.x + Phaser.Math.Between(-14, 14);
+    const py = this.y - Phaser.Math.Between(8, 26);
+    const color = Phaser.Math.RND.pick([0xfef08a, 0xfde047, 0xffffff, 0xfef9c3]);
+
+    angel.fillStyle(color, 0.9);
+    angel.fillCircle(0, 0, Phaser.Math.FloatBetween(2.5, 4.5));
+    angel.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: angel,
+      y: py - Phaser.Math.Between(20, 36),
+      x: px + (Math.random() - 0.5) * 12,
+      scaleX: 1.3,
+      scaleY: 1.3,
+      alpha: 0,
+      duration: 900,
+      ease: 'Sine.easeOut',
+      onComplete: () => angel.destroy(),
+    });
+  }
+
+  private spawnChromaticParticle(): void {
+    const spark = this.scene.add.graphics();
+    spark.setDepth(this.y + 3);
+    const px = this.x + Phaser.Math.Between(-16, 16);
+    const py = this.y + Phaser.Math.Between(-16, 12);
+    const rainbowColors = [0xef4444, 0xf97316, 0xeab308, 0x22c55e, 0x06b6d4, 0x8b5cf6, 0xec4899];
+    const color = Phaser.Math.RND.pick(rainbowColors);
+
+    spark.fillStyle(color, 0.95);
+    spark.fillCircle(0, 0, Phaser.Math.FloatBetween(2.4, 4.2));
+    spark.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: spark,
+      y: py - Phaser.Math.Between(14, 28),
+      x: px + (Math.random() - 0.5) * 14,
+      scaleX: 1.4,
+      scaleY: 1.4,
+      alpha: 0,
+      duration: 700,
+      ease: 'Sine.easeOut',
+      onComplete: () => spark.destroy(),
+    });
+  }
+
+  private spawnInvertedParticle(): void {
+    const mote = this.scene.add.graphics();
+    mote.setDepth(this.y + 3);
+    const px = this.x + Phaser.Math.Between(-16, 16);
+    const py = this.y + Phaser.Math.Between(-16, 12);
+    const color = Phaser.Math.RND.pick([0x06b6d4, 0x818cf8, 0xec4899, 0xffffff]);
+
+    mote.fillStyle(color, 0.9);
+    mote.fillCircle(0, 0, Phaser.Math.FloatBetween(2.0, 3.8));
+    mote.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: mote,
+      y: py + Phaser.Math.Between(-18, 18),
+      x: px + (Math.random() - 0.5) * 20,
+      scaleX: 0.2,
+      scaleY: 0.2,
+      alpha: 0,
+      duration: 550,
+      ease: 'Quad.easeInOut',
+      onComplete: () => mote.destroy(),
+    });
+  }
+
+  private spawnGiantTremorParticle(): void {
+    if (this.cat.animationState !== 'walk' && this.cat.animationState !== 'run') return;
+    const dust = this.scene.add.graphics();
+    dust.setDepth(this.y - 1);
+    const px = this.x + (Math.random() - 0.5) * 16;
+    const py = this.y + 14;
+
+    dust.fillStyle(Phaser.Math.RND.pick([0xfcd34d, 0xd1d5db, 0xa8a29e]), 0.65);
+    dust.fillEllipse(0, 0, Phaser.Math.Between(7, 12), Phaser.Math.Between(4, 7));
+    dust.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: dust,
+      scaleX: 1.6,
+      scaleY: 1.6,
+      alpha: 0,
+      duration: 480,
+      ease: 'Quad.easeOut',
+      onComplete: () => dust.destroy(),
+    });
+  }
+
+  private spawnTinyFairyParticle(): void {
+    const fairy = this.scene.add.graphics();
+    fairy.setDepth(this.y + 3);
+    const px = this.x + Phaser.Math.Between(-12, 12);
+    const py = this.y + Phaser.Math.Between(-12, 8);
+    const color = Phaser.Math.RND.pick([0x6ee7b7, 0xa7f3d0, 0xfbcfe8, 0xffffff]);
+
+    fairy.fillStyle(color, 0.9);
+    fairy.fillCircle(0, 0, Phaser.Math.FloatBetween(1.2, 2.4));
+    fairy.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: fairy,
+      y: py - Phaser.Math.Between(10, 20),
+      x: px + (Math.random() - 0.5) * 12,
+      scaleX: 1.5,
+      scaleY: 1.5,
+      alpha: 0,
+      duration: 500,
+      ease: 'Quad.easeOut',
+      onComplete: () => fairy.destroy(),
+    });
+  }
+
+  private spawnRareAuraParticle(): void {
+    const p = this.scene.add.graphics();
+    p.setDepth(this.y + 3);
+    const px = this.x + Phaser.Math.Between(-16, 16);
+    const py = this.y + Phaser.Math.Between(-16, 12);
+
+    let color = 0xfde047;
+    if (this.cat.color === 'ghost_0' || this.cat.rareType === 'ghost') {
+      color = Phaser.Math.RND.pick([0xcfe2f3, 0xe2e8f0, 0xffffff]);
+    } else if (this.cat.color === 'radioactive_0' || this.cat.rareType === 'radioactive') {
+      color = Phaser.Math.RND.pick([0x4ade80, 0x22c55e, 0x86efac]);
+    } else if (this.cat.color === 'gold_0') {
+      color = Phaser.Math.RND.pick([0xfde047, 0xfacc15, 0xffffff]);
+    } else {
+      color = Phaser.Math.RND.pick([0xfbcfe8, 0xbae6fd, 0xfde047, 0xffffff]);
+    }
+
+    p.fillStyle(color, 0.9);
+    p.fillCircle(0, 0, Phaser.Math.FloatBetween(2.0, 3.8));
+    p.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: p,
+      y: py - Phaser.Math.Between(14, 28),
+      x: px + (Math.random() - 0.5) * 10,
+      scaleX: 1.3,
+      scaleY: 1.3,
+      alpha: 0,
+      duration: 700,
+      ease: 'Sine.easeOut',
+      onComplete: () => p.destroy(),
     });
   }
 

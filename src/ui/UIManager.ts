@@ -444,15 +444,26 @@ export class UIManager {
     if (this.catsList.length === 0) return;
 
     let currentIndex = Phaser.Math.Clamp(initialIndex, 0, this.catsList.length - 1);
+    let cancelAvatarAnimation: (() => void) | null = null;
     const backdrop = this.createBackdrop();
     const modal = document.createElement('div');
     modal.className = 'modal journal-modal carousel-modal';
+
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) {
+        sound.playTap();
+        cancelAvatarAnimation?.();
+        backdrop.remove();
+      }
+    });
 
     let isNavigating = false;
     const navigateToCat = (newIndex: number, direction: 'next' | 'prev') => {
       if (isNavigating) return;
       isNavigating = true;
       sound.playTap();
+      cancelAvatarAnimation?.();
+      cancelAvatarAnimation = null;
       modal.style.transition = 'transform 0.16s ease-out, opacity 0.16s ease-out';
       modal.style.transform = direction === 'next' ? 'translateX(-80px) rotate(-3deg)' : 'translateX(80px) rotate(3deg)';
       modal.style.opacity = '0';
@@ -872,6 +883,7 @@ export class UIManager {
       modal.querySelector('#rehome-cat-btn')?.addEventListener('click', () => {
         sound.playTap();
         this.openRehomeConfirmModal(cat, rehomeVal, () => {
+          cancelAvatarAnimation?.();
           backdrop.remove();
         });
       });
@@ -883,10 +895,12 @@ export class UIManager {
 
       modal.querySelector('#journal-close-btn')!.addEventListener('click', () => {
         sound.playTap();
+        cancelAvatarAnimation?.();
         backdrop.remove();
       });
 
-      this.drawCatAvatar(modal.querySelector('#journal-cat-canvas') as HTMLCanvasElement, cat);
+      cancelAvatarAnimation?.();
+      cancelAvatarAnimation = this.startCatAvatarAnimation(modal.querySelector('#journal-cat-canvas') as HTMLCanvasElement, cat);
     };
 
     // Robust Touch & Drag Gesture System with Deadzone & Ease-in Progression
@@ -1526,31 +1540,148 @@ export class UIManager {
     `;
   }
 
-  private drawCatAvatar(canvas: HTMLCanvasElement | null, cat: Cat): void {
-    if (!canvas) return;
+  private static avatarImageCache: Map<string, HTMLImageElement> = new Map();
+
+  private startCatAvatarAnimation(canvas: HTMLCanvasElement | null, cat: Cat): () => void {
+    if (!canvas) return () => {};
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) return () => {};
 
     ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const skinDef = CAT_SKINS.find((s) => s.id === cat.color);
-    if (!skinDef) return;
+    if (!skinDef) return () => {};
 
-    const baseImg = new Image();
-    baseImg.src = `assets/cats/${skinDef.file}`;
+    let stopped = false;
+    let animReq: number | null = null;
 
-    baseImg.onload = () => {
-      const sx = 0;
-      const sy = 1 * 32;
-      ctx.drawImage(baseImg, sx, sy, 32, 32, 0, 0, 64, 64);
+    const getImage = (src: string, cb: (img: HTMLImageElement) => void) => {
+      if (UIManager.avatarImageCache.has(src)) {
+        const img = UIManager.avatarImageCache.get(src)!;
+        if (img.complete && img.naturalWidth > 0) {
+          cb(img);
+        } else {
+          img.addEventListener('load', () => cb(img), { once: true });
+        }
+      } else {
+        const img = new Image();
+        img.src = src;
+        UIManager.avatarImageCache.set(src, img);
+        img.addEventListener('load', () => cb(img), { once: true });
+      }
+    };
 
-      if (cat.marking) {
-        const markImg = new Image();
-        markImg.src = `assets/cats/Markings/${cat.marking}`;
-        markImg.onload = () => {
-          ctx.drawImage(markImg, sx, sy, 32, 32, 0, 0, 64, 64);
-        };
+    const baseSrc = `assets/cats/${skinDef.file}`;
+    const markSrc = cat.marking ? `assets/cats/Markings/${encodeURIComponent(cat.marking)}` : null;
+
+    let baseImg: HTMLImageElement | null = null;
+    let markImg: HTMLImageElement | null = null;
+
+    getImage(baseSrc, (img) => { baseImg = img; });
+    if (markSrc) {
+      getImage(markSrc, (img) => { markImg = img; });
+    }
+
+    // Direction 0 = Facing front/camera (row 1 & 2)
+    // Playlist: 2x Sit Idle -> 1x Look Around -> 2x Sit Idle -> 1x Play Batting Paw -> 1x Stretch/Lay
+    interface AnimFrame { col: number; row: number; dur: number }
+
+    const sitFrames: AnimFrame[] = [
+      { col: 0, row: 1, dur: 280 },
+      { col: 1, row: 1, dur: 280 },
+      { col: 2, row: 1, dur: 280 },
+      { col: 3, row: 1, dur: 320 },
+      { col: 2, row: 1, dur: 280 },
+      { col: 1, row: 1, dur: 280 },
+    ];
+
+    const lookFrames: AnimFrame[] = [
+      { col: 4, row: 1, dur: 200 },
+      { col: 5, row: 1, dur: 200 },
+      { col: 6, row: 1, dur: 200 },
+      { col: 7, row: 1, dur: 360 },
+      { col: 6, row: 1, dur: 200 },
+      { col: 5, row: 1, dur: 200 },
+    ];
+
+    const playFrames: AnimFrame[] = [
+      { col: 16, row: 2, dur: 150 },
+      { col: 17, row: 2, dur: 150 },
+      { col: 18, row: 2, dur: 150 },
+      { col: 19, row: 2, dur: 240 },
+      { col: 18, row: 2, dur: 150 },
+      { col: 17, row: 2, dur: 150 },
+    ];
+
+    const layFrames: AnimFrame[] = [
+      { col: 8, row: 1, dur: 240 },
+      { col: 9, row: 1, dur: 240 },
+      { col: 10, row: 1, dur: 260 },
+      { col: 11, row: 1, dur: 380 },
+      { col: 10, row: 1, dur: 240 },
+      { col: 9, row: 1, dur: 240 },
+    ];
+
+    const playlist: AnimFrame[] = [
+      ...sitFrames,
+      ...sitFrames,
+      ...lookFrames,
+      ...sitFrames,
+      ...playFrames,
+      ...sitFrames,
+      ...layFrames,
+    ];
+
+    let currentFrameIdx = 0;
+    let lastFrameTime = performance.now();
+
+    const draw = (now: number) => {
+      if (stopped) return;
+
+      const currentFrame = playlist[currentFrameIdx];
+      if (now - lastFrameTime >= currentFrame.dur) {
+        currentFrameIdx = (currentFrameIdx + 1) % playlist.length;
+        lastFrameTime = now;
+      }
+
+      const frame = playlist[currentFrameIdx];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (baseImg && baseImg.complete && baseImg.naturalWidth > 0) {
+        ctx.save();
+        if (cat.mutation === 'inverted') {
+          ctx.filter = 'invert(1)';
+        } else if (cat.mutation === 'gilded') {
+          ctx.filter = 'sepia(0.9) saturate(3) hue-rotate(5deg)';
+        } else if (cat.mutation === 'frosted') {
+          ctx.filter = 'hue-rotate(180deg) saturate(1.8) brightness(1.1)';
+        } else if (cat.mutation === 'flaming') {
+          ctx.filter = 'hue-rotate(335deg) saturate(2.4) brightness(1.15)';
+        } else if (cat.mutation === 'chromatic') {
+          ctx.filter = `hue-rotate(${(now / 18) % 360}deg) saturate(2.2)`;
+        }
+
+        const sx = frame.col * 32;
+        const sy = frame.row * 32;
+        ctx.drawImage(baseImg, sx, sy, 32, 32, 0, 0, canvas.width, canvas.height);
+
+        if (markImg && markImg.complete && markImg.naturalWidth > 0) {
+          ctx.drawImage(markImg, sx, sy, 32, 32, 0, 0, canvas.width, canvas.height);
+        }
+
+        ctx.restore();
+      }
+
+      animReq = requestAnimationFrame(draw);
+    };
+
+    animReq = requestAnimationFrame(draw);
+
+    return () => {
+      stopped = true;
+      if (animReq !== null) {
+        cancelAnimationFrame(animReq);
+        animReq = null;
       }
     };
   }
