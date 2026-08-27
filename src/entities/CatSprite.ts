@@ -460,14 +460,18 @@ export class CatSprite extends Phaser.GameObjects.Container {
     return this.perfumeFrenzyTimer > 0;
   }
 
-  activatePerfumeFrenzy(duration = 10): void {
-    if (this.cat.stage !== 'adult') return;
+  activatePerfumeFrenzy(duration = 15): void {
+    this.cat.stage = 'adult';
+    this.cat.growthProgress = 100;
     this.perfumeFrenzyTimer = duration;
     this.perfumedMatesBredInFrenzy.clear();
     this.cat.animationState = 'run';
     this.wanderTarget = null;
     this.chaseTarget = null;
     this.targetMachineId = null;
+    if (this.chasingCatSprite) this.stopCatChase(false);
+    if (this.fleeingFromCatSprite) this.fleeingFromCatSprite = null;
+    this.isPouncing = false;
     this.showEmote('🌸');
     this.playCurrentAnimation();
   }
@@ -524,6 +528,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   triggerPlayState(durationSeconds = 3.0): void {
+    if (this.perfumeFrenzyTimer > 0) return;
     if (this.cat.animationState === 'sleep') return;
     this.wanderTarget = null;
     this.cat.animationState = 'play';
@@ -532,6 +537,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   triggerLayDown(durationSeconds = 5.5): void {
+    if (this.perfumeFrenzyTimer > 0) return;
     if (this.isDragged || this.cat.animationState === 'sleep') return;
     this.wanderTarget = null;
     this.chaseTarget = null;
@@ -555,6 +561,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   setChaseTarget(x: number, y: number): void {
+    if (this.perfumeFrenzyTimer > 0) return;
     if (this.isDragged || this.cat.animationState === 'sleep') return;
     this.chaseTarget = { x, y };
     this.wanderTarget = null;
@@ -577,6 +584,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   startChasingCat(target: CatSprite): void {
+    if (this.perfumeFrenzyTimer > 0) return;
     if (this.isDragged || this.cat.animationState === 'sleep') return;
     this.chasingCatSprite = target;
     this.catChaseDurationTimer = 3.8;
@@ -586,6 +594,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   startFleeingFrom(chaser: CatSprite): void {
+    if (this.perfumeFrenzyTimer > 0) return;
     if (this.isDragged || this.cat.animationState === 'sleep') return;
     this.fleeingFromCatSprite = chaser;
     this.wanderTarget = null;
@@ -634,6 +643,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   slinkAwayFrom(fromX: number, fromY: number, dt: number, speedMult = 1): void {
+    if (this.perfumeFrenzyTimer > 0) return;
     if (this.isDragged || this.cat.animationState === 'sleep' || this.isPouncing) return;
     this.chaseTarget = null;
     this.wanderTarget = null;

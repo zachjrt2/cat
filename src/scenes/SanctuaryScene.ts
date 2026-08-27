@@ -2633,7 +2633,7 @@ export class SanctuaryScene extends Phaser.Scene {
       const py = pointer.worldY;
 
       for (const sprite of this.catSprites.values()) {
-        if (sprite.isCurrentlyDragged() || sprite.cat.animationState === 'sleep') continue;
+        if (sprite.isCurrentlyDragged() || sprite.cat.animationState === 'sleep' || sprite.isPerfumeFrenzied()) continue;
         const dist = Phaser.Math.Distance.Between(px, py, sprite.x, sprite.y);
 
         // Cats sense the brush approaching even without touching (< 180px) and cautiously slink away
@@ -2651,8 +2651,8 @@ export class SanctuaryScene extends Phaser.Scene {
       const isMoving = ballSpeed > 25 || this.toyBall.isDragging;
 
       for (const sprite of this.catSprites.values()) {
-        if (sprite.cat.animationState === 'sleep' || sprite.isCurrentlyDragged()) {
-          sprite.clearChaseTarget();
+        if (sprite.cat.animationState === 'sleep' || sprite.isCurrentlyDragged() || sprite.isPerfumeFrenzied()) {
+          if (!sprite.isPerfumeFrenzied()) sprite.clearChaseTarget();
           continue;
         }
 
@@ -2708,7 +2708,7 @@ export class SanctuaryScene extends Phaser.Scene {
     if (this.kibblePieces.length > 0) {
       // Check if any awake, non-dragged cat in the sanctuary area is hungry (hunger < 98)
       const anyCatHungry = Array.from(this.catSprites.values()).some(
-        (sprite) => sprite.cat.animationState !== 'sleep' && !sprite.isCurrentlyDragged() && sprite.cat.hunger < 98
+        (sprite) => sprite.cat.animationState !== 'sleep' && !sprite.isCurrentlyDragged() && !sprite.isPerfumeFrenzied() && sprite.cat.hunger < 98
       );
 
       for (const piece of this.kibblePieces) {
@@ -2716,7 +2716,7 @@ export class SanctuaryScene extends Phaser.Scene {
       }
 
       for (const sprite of this.catSprites.values()) {
-        if (sprite.cat.animationState === 'sleep' || sprite.isCurrentlyDragged()) {
+        if (sprite.cat.animationState === 'sleep' || sprite.isCurrentlyDragged() || sprite.isPerfumeFrenzied()) {
           continue;
         }
 
