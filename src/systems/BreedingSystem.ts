@@ -104,6 +104,7 @@ export class BreedingSystem {
         const stray = generateCat({
           day: this.state.day,
           usedNames,
+          existingCats: this.state.cats,
           stage: 'adult',
         });
         stray.area = 'yard';

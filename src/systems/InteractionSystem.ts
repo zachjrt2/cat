@@ -53,7 +53,7 @@ export class InteractionSystem {
         if (cat.animationState !== 'sleep') cat.animationState = 'play';
         break;
       case 'wash':
-        cat.cleanliness = Math.min(100, cat.cleanliness + NEED_RESTORE_AMOUNT * 1.5);
+        cat.cleanliness = Math.min(100, cat.cleanliness + NEED_RESTORE_AMOUNT * 3.5);
         break;
     }
 

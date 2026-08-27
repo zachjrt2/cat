@@ -13,10 +13,10 @@ import { GrowthSystem } from '../systems/GrowthSystem';
 import { AutomationSystem } from '../systems/AutomationSystem';
 import { BreedingSystem } from '../systems/BreedingSystem';
 import { tickCatNeeds } from '../systems/NeedsSystem';
-import { CatSprite } from '../entities/CatSprite';
+import { CatSprite, type AvailableMachineInfo } from '../entities/CatSprite';
 import { ToyBall } from '../entities/ToyBall';
 import { KibbleBag, KibblePiece } from '../entities/KibbleBag';
-import { AUTOSAVE_INTERVAL_MS, AREA_INFO_MAP, FURNITURE_CATALOG, RARE_SUMMONS, OFFLINE_STAR_UPGRADES, calculateRehomeLove } from '../data/constants';
+import { AUTOSAVE_INTERVAL_MS, AREA_INFO_MAP, FURNITURE_CATALOG, RARE_SUMMONS, OFFLINE_STAR_UPGRADES, calculateRehomeLove, getAreaCapacityUpgradeCost, CAT_PERFUME_COST, CAT_PERFUME_COOLDOWN_MS, CAT_PERFUME_FRENZY_SECONDS } from '../data/constants';
 import { BREED_COOLDOWN_MS } from '../systems/BreedingSystem';
 import { EventBus } from '../ui/EventBus';
 import { sound } from '../systems/SoundManager';
@@ -176,8 +176,10 @@ export class SanctuaryScene extends Phaser.Scene {
     } else {
       // Warm onboarding: sanctuary starts with TWO adult cats in the Yard ready to pair & play
       const usedNames = new Set<string>();
-      this.state.cats.push(generateCat({ day: this.state.day, usedNames, stage: 'adult' }));
-      this.state.cats.push(generateCat({ day: this.state.day, usedNames, stage: 'adult' }));
+      const cat1 = generateCat({ day: this.state.day, usedNames, existingCats: this.state.cats, stage: 'adult' });
+      this.state.cats.push(cat1);
+      const cat2 = generateCat({ day: this.state.day, usedNames, existingCats: this.state.cats, stage: 'adult' });
+      this.state.cats.push(cat2);
       this.love.add(50);
     }
   }
@@ -185,13 +187,13 @@ export class SanctuaryScene extends Phaser.Scene {
 
   private initWeatherAndLighting(): void {
     this.dynamicEffectsGfx = this.add.graphics();
-    this.dynamicEffectsGfx.setDepth(800);
+    this.dynamicEffectsGfx.setDepth(1200);
 
     this.weatherParticlesGfx = this.add.graphics();
-    this.weatherParticlesGfx.setDepth(900);
+    this.weatherParticlesGfx.setDepth(1300);
 
     this.ambientLightingGfx = this.add.graphics();
-    this.ambientLightingGfx.setDepth(950);
+    this.ambientLightingGfx.setDepth(1400);
 
     this.resetWeatherParticles();
   }
@@ -228,6 +230,8 @@ export class SanctuaryScene extends Phaser.Scene {
       strayDueAt: this.state.strayArrivalDueAt,
       milestones: this.milestones.getMilestones(),
       tokens: this.milestones.tokens,
+      offlineStarLevel: this.state.offlineStarLevel || 1,
+      catPerfumeCount: this.state.catPerfumeCount || 0,
     });
   }
 
@@ -1284,6 +1288,28 @@ export class SanctuaryScene extends Phaser.Scene {
     }
   }
 
+  private getAvailableMachinesForCurrentArea(bounds: Phaser.Geom.Rectangle): AvailableMachineInfo[] {
+    return this.automation.getMachinesInArea(this.currentArea).map((m) => {
+      const threshold = m.level === 1 ? 50 : m.level === 2 ? 80 : 100;
+      return {
+        id: m.def.id,
+        needType: m.def.needType,
+        level: m.level,
+        threshold,
+        x: bounds.left + m.def.xPercent * bounds.width,
+        y: bounds.top + m.def.yPercent * bounds.height,
+      };
+    });
+  }
+
+  private refreshCatMachines(): void {
+    const bounds = this.walkableBounds();
+    const machines = this.getAvailableMachinesForCurrentArea(bounds);
+    for (const sprite of this.catSprites.values()) {
+      sprite.setAvailableMachines(machines);
+    }
+  }
+
   private spawnCatSprite(cat: Cat, bounds: Phaser.Geom.Rectangle): void {
     const x = Phaser.Math.Between(bounds.left + 30, bounds.right - 30);
     const y = Phaser.Math.Between(bounds.top + 30, bounds.bottom - 30);
@@ -1291,12 +1317,7 @@ export class SanctuaryScene extends Phaser.Scene {
     sprite.setSelectedTool(this.selectedTool);
 
     // Provide machines in current area to cat AI
-    const machines = this.automation.getMachinesInArea(this.currentArea).map((m) => ({
-      id: m.def.id,
-      needType: m.def.needType,
-      x: bounds.left + m.def.xPercent * bounds.width,
-      y: bounds.top + m.def.yPercent * bounds.height,
-    }));
+    const machines = this.getAvailableMachinesForCurrentArea(bounds);
     sprite.setAvailableMachines(machines);
     sprite.setOtherSpritesProvider(() => Array.from(this.catSprites.values()));
     sprite.setMachineUseCallback((c, machineId) => {
@@ -1498,7 +1519,7 @@ export class SanctuaryScene extends Phaser.Scene {
       if (this.automation.buyMachine(machineId)) {
         this.saveManager.save(this.state);
         this.drawCurrentArea();
-        this.spawnCatsInCurrentArea();
+        this.refreshCatMachines();
         this.notifyUiState();
       }
     });
@@ -1507,7 +1528,7 @@ export class SanctuaryScene extends Phaser.Scene {
       if (this.automation.upgradeMachine(machineId)) {
         this.saveManager.save(this.state);
         this.drawCurrentArea();
-        this.spawnCatsInCurrentArea();
+        this.refreshCatMachines();
         this.notifyUiState();
       }
     });
@@ -1544,7 +1565,7 @@ export class SanctuaryScene extends Phaser.Scene {
         const usedNames = new Set(this.state.cats.map((c) => c.name));
 
         for (let i = 0; i < 2; i++) {
-          const newCat = generateCat({ day: this.state.day, usedNames, stage: 'adult' });
+          const newCat = generateCat({ day: this.state.day, usedNames, existingCats: this.state.cats, stage: 'adult' });
           newCat.area = 'yard';
           newCat.journal.entries.push({
             day: this.state.day,
@@ -1685,6 +1706,49 @@ export class SanctuaryScene extends Phaser.Scene {
       this.notifyUiState();
     });
 
+    EventBus.on('export-save-requested', () => {
+      this.saveManager.exportToFile(this.state);
+      EventBus.emit('toast', { message: '💾 savegame.json downloaded!' });
+    });
+
+    EventBus.on('import-save-requested', async ({ file }: { file: File }) => {
+      try {
+        const loaded = await this.saveManager.importFromFile(file);
+        if (loaded && Array.isArray(loaded.cats)) {
+          this.state = loaded;
+          this.saveManager.save(this.state);
+          this.drawCurrentArea();
+          this.spawnCatsInCurrentArea();
+          this.notifyUiState();
+          sound.playAdoptFanfare();
+          EventBus.emit('toast', { message: '✅ Save file loaded successfully!' });
+        } else {
+          EventBus.emit('toast', { message: '❌ Invalid save file structure.' });
+        }
+      } catch (err) {
+        console.error('Save import failed', err);
+        EventBus.emit('toast', { message: '❌ Failed to read save file.' });
+      }
+    });
+
+    EventBus.on('cat-acquired-from-plinko', ({ cat }: { cat: Cat }) => {
+      if (!this.state.cats.some((c) => c.id === cat.id)) {
+        this.state.cats.push(cat);
+      }
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+
+      if (cat.area === this.currentArea) {
+        this.spawnCatSprite(cat, this.walkableBounds());
+      }
+    });
+
+    EventBus.on('spend-tokens', ({ amount }: { amount: number }) => {
+      this.milestones.spendTokens(amount);
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+    });
+
     EventBus.on('export-cat-card', async ({ catId }: { catId: string }) => {
       const cat = this.state.cats.find((c) => c.id === catId);
       if (cat) {
@@ -1714,6 +1778,171 @@ export class SanctuaryScene extends Phaser.Scene {
         }
       }
     });
+
+    EventBus.on('buy-cat-perfume', () => {
+      if (this.love.spend(CAT_PERFUME_COST)) {
+        this.state.catPerfumeCount = (this.state.catPerfumeCount || 0) + 1;
+        this.saveManager.save(this.state);
+        this.notifyUiState();
+        sound.playCoin();
+        sound.playAdoptFanfare();
+        EventBus.emit('toast', { message: `🌸 Purchased Cat Perfume! (${this.state.catPerfumeCount} in stock)` });
+      } else {
+        EventBus.emit('toast', { message: `Need ${CAT_PERFUME_COST} 💗 Care Points to buy Cat Perfume.` });
+        sound.playPop();
+      }
+    });
+
+    EventBus.on('apply-cat-perfume', ({ screenX, screenY, catId }: { screenX?: number; screenY?: number; catId?: string }) => {
+      if ((this.state.catPerfumeCount || 0) <= 0) {
+        EventBus.emit('toast', { message: '🌸 Buy Cat Perfume in the Shop first!' });
+        return;
+      }
+
+      let targetSprite: CatSprite | null = null;
+
+      if (catId) {
+        targetSprite = this.catSprites.get(catId) || null;
+      } else if (screenX !== undefined && screenY !== undefined) {
+        const canvas = this.game.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = this.scale.width / rect.width;
+        const scaleY = this.scale.height / rect.height;
+        const worldX = (screenX - rect.left) * scaleX;
+        const worldY = (screenY - rect.top) * scaleY;
+
+        // 1. FIRST: Look for any adult cat in the current room near the drop location (up to 200px)
+        let closestAdultDist = 200;
+        let closestAdultSprite: CatSprite | null = null;
+
+        for (const [, sprite] of this.catSprites) {
+          if (!sprite.active) continue;
+          if (sprite.cat.stage !== 'kitten' && sprite.cat.stage !== 'adult') {
+            sprite.cat.stage = 'adult';
+            sprite.cat.growthProgress = 100;
+          }
+          if (sprite.cat.stage === 'adult') {
+            const dist = Math.hypot(sprite.x - worldX, sprite.y - worldY);
+            if (dist < closestAdultDist) {
+              closestAdultDist = dist;
+              closestAdultSprite = sprite;
+            }
+          }
+        }
+
+        if (closestAdultSprite) {
+          targetSprite = closestAdultSprite;
+        } else {
+          // 2. If no adult cat within 200px, look for nearest cat in the room
+          let closestAnyDist = 250;
+          let closestAnySprite: CatSprite | null = null;
+
+          for (const [, sprite] of this.catSprites) {
+            if (!sprite.active) continue;
+            const dist = Math.hypot(sprite.x - worldX, sprite.y - worldY);
+            if (dist < closestAnyDist) {
+              closestAnyDist = dist;
+              closestAnySprite = sprite;
+            }
+          }
+
+          if (closestAnySprite) {
+            if (closestAnySprite.cat.stage !== 'kitten') {
+              closestAnySprite.cat.stage = 'adult';
+              closestAnySprite.cat.growthProgress = 100;
+              targetSprite = closestAnySprite;
+            } else {
+              EventBus.emit('toast', { message: `🍼 ${closestAnySprite.cat.name} is still a kitten and too young for Cat Perfume!` });
+              sound.playPop();
+              return;
+            }
+          }
+        }
+      }
+
+      if (!targetSprite) {
+        EventBus.emit('toast', { message: '🌸 Drop the perfume bottle over an adult cat!' });
+        sound.playPop();
+        return;
+      }
+
+      const cat = targetSprite.cat;
+      cat.stage = 'adult';
+      cat.growthProgress = 100;
+
+      const now = Date.now();
+      const elapsed = now - (cat.lastPerfumeTimestamp || 0);
+      if (cat.lastPerfumeTimestamp && elapsed < CAT_PERFUME_COOLDOWN_MS) {
+        const minsLeft = Math.ceil((CAT_PERFUME_COOLDOWN_MS - elapsed) / 60000);
+        EventBus.emit('toast', { message: `🌸 ${cat.name} is still smelling sweet! Try again in ${minsLeft}m.` });
+        sound.playPop();
+        return;
+      }
+
+      // Success: Apply perfume & trigger frenzy!
+      this.state.catPerfumeCount = Math.max(0, (this.state.catPerfumeCount || 1) - 1);
+      cat.lastPerfumeTimestamp = now;
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+
+      targetSprite.activatePerfumeFrenzy(CAT_PERFUME_FRENZY_SECONDS);
+      sound.playAdoptFanfare();
+      this.createHeartBurst(targetSprite.x, targetSprite.y);
+      EventBus.emit('toast', { message: `🌸 Applied Cat Perfume to ${cat.name}! 15s Breeding Frenzy started!` });
+    });
+
+    EventBus.on('perfume-drag-start', () => {
+      const now = Date.now();
+      for (const sprite of this.catSprites.values()) {
+        const cat = sprite.cat;
+        if (cat.stage !== 'kitten' && cat.stage !== 'adult') {
+          cat.stage = 'adult';
+          cat.growthProgress = 100;
+        }
+        const isEligible = cat.stage === 'adult' && (!cat.lastPerfumeTimestamp || now - cat.lastPerfumeTimestamp >= CAT_PERFUME_COOLDOWN_MS);
+        if (isEligible) {
+          sprite.setPerfumeTargetHighlight(true);
+        }
+      }
+    });
+
+    EventBus.on('perfume-drag-end', () => {
+      for (const sprite of this.catSprites.values()) {
+        sprite.setPerfumeTargetHighlight(false);
+      }
+    });
+  }
+
+  getAdultCatsInArea(area: CatArea): CatSprite[] {
+    const list: CatSprite[] = [];
+    for (const [, sprite] of this.catSprites) {
+      if (sprite.active && sprite.cat.area === area) {
+        if (sprite.cat.stage !== 'kitten') {
+          if (sprite.cat.stage !== 'adult') {
+            sprite.cat.stage = 'adult';
+            sprite.cat.growthProgress = 100;
+          }
+          list.push(sprite);
+        }
+      }
+    }
+    return list;
+  }
+
+  triggerPerfumeBreeding(catA: Cat, catB: Cat, x: number, y: number): void {
+    const key = `${catA.id}:${catB.id}`;
+    const altKey = `${catB.id}:${catA.id}`;
+    this.state.breedingCooldowns[key] = Date.now();
+    this.state.breedingCooldowns[altKey] = Date.now();
+
+    // Award 1 Star ⭐
+    this.milestones.addTokens(1);
+    this.saveManager.save(this.state);
+    this.notifyUiState();
+
+    sound.playAdoptFanfare();
+    this.createHeartBurst(x, y);
+    EventBus.emit('toast', { message: `🌸 ${catA.name} & ${catB.name} bonded in a perfume frenzy! (+1 Star ⭐)` });
   }
 
 
@@ -1775,10 +2004,10 @@ export class SanctuaryScene extends Phaser.Scene {
   private tryUpgradeCapacity(area: CatArea): void {
     const areaState = this.state.areas[area];
     const info = AREA_INFO_MAP[area];
-    const cost = info.capacityUpgradeCost;
+    const cost = getAreaCapacityUpgradeCost(areaState, info.baseCapacity);
 
     if (!this.love.spend(cost)) {
-      EventBus.emit('toast', { message: `Need ${cost} 💗 to upgrade ${info.label} capacity.` });
+      EventBus.emit('toast', { message: `Need ${cost.toLocaleString()} 💗 to upgrade ${info.label} capacity.` });
       return;
     }
 
@@ -1845,7 +2074,7 @@ export class SanctuaryScene extends Phaser.Scene {
     this.milestones.spendTokens(summonDef.tokenCost);
 
     const usedNames = new Set(this.state.cats.map((c) => c.name));
-    const cat = generateRareCat(rareType, { day: this.state.day, usedNames });
+    const cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: this.state.cats });
     cat.area = targetArea;
     this.state.cats.push(cat);
 
@@ -1920,43 +2149,48 @@ export class SanctuaryScene extends Phaser.Scene {
       }
     }
 
-    // ── Pet Tool Active Click & Drag Petting ─────────────────────────────
+    // ── Pet Tool Active Click & Drag Petting (2x faster rate, small AOE) ───
     if (this.selectedTool === 'pet' && pointer.isDown) {
       const px = pointer.worldX;
       const py = pointer.worldY;
       const now = this.time.now;
 
-      for (const sprite of this.catSprites.values()) {
-        if (sprite.isCurrentlyDragged()) continue;
-        const dist = Phaser.Math.Distance.Between(px, py, sprite.x, sprite.y);
-        if (dist < 60) {
-          if (!this.lastPetLoveTime || now - this.lastPetLoveTime > 240) {
-            this.lastPetLoveTime = now;
-
+      if (!this.lastPetLoveTime || now - this.lastPetLoveTime > 120) {
+        let pettedAny = false;
+        for (const sprite of this.catSprites.values()) {
+          if (sprite.isCurrentlyDragged()) continue;
+          const dist = Phaser.Math.Distance.Between(px, py, sprite.x, sprite.y);
+          // Small AOE (85px) allows petting nearby cats at the same time
+          if (dist < 85) {
+            pettedAny = true;
             const wasNeedy = sprite.cat.affection < 98;
-            sprite.cat.affection = Math.min(100, sprite.cat.affection + 5.0);
-            sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 1.5);
-            sprite.cat.energy = Math.min(100, sprite.cat.energy + 0.5);
+            sprite.cat.affection = Math.min(100, sprite.cat.affection + 4.0);
+            sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 1.2);
+            sprite.cat.energy = Math.min(100, sprite.cat.energy + 0.4);
 
             // Lay down comfortably while being petted
             sprite.triggerLayDown(5.5);
 
-            // Spawn floating heart burst / sparkles
-            this.spawnPetHeart(px, py);
+            // Spawn floating heart burst / sparkles at cat's position
+            this.spawnPetHeart(sprite.x, sprite.y - 10);
 
             if (wasNeedy) {
-              this.love.add(3);
-              this.state.totalLoveEarned += 3;
+              this.love.add(2);
+              this.state.totalLoveEarned += 2;
               this.state.totalPetsGiven = (this.state.totalPetsGiven || 0) + 1;
-              this.growth.addGrowth(sprite.cat, 2);
+              this.growth.addGrowth(sprite.cat, 1);
               EventBus.emit('love-changed', { love: this.love.love });
             }
 
-            sound.playPurr();
             sprite.showEmote(wasNeedy ? '❤️' : '🥰');
             sprite.refreshVisuals();
-            this.notifyUiState();
           }
+        }
+
+        if (pettedAny) {
+          this.lastPetLoveTime = now;
+          sound.playPurr();
+          this.notifyUiState();
         }
       }
     }
@@ -1971,25 +2205,26 @@ export class SanctuaryScene extends Phaser.Scene {
       for (const sprite of this.catSprites.values()) {
         if (sprite.isCurrentlyDragged()) continue;
         const dist = Phaser.Math.Distance.Between(px, py, sprite.x, sprite.y);
-        if (dist < 65) {
+
+        // Active scrubbing when touching (< 55px) with well-balanced, deeper scrub rate
+        if (dist < 55) {
           this.spawnSoapBubbles(px, py);
 
           const wasDirty = sprite.cat.cleanliness < 98;
-          sprite.cat.cleanliness = Math.min(100, sprite.cat.cleanliness + 2.5);
-          sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 0.35);
+          // 4x cleaning power: 34 * dt for fast, satisfying bubble scrubs
+          sprite.cat.cleanliness = Math.min(100, sprite.cat.cleanliness + 34 * dt);
+          sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 0.5 * dt);
 
-          if (wasDirty && (!this.lastWashLoveTime || now - this.lastWashLoveTime > 300)) {
+          if (wasDirty && (!this.lastWashLoveTime || now - this.lastWashLoveTime > 450)) {
             this.lastWashLoveTime = now;
-            this.love.add(3);
-            this.state.totalLoveEarned += 3;
-            this.growth.addGrowth(sprite.cat, 2);
+            this.love.add(2);
+            this.state.totalLoveEarned += 2;
+            this.growth.addGrowth(sprite.cat, 1);
             EventBus.emit('love-changed', { love: this.love.love });
             sound.playBubble();
             sprite.showEmote('🫧');
           }
 
-          // Cat slowly walks away from the brush
-          sprite.slinkAwayFrom(px, py, dt);
           sprite.refreshVisuals();
           this.notifyUiState();
         }
@@ -2354,7 +2589,7 @@ export class SanctuaryScene extends Phaser.Scene {
     }
 
     const usedNames = new Set(this.state.cats.map((c) => c.name));
-    const cat = generateCat({ day: this.state.day, usedNames });
+    const cat = generateCat({ day: this.state.day, usedNames, existingCats: this.state.cats });
     cat.area = targetAreaKey;
     this.state.cats.push(cat);
 
@@ -2389,6 +2624,24 @@ export class SanctuaryScene extends Phaser.Scene {
     // Update sprites currently visible in active area
     for (const sprite of this.catSprites.values()) {
       sprite.update(deltaMs);
+    }
+
+    // ── Continuous Wash Brush Proximity Avoidance ──────────────────────────
+    if (this.selectedTool === 'wash') {
+      const pointer = this.input.activePointer;
+      const px = pointer.worldX;
+      const py = pointer.worldY;
+
+      for (const sprite of this.catSprites.values()) {
+        if (sprite.isCurrentlyDragged() || sprite.cat.animationState === 'sleep') continue;
+        const dist = Phaser.Math.Distance.Between(px, py, sprite.x, sprite.y);
+
+        // Cats sense the brush approaching even without touching (< 180px) and cautiously slink away
+        if (dist < 180) {
+          const proximitySpeed = dist < 60 ? 1.25 : 0.65;
+          sprite.slinkAwayFrom(px, py, deltaSeconds, proximitySpeed);
+        }
+      }
     }
 
     // Update Interactive Toy Ball and Cat Chase AI

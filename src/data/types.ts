@@ -88,6 +88,7 @@ export interface Cat {
   area: CatArea;
   adoptedAt: number; // timestamp
   ageDays: number;
+  lastPerfumeTimestamp?: number; // timestamp of last perfume frenzy activation (10m cooldown)
 
   journal: CatJournal;
 
@@ -150,6 +151,7 @@ export interface GameState {
   strayArrivalDueAt?: number | null; // Timestamp for stray cat arrival safety net
   milestoneClaimedIds: string[];
   offlineStarLevel?: number; // 1..5: Passive Star rate per hour when offline (1=1/hr, 2=2/hr, 3=3/hr, 4=4/hr, 5=5/hr)
+  catPerfumeCount?: number; // Number of consumable Cat Perfumes owned
   totalPetsGiven: number;
   totalLoveEarned: number;
   totalRehomedCats: number;

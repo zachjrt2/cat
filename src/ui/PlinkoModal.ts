@@ -1,8 +1,9 @@
-import type { Cat, GameState } from '../data/types';
+import type { Cat, CatArea, GameState } from '../data/types';
 import { PlinkoSystem, type PlinkoTier } from '../systems/PlinkoSystem';
 import { EventBus } from './EventBus';
 import { sound } from '../systems/SoundManager';
 import { SVG_ICONS } from './icons';
+import { AREA_INFO_MAP } from '../data/constants';
 
 interface Peg {
   x: number;
@@ -56,9 +57,12 @@ export class PlinkoModal {
   // Active ball physics
   private ball: { x: number; y: number; vx: number; vy: number; r: number; active: boolean; trail: { x: number; y: number }[] } | null = null;
 
-  constructor(root: HTMLElement, state: GameState) {
+  private preferredArea: CatArea;
+
+  constructor(root: HTMLElement, state: GameState, preferredArea: CatArea = 'yard') {
     this.root = root;
     this.state = state;
+    this.preferredArea = preferredArea;
     this.plinkoSystem = new PlinkoSystem(state);
   }
 
@@ -229,9 +233,17 @@ export class PlinkoModal {
       const breakdownEl = modal.querySelector('#plinko-odds-breakdown');
       if (breakdownEl) breakdownEl.innerHTML = this.renderOddsBreakdown(odds);
 
+      const hasSpace = this.plinkoSystem.hasRemainingSanctuarySpace();
+      const canAfford = (this.state.adoptionTokens || 0) >= this.wager;
+
       if (dropBtn) {
-        dropBtn.innerHTML = `<span class="svg-inline">${SVG_ICONS.sparkle}</span><span>Drop Ball (⭐ ${this.wager})</span>`;
-        dropBtn.disabled = this.isDropping || (this.state.adoptionTokens || 0) < this.wager;
+        if (!hasSpace) {
+          dropBtn.innerHTML = `<span class="svg-inline">${SVG_ICONS.sparkle}</span><span>Sanctuary Full (No Room)</span>`;
+          dropBtn.disabled = true;
+        } else {
+          dropBtn.innerHTML = `<span class="svg-inline">${SVG_ICONS.sparkle}</span><span>Drop Ball (⭐ ${this.wager})</span>`;
+          dropBtn.disabled = this.isDropping || !canAfford;
+        }
       }
 
       modal.querySelectorAll('.plinko-chip-btn').forEach((btn) => {
@@ -363,6 +375,13 @@ export class PlinkoModal {
 
   private triggerDrop(): void {
     if (this.isDropping) return;
+
+    if (!this.plinkoSystem.hasRemainingSanctuarySpace()) {
+      EventBus.emit('toast', { message: '🏠 Sanctuary is full! Expand or unlock an area first to play Plinko.' });
+      sound.playTap();
+      return;
+    }
+
     if ((this.state.adoptionTokens || 0) < this.wager) {
       EventBus.emit('toast', { message: '⭐ Not enough Stars! Breed cats or complete goals to earn more.' });
       return;
@@ -532,7 +551,7 @@ export class PlinkoModal {
         sound.playPop();
         EventBus.emit('toast', { message: '💨 Missed this drop! Higher star wagers guarantee better odds.' });
       } else {
-        const catsWon = this.plinkoSystem.generateCatsForTier(landedSlot.tier, catsCount);
+        const catsWon = this.plinkoSystem.generateCatsForTier(landedSlot.tier, catsCount, this.preferredArea);
         for (const cat of catsWon) {
           this.state.cats.push(cat);
           EventBus.emit('cat-acquired-from-plinko', { cat });
@@ -554,13 +573,17 @@ export class PlinkoModal {
     `;
 
     const catCardsHtml = cats
-      .map((c) => `
+      .map((c) => {
+        const areaMeta = AREA_INFO_MAP[c.area];
+        return `
         <div class="plinko-cat-reward-card">
           <div class="reward-cat-title"><b>${c.name}</b> (${cap(c.stage)})</div>
           <div class="reward-cat-trait">✨ Personality: ${cap(c.majorTrait)} & ${cap(c.minorTrait)}</div>
+          <div class="reward-cat-area">🏡 Settled in: <b>${areaMeta?.label || c.area}</b></div>
           <div class="reward-cat-favorite">🐟 Favorite: ${c.favoriteFood}</div>
         </div>
-      `)
+      `;
+      })
       .join('');
 
     modal.innerHTML = `

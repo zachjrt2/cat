@@ -98,36 +98,51 @@ export class AutomationSystem {
     const level = this.getMachineLevel(machineId);
     if (level === 0) return null;
 
-    const restoreAmount = level === 1 ? 45 : level === 2 ? 75 : 100;
+    const tierThreshold = level === 1 ? 50 : level === 2 ? 80 : 100;
     const loveBonus = level === 1 ? 2 : level === 2 ? 5 : 10;
 
+    let restored = 0;
     switch (def.needType) {
       case 'food':
-        cat.hunger = Math.min(100, cat.hunger + restoreAmount);
+        if (cat.hunger < tierThreshold) {
+          const prev = cat.hunger;
+          cat.hunger = Math.min(tierThreshold, cat.hunger + 35);
+          restored = cat.hunger - prev;
+        }
         break;
       case 'pet':
-        cat.affection = Math.min(100, cat.affection + restoreAmount);
+        if (cat.affection < tierThreshold) {
+          const prev = cat.affection;
+          cat.affection = Math.min(tierThreshold, cat.affection + 35);
+          restored = cat.affection - prev;
+        }
         break;
       case 'brush':
-        cat.cleanliness = Math.min(100, cat.cleanliness + restoreAmount);
+      case 'wash':
+        if (cat.cleanliness < tierThreshold) {
+          const prev = cat.cleanliness;
+          cat.cleanliness = Math.min(tierThreshold, cat.cleanliness + 35);
+          restored = cat.cleanliness - prev;
+        }
         break;
       case 'toy':
-        cat.fun = Math.min(100, cat.fun + restoreAmount);
-        break;
-      case 'wash':
-        cat.cleanliness = 100;
+        if (cat.fun < tierThreshold) {
+          const prev = cat.fun;
+          cat.fun = Math.min(tierThreshold, cat.fun + 35);
+          restored = cat.fun - prev;
+        }
         break;
     }
 
     this.love.add(loveBonus);
     this.state.totalLoveEarned += loveBonus;
 
-    const message = `${cat.name} enjoyed using ${def.name} (Tier ${level})! (+${loveBonus} 💗)`;
+    const message = `${cat.name} used ${def.name} (Tier ${level}, up to ${tierThreshold}%)! (+${loveBonus} 💗)`;
     return {
       cat,
       machine: def,
       level,
-      needRestored: restoreAmount,
+      needRestored: restored,
       loveEarned: loveBonus,
       message,
     };

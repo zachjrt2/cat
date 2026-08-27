@@ -4,7 +4,7 @@ import { sound } from '../systems/SoundManager';
 import { CAT_SKINS, CAT_MARKINGS } from '../data/catAssets';
 import { TRAITS } from '../data/traits';
 import { SVG_ICONS } from './icons';
-import { AREA_INFO_MAP, AUTOMATION_CATALOG, FURNITURE_CATALOG, OFFLINE_STAR_UPGRADES, calculateRehomeLove } from '../data/constants';
+import { AREA_INFO_MAP, AUTOMATION_CATALOG, FURNITURE_CATALOG, OFFLINE_STAR_UPGRADES, calculateRehomeLove, getAreaCapacityUpgradeCost } from '../data/constants';
 import { PlinkoModal } from './PlinkoModal';
 
 const TOOLS: { id: ToolType; svg: string; label: string }[] = [
@@ -21,10 +21,10 @@ export class UIManager {
   private loveEl!: HTMLElement;
   private tokensEl!: HTMLElement;
   private timeWeatherBtn!: HTMLButtonElement;
-  private soundBtn!: HTMLButtonElement;
   private rosterBtn!: HTMLButtonElement;
-  private areaNavEl!: HTMLElement;
+  private perfumeBtn!: HTMLButtonElement;
   private toastStack!: HTMLElement;
+  private areaNavEl!: HTMLElement;
 
   private selectedTool: ToolType | null = null;
   private currentLove = 0;
@@ -44,12 +44,14 @@ export class UIManager {
   private machinesState: Record<string, number> = {};
   private milestonesList: Milestone[] = [];
   private offlineStarLevel = 1;
+  private catPerfumeCount = 0;
 
   constructor(container: HTMLElement) {
     this.root = container;
     this.buildTopHeader();
     this.buildToolbar();
     this.buildRosterButton();
+    this.buildPerfumeButton();
     this.buildToastStack();
     this.bindBusEvents();
   }
@@ -92,10 +94,7 @@ export class UIManager {
         <button class="icon-btn shop-btn" id="shop-btn" title="Sanctuary Shop & Upgrades">
           ${SVG_ICONS.shop}
         </button>
-        <button class="icon-btn" id="sound-toggle-btn" title="Sound Settings">
-          ${sound.isSfxEnabled() || sound.isMusicEnabled() ? SVG_ICONS.soundOn : SVG_ICONS.soundOff}
-        </button>
-        <button class="icon-btn" id="save-menu-btn" title="Sanctuary Options">
+        <button class="icon-btn" id="save-menu-btn" title="Sanctuary Options & Audio Settings">
           ${SVG_ICONS.menu}
         </button>
       </div>
@@ -104,7 +103,6 @@ export class UIManager {
     this.loveEl = hud.querySelector('#love-value')!;
     this.tokensEl = hud.querySelector('#tokens-value')!;
     this.timeWeatherBtn = hud.querySelector('#time-weather-btn')!;
-    this.soundBtn = hud.querySelector('#sound-toggle-btn')!;
 
     hud.querySelector('#plinko-btn')!.addEventListener('click', () => {
       sound.playTap();
@@ -126,11 +124,6 @@ export class UIManager {
     hud.querySelector('#shop-btn')!.addEventListener('click', () => {
       sound.playTap();
       this.openShopModal();
-    });
-
-    this.soundBtn.addEventListener('click', () => {
-      sound.playTap();
-      this.openSoundPanel();
     });
 
     hud.querySelector('#save-menu-btn')!.addEventListener('click', () => this.openSaveMenu());
@@ -204,7 +197,7 @@ export class UIManager {
     const btn = document.createElement('button');
     btn.className = 'adopt-btn roster-btn';
     btn.id = 'roster-btn';
-    btn.innerHTML = `<span class="roster-btn-icon">${SVG_ICONS.info}</span><span class="roster-btn-label">Cat Info</span>`;
+    btn.innerHTML = `<span class="roster-btn-icon">${SVG_ICONS.info}</span>`;
     btn.title = 'View Sanctuary Cats Roster & Details';
     btn.addEventListener('click', () => {
       sound.playTap();
@@ -217,6 +210,63 @@ export class UIManager {
 
     this.root.appendChild(btn);
     this.rosterBtn = btn;
+  }
+
+  /**
+   * Cat Perfume floating button in the bottom left, mirroring the Cat Info button
+   */
+  private buildPerfumeButton(): void {
+    const btn = document.createElement('button');
+    btn.className = 'perfume-hud-btn';
+    btn.id = 'perfume-hud-btn';
+    btn.style.display = this.catPerfumeCount > 0 ? 'flex' : 'none';
+    btn.innerHTML = `
+      <span class="perfume-btn-icon">${SVG_ICONS.perfume}</span>
+      <span class="perfume-count-badge" id="perfume-count-badge">x${this.catPerfumeCount}</span>
+    `;
+    btn.title = 'Drag & drop onto an adult cat for a 10s Breeding Frenzy!';
+
+    let isDragging = false;
+    let ghostEl: HTMLElement | null = null;
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!isDragging || !ghostEl) return;
+      ghostEl.style.left = `${e.clientX - 24}px`;
+      ghostEl.style.top = `${e.clientY - 24}px`;
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (!isDragging) return;
+      isDragging = false;
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerUp);
+      if (ghostEl) {
+        ghostEl.remove();
+        ghostEl = null;
+      }
+      EventBus.emit('perfume-drag-end', {});
+      EventBus.emit('apply-cat-perfume', { screenX: e.clientX, screenY: e.clientY });
+    };
+
+    btn.addEventListener('pointerdown', (e: PointerEvent) => {
+      if (this.catPerfumeCount <= 0) return;
+      sound.playTap();
+      isDragging = true;
+      EventBus.emit('perfume-drag-start', {});
+
+      ghostEl = document.createElement('div');
+      ghostEl.className = 'perfume-drag-ghost';
+      ghostEl.innerHTML = SVG_ICONS.perfume;
+      ghostEl.style.left = `${e.clientX - 24}px`;
+      ghostEl.style.top = `${e.clientY - 24}px`;
+      document.body.appendChild(ghostEl);
+
+      document.addEventListener('pointermove', onPointerMove);
+      document.addEventListener('pointerup', onPointerUp);
+    });
+
+    this.root.appendChild(btn);
+    this.perfumeBtn = btn;
   }
 
   private activeToasts: { el: HTMLElement; timerId: number }[] = [];
@@ -348,8 +398,15 @@ export class UIManager {
         this.milestonesList = payload.milestones ?? [];
         this.currentTokens = payload.tokens ?? 0;
         this.offlineStarLevel = payload.offlineStarLevel ?? 1;
+        this.catPerfumeCount = (payload as any).catPerfumeCount ?? 0;
         this.tokensEl.textContent = this.currentTokens.toString();
         this.renderAreaNav();
+
+        if (this.perfumeBtn) {
+          this.perfumeBtn.style.display = this.catPerfumeCount > 0 ? 'flex' : 'none';
+          const badge = this.perfumeBtn.querySelector('#perfume-count-badge');
+          if (badge) badge.textContent = `x${this.catPerfumeCount}`;
+        }
       },
     );
 
@@ -540,10 +597,15 @@ export class UIManager {
         ${growthHtml}
 
         <div class="area-reassign-box">
-          <label for="cat-area-select"><b>Current Area:</b></label>
-          <select id="cat-area-select" class="area-select-dropdown">
-            ${areaOptions}
-          </select>
+          <div class="area-reassign-left">
+            <label for="cat-area-select"><b>Area:</b></label>
+            <select id="cat-area-select" class="area-select-dropdown">
+              ${areaOptions}
+            </select>
+          </div>
+          <button class="sort-all-cats-btn" id="sort-all-cats-btn" title="Sort & Reassign All Cats">
+            <span class="svg-inline">${SVG_ICONS.paw}</span> Sort All
+          </button>
         </div>
 
         <div class="traits-container">
@@ -588,14 +650,14 @@ export class UIManager {
             <span class="need-pct-affection">${Math.round(cat.affection)}%</span>
           </div>
           <div class="need-bar-item">
-            <span class="need-label"><span class="svg-inline">${SVG_ICONS.wash}</span> Cleanliness</span>
-            <div class="progress-track"><div class="progress-fill fill-clean" style="width: ${cat.cleanliness}%"></div></div>
-            <span class="need-pct-clean">${Math.round(cat.cleanliness)}%</span>
-          </div>
-          <div class="need-bar-item">
             <span class="need-label"><span class="svg-inline">${SVG_ICONS.toy}</span> Fun</span>
             <div class="progress-track"><div class="progress-fill fill-fun" style="width: ${cat.fun}%"></div></div>
             <span class="need-pct-fun">${Math.round(cat.fun)}%</span>
+          </div>
+          <div class="need-bar-item">
+            <span class="need-label"><span class="svg-inline">${SVG_ICONS.wash}</span> Cleanliness</span>
+            <div class="progress-track"><div class="progress-fill fill-clean" style="width: ${cat.cleanliness}%"></div></div>
+            <span class="need-pct-clean">${Math.round(cat.cleanliness)}%</span>
           </div>
           <div class="need-bar-item">
             <span class="need-label"><span class="svg-inline">${SVG_ICONS.energy}</span> Energy</span>
@@ -723,6 +785,12 @@ export class UIManager {
         if (newArea !== cat.area) {
           EventBus.emit('move-cat', { catId: cat.id, toArea: newArea });
         }
+      });
+
+      modal.querySelector('#sort-all-cats-btn')?.addEventListener('click', () => {
+        sound.playTap();
+        backdrop.remove();
+        this.openCatSortingModal();
       });
 
       modal.querySelectorAll('.quick-care-btn').forEach((btn) => {
@@ -986,12 +1054,12 @@ export class UIManager {
     this.root.appendChild(backdrop);
   }
 
-  private openShopModal(defaultTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' | 'plinko' | 'sort' = 'areas'): void {
+  private openShopModal(defaultTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' = 'areas'): void {
     const backdrop = this.createBackdrop();
     const modal = document.createElement('div');
     modal.className = 'modal shop-modal';
 
-    const renderTabs = (activeTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' | 'plinko' | 'sort', preserveScroll = true) => {
+    const renderTabs = (activeTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades', preserveScroll = true) => {
       const savedModalScroll = preserveScroll ? modal.scrollTop : 0;
       const contentEl = modal.querySelector('.shop-content');
       const savedContentScroll = preserveScroll && contentEl ? contentEl.scrollTop : 0;
@@ -1011,8 +1079,6 @@ export class UIManager {
           <button class="shop-tab-btn ${activeTab === 'furniture' ? 'active' : ''}" id="tab-furniture-btn"><span class="svg-inline">${SVG_ICONS.shop}</span> Decor</button>
           <button class="shop-tab-btn ${activeTab === 'milestones' ? 'active' : ''}" id="tab-milestones-btn"><span class="svg-inline">${SVG_ICONS.star}</span> Goals</button>
           <button class="shop-tab-btn ${activeTab === 'upgrades' ? 'active' : ''}" id="tab-upgrades-btn"><span class="svg-inline">${SVG_ICONS.sparkle}</span> Upgrades</button>
-          <button class="shop-tab-btn ${activeTab === 'plinko' ? 'active' : ''}" id="tab-plinko-btn"><span class="svg-inline">${SVG_ICONS.star}</span> Plinko</button>
-          <button class="shop-tab-btn ${activeTab === 'sort' ? 'active' : ''}" id="tab-sort-btn"><span class="svg-inline">${SVG_ICONS.paw}</span> Sort</button>
         </div>
 
         <div class="shop-content">
@@ -1025,11 +1091,7 @@ export class UIManager {
                   ? this.renderShopFurnitureContent()
                   : activeTab === 'milestones'
                     ? this.renderShopMilestonesContent()
-                    : activeTab === 'upgrades'
-                      ? this.renderShopUpgradesContent()
-                      : activeTab === 'plinko'
-                        ? this.renderShopPlinkoContent()
-                        : this.renderShopSortContent()
+                    : this.renderShopUpgradesContent()
           }
         </div>
 
@@ -1063,14 +1125,6 @@ export class UIManager {
       modal.querySelector('#tab-upgrades-btn')?.addEventListener('click', () => {
         sound.playTap();
         renderTabs('upgrades', false);
-      });
-      modal.querySelector('#tab-plinko-btn')?.addEventListener('click', () => {
-        sound.playTap();
-        renderTabs('plinko', false);
-      });
-      modal.querySelector('#tab-sort-btn')?.addEventListener('click', () => {
-        sound.playTap();
-        renderTabs('sort', false);
       });
 
       modal.querySelector('#shop-close-btn')?.addEventListener('click', () => {
@@ -1145,25 +1199,11 @@ export class UIManager {
         setTimeout(() => renderTabs('upgrades', true), 200);
       });
 
-      // Bind Launch Plinko Button
-      modal.querySelector('.launch-plinko-btn')?.addEventListener('click', () => {
-        sound.playTap();
-        backdrop.remove();
-        this.openPlinkoModal();
-      });
-
-      // Bind Cat Move Dropdowns
-      modal.querySelectorAll('.roster-move-select').forEach((sel) => {
-        sel.addEventListener('change', (e) => {
-          const target = e.target as HTMLSelectElement;
-          const catId = target.dataset.catId;
-          const toArea = target.value as CatArea;
-          if (catId && toArea) {
-            EventBus.emit('move-cat', { catId, toArea });
-            const cat = this.catsList.find((c) => c.id === catId);
-            if (cat) cat.area = toArea;
-            renderTabs('sort', true);
-          }
+      // Bind Buy Cat Perfume button
+      modal.querySelectorAll('.buy-perfume-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          EventBus.emit('buy-cat-perfume', {});
+          setTimeout(() => renderTabs('upgrades', true), 200);
         });
       });
     };
@@ -1200,7 +1240,8 @@ export class UIManager {
         `;
       }
 
-      const canUpgrade = this.currentLove >= meta.capacityUpgradeCost;
+      const capacityCost = getAreaCapacityUpgradeCost(areaState, meta.baseCapacity);
+      const canUpgrade = this.currentLove >= capacityCost;
 
       return `
         <div class="shop-card unlocked-card">
@@ -1210,7 +1251,7 @@ export class UIManager {
             <div class="shop-card-meta">Current Capacity: <b>${count} / ${areaState.capacity} cats</b></div>
           </div>
           <button class="shop-action-btn upgrade-cap-btn" data-area="${k}" ${!canUpgrade ? 'disabled' : ''}>
-            +5 Space (${meta.capacityUpgradeCost} 💗)
+            +5 Space (${capacityCost.toLocaleString()} 💗)
           </button>
         </div>
       `;
@@ -1220,7 +1261,7 @@ export class UIManager {
   private renderShopMachinesContent(): string {
     return `
       <div class="machines-intro">
-        Install automated stations for each area. Cats will walk to them to replenish needs and generate bonus Love!
+        Install automated stations for each area. Cats sense when their need is below the station's tier threshold (<b>50% at Tier 1</b>, <b>80% at Tier 2</b>, <b>100% at Tier 3</b>) and seek them out!
       </div>
       <div class="machines-catalog-grid">
         ${AUTOMATION_CATALOG.map((m) => {
@@ -1230,6 +1271,7 @@ export class UIManager {
 
           let statusBadge = '';
           let actionBtn = '';
+          let tierCapText = 'Installs Tier 1 (Cares up to 50%)';
 
           if (!areaUnlocked) {
             statusBadge = `<span class="lock-badge">Locked Area</span>`;
@@ -1239,20 +1281,23 @@ export class UIManager {
             statusBadge = `<span class="machine-unowned-badge">Not Installed</span>`;
             actionBtn = `
               <button class="shop-action-btn buy-machine-btn" data-machine-id="${m.id}" ${!canAfford ? 'disabled' : ''}>
-                Install Tier 1 (${m.baseCost} 💗)
+                Install Tier 1 (${m.baseCost.toLocaleString()} 💗)
               </button>
             `;
           } else if (currentLevel < 3) {
             const upgradeCost = currentLevel === 1 ? m.upgradeCostLvl2 : m.upgradeCostLvl3;
+            const nextCap = currentLevel === 1 ? '80%' : '100%';
+            tierCapText = `Current: Tier ${currentLevel} (Cares up to ${currentLevel === 1 ? '50%' : '80%'}) · Next: up to ${nextCap}`;
             const canAfford = this.currentLove >= upgradeCost;
-            statusBadge = `<span class="unlocked-badge">Tier ${currentLevel} Installed</span>`;
+            statusBadge = `<span class="unlocked-badge">Tier ${currentLevel} (up to ${currentLevel === 1 ? '50%' : '80%'})</span>`;
             actionBtn = `
               <button class="shop-action-btn upgrade-machine-btn" data-machine-id="${m.id}" ${!canAfford ? 'disabled' : ''}>
-                Upgrade to Tier ${currentLevel + 1} (${upgradeCost} 💗)
+                Upgrade to Tier ${currentLevel + 1} (${upgradeCost.toLocaleString()} 💗)
               </button>
             `;
           } else {
-            statusBadge = `<span class="unlocked-badge tier-max-badge">Tier 3 (Max)</span>`;
+            tierCapText = 'Current: Tier 3 Max (Cares up to 100%)';
+            statusBadge = `<span class="unlocked-badge tier-max-badge">Tier 3 Max (100%)</span>`;
             actionBtn = `<span class="claimed-badge">✓ Maxed Out</span>`;
           }
 
@@ -1267,7 +1312,7 @@ export class UIManager {
                 </div>
                 <p>${m.description}</p>
                 <div class="shop-card-meta">
-                  Location: <b>${areaMeta.label}</b> · Need: <b>${cap(m.needType)}</b>
+                  Location: <b>${areaMeta.label}</b> · Need: <b>${cap(m.needType)}</b> · <span class="bonus-tag">${tierCapText}</span>
                 </div>
               </div>
               <div class="machine-action-wrap">
@@ -1376,20 +1421,24 @@ export class UIManager {
             : ''
         }
       </div>
-    `;
-  }
 
-  private renderShopPlinkoContent(): string {
-    return `
-      <div class="shop-card" style="margin-top:10px;text-align:center;padding:24px 16px;">
-        <div style="font-size:36px;margin-bottom:8px;">⭐ 🐾 🎰</div>
-        <h3 style="font-size:18px;margin-bottom:6px;">Cat Plinko Machine</h3>
-        <p style="font-size:13px;color:var(--text-dark);max-width:320px;margin:0 auto 16px;">
-          Wager Stars earned from breeding and sanctuary goals to drop balls down the cosmic pegboard and discover sweet new cats!
-        </p>
-        <button class="shop-action-btn launch-plinko-btn" style="padding:12px 24px;font-size:15px;margin:0 auto;display:inline-flex;align-items:center;gap:8px;">
-          <span class="svg-inline">${SVG_ICONS.sparkle}</span> Launch Plinko Machine
-        </button>
+      <!-- Consumable: Cat Perfume -->
+      <div class="shop-card" style="margin-top:14px;border-left: 4px solid #ec4899;">
+        <div class="shop-card-info">
+          <div class="machine-title-row">
+            <h3><span class="svg-inline">${SVG_ICONS.perfume}</span> Cat Perfume (Consumable)</h3>
+            <span class="unlocked-badge" style="background:#fce7f3;color:#be185d;font-weight:bold;">Stock: <b>${this.catPerfumeCount}</b></span>
+          </div>
+          <p>Drag & drop onto an adult cat for a <b>10-second Breeding Frenzy</b>! The cat seeks out and mates with every available adult in the area for ⭐ Stars! (10m cooldown per cat)</p>
+          <div class="shop-card-meta">
+            Cost: <b>200 CP 💗</b> · Consumable Item
+          </div>
+        </div>
+        <div class="machine-action-wrap">
+          <button class="shop-action-btn buy-perfume-btn" ${this.currentLove < 200 ? 'disabled' : ''}>
+            Buy Perfume (200 💗)
+          </button>
+        </div>
       </div>
     `;
   }
@@ -1471,41 +1520,105 @@ export class UIManager {
     };
   }
 
-  private openSoundPanel(): void {
+  private openCatSortingModal(): void {
     const backdrop = this.createBackdrop();
     const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.innerHTML = `
-      <h2>🔊 Sound Settings</h2>
-      <div style="display:flex;flex-direction:column;gap:18px;margin-top:12px;">
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          <label style="font-weight:600;color:var(--text-dark);display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="sfx-toggle" ${sound.isSfxEnabled() ? 'checked' : ''}>
-            Sound Effects
-          </label>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:12px;color:#888;">🔇</span>
-            <input type="range" id="sfx-volume" min="0" max="100" value="${Math.round(sound.getSfxVolume() * 100)}"
-              style="flex:1;accent-color:#ff758f;">
-            <span style="font-size:12px;color:#888;">🔊</span>
-            <span id="sfx-vol-label" style="min-width:32px;font-size:13px;color:var(--text-dark);">${Math.round(sound.getSfxVolume() * 100)}%</span>
-          </div>
+    modal.className = 'modal roster-modal';
+
+    const renderRoster = () => {
+      modal.innerHTML = `
+        <div class="shop-header">
+          <h2>🐾 Sort & Manage Cats</h2>
+          <span class="shop-tokens-balance">${this.catsList.length} Cats</span>
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          <label style="font-weight:600;color:var(--text-dark);display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="music-toggle" ${sound.isMusicEnabled() ? 'checked' : ''}>
-            Background Music
-          </label>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:12px;color:#888;">🔇</span>
-            <input type="range" id="music-volume" min="0" max="100" value="${Math.round(sound.getMusicVolume() * 100)}"
-              style="flex:1;accent-color:#a78bfa;">
-            <span style="font-size:12px;color:#888;">🔊</span>
-            <span id="music-vol-label" style="min-width:32px;font-size:13px;color:var(--text-dark);">${Math.round(sound.getMusicVolume() * 100)}%</span>
+        <div class="subtitle" style="margin-bottom:12px;">Assign cats to different areas to balance capacity and companionship.</div>
+        <div class="shop-content" style="max-height: 55vh; overflow-y: auto; padding-right: 4px;">
+          ${this.renderShopSortContent()}
+        </div>
+        <button class="modal-close" id="roster-close-btn" style="margin-top:16px;">Done</button>
+      `;
+
+      modal.querySelectorAll('.roster-move-select').forEach((sel) => {
+        sel.addEventListener('change', (e) => {
+          const target = e.target as HTMLSelectElement;
+          const catId = target.dataset.catId;
+          const toArea = target.value as CatArea;
+          if (catId && toArea) {
+            EventBus.emit('move-cat', { catId, toArea });
+            const cat = this.catsList.find((c) => c.id === catId);
+            if (cat) cat.area = toArea;
+            renderRoster();
+          }
+        });
+      });
+
+      modal.querySelector('#roster-close-btn')?.addEventListener('click', () => {
+        sound.playTap();
+        backdrop.remove();
+      });
+    };
+
+    renderRoster();
+    backdrop.appendChild(modal);
+    this.root.appendChild(backdrop);
+  }
+
+  private openSaveMenu(): void {
+    const backdrop = this.createBackdrop();
+    const modal = document.createElement('div');
+    modal.className = 'modal options-modal';
+    modal.innerHTML = `
+      <h2>⚙️ Sanctuary Options & Sound</h2>
+      <div class="subtitle">Customize audio preferences and backup your sanctuary save data.</div>
+
+      <!-- Sound Settings Section -->
+      <div class="options-section">
+        <h3>🔊 Audio Settings</h3>
+        <div class="sound-controls-group">
+          <div class="sound-control-row">
+            <label class="sound-toggle-label">
+              <input type="checkbox" id="sfx-toggle" ${sound.isSfxEnabled() ? 'checked' : ''}>
+              <b>Sound Effects (SFX)</b>
+            </label>
+            <div class="sound-slider-wrap">
+              <span>🔇</span>
+              <input type="range" id="sfx-volume" min="0" max="100" value="${Math.round(sound.getSfxVolume() * 100)}" class="options-slider">
+              <span>🔊</span>
+              <span id="sfx-vol-label" class="vol-label">${Math.round(sound.getSfxVolume() * 100)}%</span>
+            </div>
+          </div>
+
+          <div class="sound-control-row">
+            <label class="sound-toggle-label">
+              <input type="checkbox" id="music-toggle" ${sound.isMusicEnabled() ? 'checked' : ''}>
+              <b>Background Music</b>
+            </label>
+            <div class="sound-slider-wrap">
+              <span>🔇</span>
+              <input type="range" id="music-volume" min="0" max="100" value="${Math.round(sound.getMusicVolume() * 100)}" class="options-slider">
+              <span>🔊</span>
+              <span id="music-vol-label" class="vol-label">${Math.round(sound.getMusicVolume() * 100)}%</span>
+            </div>
           </div>
         </div>
       </div>
-      <button class="modal-close" id="close-sound-panel" style="margin-top:20px;">Done</button>
+
+      <!-- Save & Backup Section -->
+      <div class="options-section" style="margin-top: 14px;">
+        <h3>💾 Save File & Backup</h3>
+        <p style="font-size:12px;color:var(--brown-light);margin:2px 0 10px;">Progress automatically autosaves to your browser every 30 seconds.</p>
+        <div class="options-btn-grid">
+          <button class="modal-action-btn" id="export-btn">
+            Download savegame.json
+          </button>
+          <label class="modal-action-btn import-btn-label">
+            Import savegame.json
+            <input type="file" accept="application/json" id="import-input" style="display:none;" />
+          </label>
+        </div>
+      </div>
+
+      <button class="modal-close" id="close-menu" style="margin-top:18px;">Done</button>
     `;
 
     const sfxToggle = modal.querySelector('#sfx-toggle') as HTMLInputElement;
@@ -1517,7 +1630,6 @@ export class UIManager {
 
     sfxToggle.addEventListener('change', () => {
       sound.setSfxEnabled(sfxToggle.checked);
-      this.soundBtn.innerHTML = (sound.isSfxEnabled() || sound.isMusicEnabled()) ? SVG_ICONS.soundOn : SVG_ICONS.soundOff;
     });
     sfxSlider.addEventListener('input', () => {
       const v = parseInt(sfxSlider.value) / 100;
@@ -1527,7 +1639,6 @@ export class UIManager {
 
     musicToggle.addEventListener('change', () => {
       sound.setMusicEnabled(musicToggle.checked);
-      this.soundBtn.innerHTML = (sound.isSfxEnabled() || sound.isMusicEnabled()) ? SVG_ICONS.soundOn : SVG_ICONS.soundOff;
     });
     musicSlider.addEventListener('input', () => {
       const v = parseInt(musicSlider.value) / 100;
@@ -1535,46 +1646,40 @@ export class UIManager {
       musicLabel.textContent = `${musicSlider.value}%`;
     });
 
-    modal.querySelector('#close-sound-panel')!.addEventListener('click', () => {
-      sound.playTap();
-      backdrop.remove();
-    });
-
-    backdrop.appendChild(modal);
-    this.root.appendChild(backdrop);
-  }
-
-  private openSaveMenu(): void {
-    const backdrop = this.createBackdrop();
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.innerHTML = `
-      <h2>Sanctuary Options</h2>
-      <div class="subtitle">Progress autosaves every 30 seconds to this browser.</div>
-      <button class="modal-action-btn" id="export-btn">Export savegame.json</button>
-      <label class="modal-action-btn" style="display:block;text-align:center;margin-top:8px;cursor:pointer;">
-        Import savegame.json
-        <input type="file" accept="application/json" id="import-input" style="display:none;" />
-      </label>
-      <button class="modal-close" id="close-menu" style="background:#a59a8f;">Close</button>
-    `;
     modal.querySelector('#export-btn')!.addEventListener('click', () => {
       sound.playTap();
       EventBus.emit('export-save-requested', {});
     });
     modal.querySelector('#import-input')!.addEventListener('change', (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) EventBus.emit('import-save-requested', { file });
+      if (file) {
+        sound.playTap();
+        EventBus.emit('import-save-requested', { file });
+        backdrop.remove();
+      }
     });
     modal.querySelector('#close-menu')!.addEventListener('click', () => {
       sound.playTap();
       backdrop.remove();
     });
+
     backdrop.appendChild(modal);
     this.root.appendChild(backdrop);
   }
 
   private openPlinkoModal(): void {
+    // Check if there is room for cats in any unlocked sanctuary area
+    const totalCapacity = Object.entries(this.areasState).reduce((acc, [, area]) => {
+      return area.unlocked ? acc + area.capacity : acc;
+    }, 0);
+    const totalCats = this.catsList.length;
+
+    if (totalCats >= totalCapacity) {
+      this.showToast('🏠 Sanctuary is full! Expand or unlock an area first to play Plinko.');
+      sound.playTap();
+      return;
+    }
+
     const gameState: GameState = {
       love: this.currentLove,
       adoptionTokens: this.currentTokens,
@@ -1595,7 +1700,7 @@ export class UIManager {
       lastSavedAt: Date.now(),
       createdAt: Date.now(),
     };
-    new PlinkoModal(this.root, gameState).open();
+    new PlinkoModal(this.root, gameState, this.currentArea).open();
   }
 
   private showOfflineSummary(summary: { minutesAway: number; loveEarned: number; starsEarned?: number; headlines: string[] }): void {

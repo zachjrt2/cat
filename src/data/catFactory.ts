@@ -27,34 +27,80 @@ function emptyJournal(day: number): CatJournal {
 export interface GenerateCatOptions {
   day: number;
   usedNames?: Set<string>;
+  existingCats?: Cat[];
   forceRare?: boolean;
   skinId?: string;
   stage?: import('./types').LifeStage;
   rng?: () => number;
 }
 
-export function generateCat(options: GenerateCatOptions): Cat {
-  const { day, usedNames, forceRare = false, skinId, stage = 'kitten', rng = Math.random } = options;
+/**
+ * Selects a (skin, marking) pair with strong bias against identical visual duplicates
+ * that already exist in the sanctuary.
+ */
+function pickUniqueVisualCombo(
+  pool: readonly typeof CAT_SKINS[0][],
+  fixedSkinId: string | undefined,
+  existingAppearances: Set<string>,
+  rng: () => number,
+): { skin: typeof CAT_SKINS[0]; marking: typeof CAT_MARKINGS[0] } {
+  const activeMarkings = CAT_MARKINGS.filter((m) => m.id !== 'none');
 
-  // 10% chance of rolling a rare cat naturally, or guaranteed if forceRare
+  const rollMarkingForSkin = (s: typeof CAT_SKINS[0], allowNone = true): typeof CAT_MARKINGS[0] => {
+    if (s.id.startsWith('hairless') || s.id.startsWith('game_boy')) {
+      return CAT_MARKINGS[0]; // 'none'
+    }
+    if (allowNone && rng() < 0.45) {
+      return CAT_MARKINGS[0]; // 'none'
+    }
+    return randomFrom(activeMarkings, rng);
+  };
+
+  // 1. If a specific skin is requested (e.g. uncommon/rare Plinko tiers)
+  if (fixedSkinId) {
+    const skin = CAT_SKINS.find((s) => s.id === fixedSkinId) || pool[0];
+    if (skin.id.startsWith('hairless') || skin.id.startsWith('game_boy')) {
+      return { skin, marking: CAT_MARKINGS[0] };
+    }
+    // Attempt to pick an unused marking for this skin
+    const shuffledMarkings = [CAT_MARKINGS[0], ...[...activeMarkings].sort(() => rng() - 0.5)];
+    for (const m of shuffledMarkings) {
+      if (!existingAppearances.has(`${skin.id}:${m.id}`)) {
+        return { skin, marking: m };
+      }
+    }
+    return { skin, marking: rollMarkingForSkin(skin) };
+  }
+
+  // 2. Otherwise search for an unused (skin, marking) pair
+  for (let attempt = 0; attempt < 35; attempt++) {
+    const candidateSkin = randomFrom(pool, rng);
+    const candidateMarking = rollMarkingForSkin(candidateSkin);
+    const key = `${candidateSkin.id}:${candidateMarking.id}`;
+    if (!existingAppearances.has(key)) {
+      return { skin: candidateSkin, marking: candidateMarking };
+    }
+  }
+
+  // Fallback
+  const fallbackSkin = randomFrom(pool, rng);
+  return { skin: fallbackSkin, marking: rollMarkingForSkin(fallbackSkin) };
+}
+
+export function generateCat(options: GenerateCatOptions): Cat {
+  const { day, usedNames, existingCats, forceRare = false, skinId, stage = 'kitten', rng = Math.random } = options;
+
+  const existingAppearances = new Set((existingCats ?? []).map((c) => `${c.color}:${c.pattern || 'none'}`));
+
+  // 12% chance of rolling a rare cat naturally, or guaranteed if forceRare
   const isRareRoll = forceRare || rng() < 0.12;
   const pool = isRareRoll
     ? CAT_SKINS.filter((s) => s.isRare)
     : CAT_SKINS.filter((s) => !s.isRare);
 
-  const skin = skinId ? (CAT_SKINS.find((s) => s.id === skinId) || randomFrom(pool, rng)) : randomFrom(pool, rng);
+  const { skin, marking: markingDef } = pickUniqueVisualCombo(pool, skinId, existingAppearances, rng);
   const isRare = !!skin.isRare;
   const rareType = skin.rareType ?? null;
-
-  // Markings: Hairless and GameBoy don't need markings by default, others can roll markings
-  let markingDef = CAT_MARKINGS[0]; // none
-  if (!skin.id.startsWith('hairless') && !skin.id.startsWith('game_boy')) {
-    // 50% chance of having a cute marking overlay
-    if (rng() < 0.55) {
-      const activeMarkings = CAT_MARKINGS.filter((m) => m.id !== 'none');
-      markingDef = randomFrom(activeMarkings, rng);
-    }
-  }
 
   const [majorTrait, minorTrait] = pickTwoDistinctTraits(rng);
 
@@ -116,6 +162,7 @@ export function breedCats(
   parentB: Cat,
   day: number,
   usedNames?: Set<string>,
+  existingCats?: Cat[],
   rng: () => number = Math.random,
 ): Cat {
   // Rarity inheritance: if both are rare (80%), if one is rare (55%), else base (12%)
@@ -146,7 +193,7 @@ export function breedCats(
     }
   }
 
-  // Pattern / marking inheritance
+  // Pattern / marking inheritance with duplicate protection
   const patternRoll = rng();
   let pattern = parentA.pattern;
   let marking = parentA.marking;
@@ -159,6 +206,19 @@ export function breedCats(
     const newM = randomFrom(activeMarkings, rng);
     pattern = newM.id;
     marking = newM.file || undefined;
+  }
+
+  // If the inherited combo is an exact visual duplicate of an existing cat, give high preference to rolling an unused marking
+  if (existingCats && existingCats.length > 0) {
+    const existingAppearances = new Set(existingCats.map((c) => `${c.color}:${c.pattern || 'none'}`));
+    if (existingAppearances.has(`${color}:${pattern || 'none'}`)) {
+      const activeMarkings = CAT_MARKINGS.filter((m) => m.id !== 'none').sort(() => rng() - 0.5);
+      const uniqueMarking = activeMarkings.find((m) => !existingAppearances.has(`${color}:${m.id}`));
+      if (uniqueMarking) {
+        pattern = uniqueMarking.id;
+        marking = uniqueMarking.file || undefined;
+      }
+    }
   }
 
   // Trait inheritance
@@ -233,9 +293,27 @@ export function breedCats(
   return kitten;
 }
 
-export function generateRareCat(rareType: import('./types').RareCatType, options: { day: number; usedNames?: Set<string> }): Cat {
-  const { day, usedNames } = options;
+export function generateRareCat(
+  rareType: import('./types').RareCatType,
+  options: { day: number; usedNames?: Set<string>; existingCats?: Cat[] },
+): Cat {
+  const { day, usedNames, existingCats } = options;
   const rareSkin = CAT_SKINS.find((s) => s.rareType === rareType) || CAT_SKINS.find((s) => s.isRare)!;
+
+  const existingAppearances = new Set((existingCats ?? []).map((c) => `${c.color}:${c.pattern || 'none'}`));
+
+  // If a rare cat of this color already exists, try to assign a distinct marking
+  let markingDef = CAT_MARKINGS[0]; // 'none'
+  if (!rareSkin.id.startsWith('hairless') && !rareSkin.id.startsWith('game_boy')) {
+    if (existingAppearances.has(`${rareSkin.id}:none`)) {
+      const activeMarkings = CAT_MARKINGS.filter((m) => m.id !== 'none').sort(() => Math.random() - 0.5);
+      const unused = activeMarkings.find((m) => !existingAppearances.has(`${rareSkin.id}:${m.id}`));
+      markingDef = unused || activeMarkings[0];
+    } else if (Math.random() < 0.35) {
+      const activeMarkings = CAT_MARKINGS.filter((m) => m.id !== 'none');
+      markingDef = randomFrom(activeMarkings);
+    }
+  }
 
   const [majorTrait, minorTrait] = pickTwoDistinctTraits();
   let name = rareSkin.label.split(' ')[0];
@@ -250,7 +328,8 @@ export function generateRareCat(rareType: import('./types').RareCatType, options
     id: makeId(),
     name,
     color: rareSkin.id,
-    pattern: 'none',
+    pattern: markingDef.id,
+    marking: markingDef.file || undefined,
     isRare: true,
     rareType,
     stage: 'adult',

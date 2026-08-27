@@ -40,6 +40,8 @@ function vectorToDirection(dx: number, dy: number): number {
 export interface AvailableMachineInfo {
   id: string;
   needType: string;
+  level: number;
+  threshold: number; // 50, 80, or 100
   x: number;
   y: number;
 }
@@ -73,9 +75,14 @@ export class CatSprite extends Phaser.GameObjects.Container {
   // Chirp cooldown for play state
   private chirpCooldown = 0;
   // Breed-ready heart emote timer (adults only)
-  private breedReadyHeartTimer = 15 + Math.random() * 15;
+  private breedReadyHeartTimer = 15;
   private isBreedReady = false;
   private crowdCheckTimer = 1.0 + Math.random() * 2.0;
+
+  // Cat Perfume Frenzy state (10s rapid mating frenzy)
+  private perfumeFrenzyTimer = 0;
+  private perfumedMatesBredInFrenzy = new Set<string>();
+  private perfumeParticleTimer = 0;
 
   // Playful Cat-Chase-Cat Tag Game
   private chasingCatSprite: CatSprite | null = null;
@@ -226,7 +233,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
       if (this.chasingCatSprite) this.stopCatChase(false);
       if (this.fleeingFromCatSprite) this.fleeingFromCatSprite = null;
       this.wanderTarget = null;
-      this.setDepth(9999);
+      this.setDepth(850);
       this.scene.tweens.killTweensOf(this);
       this.scene.tweens.add({
         targets: this,
@@ -294,6 +301,26 @@ export class CatSprite extends Phaser.GameObjects.Container {
         this.hoverGfx.fillStyle(0xf59e0b, 0.12);
         this.hoverGfx.fillCircle(0, centerY, r);
       }
+      this.hoverGfx.setAlpha(1);
+    } else {
+      this.hoverGfx.setAlpha(0);
+    }
+  }
+
+  /**
+   * Highlights this adult cat as an eligible target when dragging the perfume bottle.
+   */
+  setPerfumeTargetHighlight(isTarget: boolean): void {
+    this.hoverGfx.clear();
+    if (isTarget) {
+      const scale = getScaleForStage(this.cat.stage);
+      const r = (getHitRadius(this.cat.stage) + 8) * scale;
+      const centerY = 4.4 * (scale / BASE_SPRITE_SCALE);
+
+      this.hoverGfx.lineStyle(3, 0xec4899, 0.95);
+      this.hoverGfx.strokeCircle(0, centerY, r);
+      this.hoverGfx.fillStyle(0xa855f7, 0.26);
+      this.hoverGfx.fillCircle(0, centerY, r);
       this.hoverGfx.setAlpha(1);
     } else {
       this.hoverGfx.setAlpha(0);
@@ -429,11 +456,70 @@ export class CatSprite extends Phaser.GameObjects.Container {
   canInteract(nowMs: number): boolean { return nowMs - this.lastInteractionTimestamp > 350; }
   recordInteraction(nowMs: number): void { this.lastInteractionTimestamp = nowMs; }
 
+  isPerfumeFrenzied(): boolean {
+    return this.perfumeFrenzyTimer > 0;
+  }
+
+  activatePerfumeFrenzy(duration = 10): void {
+    if (this.cat.stage !== 'adult') return;
+    this.perfumeFrenzyTimer = duration;
+    this.perfumedMatesBredInFrenzy.clear();
+    this.cat.animationState = 'run';
+    this.wanderTarget = null;
+    this.chaseTarget = null;
+    this.targetMachineId = null;
+    this.showEmote('🌸');
+    this.playCurrentAnimation();
+  }
+
+  private spawnPerfumeParticle(): void {
+    const emojis = ['🌸', '💖', '✨', '💕'];
+    const em = emojis[Math.floor(Math.random() * emojis.length)];
+    const p = this.scene.add.text(
+      this.x + Phaser.Math.Between(-14, 14),
+      this.y - Phaser.Math.Between(6, 22),
+      em,
+      { fontSize: '14px' },
+    ).setOrigin(0.5).setDepth(Math.min(845, this.y + 10));
+
+    this.scene.tweens.add({
+      targets: p,
+      y: p.y - 24,
+      alpha: 0,
+      scaleX: 1.3,
+      scaleY: 1.3,
+      duration: 650,
+      ease: 'Quad.easeOut',
+      onComplete: () => p.destroy(),
+    });
+  }
+
   showEmote(emoji: string): void {
     const scale = getScaleForStage(this.cat.stage);
     const text = this.scene.add.text(this.x, this.y - 20, emoji, { fontSize: '24px' }).setOrigin(0.5, 1).setDepth(100);
     this.scene.tweens.add({ targets: text, y: this.y - 64, alpha: { from: 1, to: 0 }, scale: { from: 0.8, to: 1.4 }, duration: 1200, ease: 'Cubic.easeOut', onComplete: () => text.destroy() });
-    this.scene.tweens.add({ targets: [this.baseSprite, this.markingSprite].filter(Boolean), scaleY: scale * 0.82, scaleX: scale * 1.18, duration: 120, yoyo: true, ease: 'Quad.easeInOut' });
+
+    if (this.baseSprite) {
+      this.scene.tweens.killTweensOf(this.baseSprite);
+      this.baseSprite.setScale(scale);
+    }
+    if (this.markingSprite) {
+      this.scene.tweens.killTweensOf(this.markingSprite);
+      this.markingSprite.setScale(scale);
+    }
+
+    this.scene.tweens.add({
+      targets: [this.baseSprite, this.markingSprite].filter(Boolean),
+      scaleY: scale * 0.82,
+      scaleX: scale * 1.18,
+      duration: 120,
+      yoyo: true,
+      ease: 'Quad.easeInOut',
+      onComplete: () => {
+        if (this.baseSprite) this.baseSprite.setScale(scale);
+        if (this.markingSprite) this.markingSprite.setScale(scale);
+      },
+    });
     this.updateNeedIndicator();
   }
 
@@ -547,8 +633,8 @@ export class CatSprite extends Phaser.GameObjects.Container {
     }
   }
 
-  slinkAwayFrom(fromX: number, fromY: number, dt: number): void {
-    if (this.isDragged || this.cat.animationState === 'sleep') return;
+  slinkAwayFrom(fromX: number, fromY: number, dt: number, speedMult = 1): void {
+    if (this.isDragged || this.cat.animationState === 'sleep' || this.isPouncing) return;
     this.chaseTarget = null;
     this.wanderTarget = null;
 
@@ -558,7 +644,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
     if (dist < 1) return;
 
     // Slow, cautious walk away from brush
-    const speed = 36 * dt;
+    const speed = 40 * dt * speedMult;
     this.x += (dx / dist) * speed;
     this.y += (dy / dist) * speed;
 
@@ -567,6 +653,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
     this.currentDirection = vectorToDirection(dx, dy);
     this.cat.animationState = 'walk';
+    this.wanderTimer = 1.0;
     this.playCurrentAnimation();
     this.setDepth(this.y);
   }
@@ -603,6 +690,15 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
     const scale = getScaleForStage(this.cat.stage);
 
+    if (this.baseSprite) {
+      this.scene.tweens.killTweensOf(this.baseSprite);
+      this.baseSprite.setScale(scale);
+    }
+    if (this.markingSprite) {
+      this.scene.tweens.killTweensOf(this.markingSprite);
+      this.markingSprite.setScale(scale);
+    }
+
     // ── Phase 1: Crouch / Prep (140ms, 3rd running frame) ────────────────
     this.playSpecificAnimation('pounce_prep');
 
@@ -616,6 +712,8 @@ export class CatSprite extends Phaser.GameObjects.Container {
       onComplete: () => {
         if (!this.active || this.isDragged) {
           this.isPouncing = false;
+          if (this.baseSprite) this.baseSprite.setScale(scale);
+          if (this.markingSprite) this.markingSprite.setScale(scale);
           return;
         }
 
@@ -666,6 +764,8 @@ export class CatSprite extends Phaser.GameObjects.Container {
           onComplete: () => {
             if (!this.active || this.isDragged) {
               this.isPouncing = false;
+              if (this.baseSprite) { this.baseSprite.y = 0; this.baseSprite.setScale(scale); }
+              if (this.markingSprite) { this.markingSprite.y = 0; this.markingSprite.setScale(scale); }
               return;
             }
 
@@ -689,6 +789,8 @@ export class CatSprite extends Phaser.GameObjects.Container {
               ease: 'Quad.easeOut',
               onComplete: () => {
                 this.isPouncing = false;
+                if (this.baseSprite) this.baseSprite.setScale(scale);
+                if (this.markingSprite) this.markingSprite.setScale(scale);
                 if (onLand) {
                   onLand();
                 } else {
@@ -771,11 +873,11 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
   update(deltaMs: number): void {
     if (this.isDragged) {
-      this.setDepth(9999);
+      this.setDepth(850);
       return;
     }
     if (this.isPouncing) {
-      this.setDepth(this.y);
+      this.setDepth(Math.min(840, this.y));
       return;
     }
     const dt = deltaMs / 1000;
@@ -813,6 +915,94 @@ export class CatSprite extends Phaser.GameObjects.Container {
         this.breedReadyHeartTimer = 15 + Math.random() * 15;
         this.showEmote('❤️');
       }
+    }
+
+    // ── Active Perfume Breeding Frenzy AI ───────────────────────────────
+    if (this.perfumeFrenzyTimer > 0) {
+      this.perfumeFrenzyTimer -= dt;
+      this.perfumeParticleTimer -= dt;
+      if (this.perfumeParticleTimer <= 0) {
+        this.perfumeParticleTimer = 0.22;
+        this.spawnPerfumeParticle();
+      }
+
+      // Find all adult cat sprites in this scene that haven't been visited in this frenzy yet
+      const sceneAny = this.scene as any;
+      const eligibleMates: CatSprite[] = sceneAny.getAdultCatsInArea
+        ? sceneAny.getAdultCatsInArea(this.cat.area).filter(
+            (s: CatSprite) => s !== this && s.cat.stage === 'adult' && !this.perfumedMatesBredInFrenzy.has(s.cat.id)
+          )
+        : [];
+
+      if (eligibleMates.length > 0) {
+        eligibleMates.sort((a, b) => {
+          const da = Math.hypot(a.x - this.x, a.y - this.y);
+          const db = Math.hypot(b.x - this.x, b.y - this.y);
+          return da - db;
+        });
+
+        const targetMate = eligibleMates[0];
+        // Ensure mate is attentive and pauses to greet the perfumed lover
+        if (targetMate.cat.animationState === 'sleep') {
+          targetMate.cat.animationState = 'sit';
+          targetMate.playCurrentAnimation();
+        }
+        targetMate.wanderTarget = null;
+
+        const dx = targetMate.x - this.x;
+        const dy = targetMate.y - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < 48) {
+          // Reached mate! Trigger breeding bond & celebrate
+          this.perfumedMatesBredInFrenzy.add(targetMate.cat.id);
+          this.showEmote('💖');
+          targetMate.showEmote('😍');
+          if (sceneAny.triggerPerfumeBreeding) {
+            sceneAny.triggerPerfumeBreeding(this.cat, targetMate.cat, (this.x + targetMate.x) / 2, (this.y + targetMate.y) / 2);
+          }
+        } else {
+          // Run passionately toward mate
+          const speed = 220 * dt;
+          this.x += (dx / dist) * speed;
+          this.y += (dy / dist) * speed;
+          this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
+          this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
+          this.currentDirection = vectorToDirection(dx, dy);
+          this.cat.animationState = 'run';
+          this.playCurrentAnimation();
+        }
+      } else {
+        // All mates visited or alone in room: run joyous zoomie victory lap with floating hearts
+        this.cat.animationState = 'run';
+        if (!this.wanderTarget || Math.hypot(this.wanderTarget.x - this.x, this.wanderTarget.y - this.y) < 20) {
+          this.wanderTarget = new Phaser.Math.Vector2(
+            Phaser.Math.Between(this.bounds.left + 30, this.bounds.right - 30),
+            Phaser.Math.Between(this.bounds.top + 30, this.bounds.bottom - 30),
+          );
+        }
+        const target = this.wanderTarget;
+        const dx = target.x - this.x;
+        const dy = target.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 5) {
+          const speed = 175 * dt;
+          this.x += (dx / dist) * speed;
+          this.y += (dy / dist) * speed;
+          this.currentDirection = vectorToDirection(dx, dy);
+          this.playCurrentAnimation();
+        }
+      }
+
+      if (this.perfumeFrenzyTimer <= 0) {
+        this.showEmote('🥰');
+        this.cat.animationState = 'sit';
+        this.wanderTimer = 3.0;
+        this.playCurrentAnimation();
+      }
+
+      this.setDepth(Math.min(840, this.y));
+      return;
     }
 
     if (this.cat.animationState !== 'sleep' && shouldFallAsleep(this.cat)) {
@@ -1084,19 +1274,34 @@ export class CatSprite extends Phaser.GameObjects.Container {
     }
 
     if (this.availableMachines.length > 0) {
-      let targetNeed: string | null = null;
-      if (this.cat.hunger < 45) targetNeed = 'food';
-      else if (this.cat.cleanliness < 45) targetNeed = 'wash';
-      else if (this.cat.affection < 45) targetNeed = 'pet';
-      else if (this.cat.fun < 45) targetNeed = 'toy';
-      const machine = targetNeed ? this.availableMachines.find((m) => m.needType === targetNeed) : null;
-      if (machine && Math.random() < 0.7) {
-        this.targetMachineId = machine.id;
-        this.wanderTarget = new Phaser.Math.Vector2(machine.x, machine.y);
-        this.cat.animationState = 'walk';
-        this.wanderTimer = 8.0;
-        this.playCurrentAnimation();
-        return;
+      // Senses available machines when under that machine's tier threshold (50% Tier 1, 80% Tier 2, 100% Tier 3)
+      const needyMachines = this.availableMachines.filter((m) => {
+        let currentVal = 100;
+        if (m.needType === 'food') currentVal = this.cat.hunger;
+        else if (m.needType === 'wash' || m.needType === 'brush') currentVal = this.cat.cleanliness;
+        else if (m.needType === 'pet') currentVal = this.cat.affection;
+        else if (m.needType === 'toy') currentVal = this.cat.fun;
+
+        return currentVal < m.threshold;
+      });
+
+      if (needyMachines.length > 0) {
+        // Pick the machine with the highest deficit below threshold
+        needyMachines.sort((a, b) => {
+          const valA = a.needType === 'food' ? this.cat.hunger : a.needType === 'pet' ? this.cat.affection : a.needType === 'toy' ? this.cat.fun : this.cat.cleanliness;
+          const valB = b.needType === 'food' ? this.cat.hunger : b.needType === 'pet' ? this.cat.affection : b.needType === 'toy' ? this.cat.fun : this.cat.cleanliness;
+          return (valA - a.threshold) - (valB - b.threshold);
+        });
+
+        const chosen = needyMachines[0];
+        if (Math.random() < 0.85) {
+          this.targetMachineId = chosen.id;
+          this.wanderTarget = new Phaser.Math.Vector2(chosen.x, chosen.y);
+          this.cat.animationState = 'walk';
+          this.wanderTimer = 8.0;
+          this.playCurrentAnimation();
+          return;
+        }
       }
     }
 

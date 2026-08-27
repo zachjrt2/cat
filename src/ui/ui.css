@@ -372,34 +372,135 @@ body.tool-pet-active, body.tool-pet-active canvas {
 }
 
 /* Adopt button floating */
+/* Adopt / Cat Info button floating in bottom right */
 .adopt-btn {
   position: absolute;
   right: 14px;
   bottom: 96px;
+  width: 50px;
+  height: 50px;
   background: linear-gradient(135deg, #ff758f, #ff4d6d);
   color: white;
   border: none;
-  border-radius: 999px;
-  padding: 12px 20px;
+  border-radius: 50%;
+  padding: 0;
   font-family: inherit;
   font-weight: 800;
-  font-size: 15px;
   box-shadow: 0 5px 15px rgba(255, 77, 109, 0.4);
   cursor: pointer;
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
   z-index: 30;
 }
 
+.adopt-btn .roster-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.adopt-btn .roster-btn-icon svg {
+  width: 24px;
+  height: 24px;
+  fill: #ffffff;
+}
+
 .adopt-btn:hover {
-  transform: translateY(-3px) scale(1.03);
-  box-shadow: 0 8px 20px rgba(255, 77, 109, 0.5);
+  transform: translateY(-3px) scale(1.08);
+  box-shadow: 0 8px 20px rgba(255, 77, 109, 0.55);
 }
 
 .adopt-btn:active {
   transform: scale(0.94);
+}
+
+/* Cat Perfume Floating Button in Bottom Left (Mirroring Cat Info button) */
+.perfume-hud-btn {
+  position: absolute;
+  left: 14px;
+  bottom: 96px;
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #a855f7, #ec4899);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  padding: 0;
+  font-family: inherit;
+  font-weight: 800;
+  box-shadow: 0 5px 15px rgba(236, 72, 153, 0.4);
+  cursor: grab;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  user-select: none;
+  touch-action: none;
+}
+
+.perfume-hud-btn .perfume-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.perfume-hud-btn .perfume-btn-icon svg {
+  width: 24px;
+  height: 24px;
+  fill: #ffffff;
+}
+
+.perfume-hud-btn:hover {
+  transform: translateY(-3px) scale(1.08);
+  box-shadow: 0 8px 20px rgba(236, 72, 153, 0.58);
+}
+
+.perfume-hud-btn:active {
+  cursor: grabbing;
+  transform: scale(0.94);
+}
+
+.perfume-count-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ffffff;
+  color: #a855f7;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 999px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  border: 1.5px solid #a855f7;
+}
+
+.perfume-drag-ghost {
+  position: fixed;
+  width: 48px;
+  height: 48px;
+  pointer-events: none;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, rgba(236, 72, 153, 0.88) 0%, rgba(168, 85, 247, 0.72) 70%, transparent 100%);
+  border-radius: 50%;
+  filter: drop-shadow(0 4px 10px rgba(236, 72, 153, 0.6));
+  animation: pulse-perfume 0.55s infinite alternate ease-in-out;
+}
+
+.perfume-drag-ghost svg {
+  width: 28px;
+  height: 28px;
+  fill: #ffffff;
+}
+
+@keyframes pulse-perfume {
+  from { transform: scale(1); }
+  to { transform: scale(1.2); }
 }
 
 /* ---------- Toasts ---------- */
@@ -483,6 +584,79 @@ body.tool-pet-active, body.tool-pet-active canvas {
   color: var(--brown-light);
   margin-top: 4px;
   margin-bottom: 14px;
+}
+
+/* Options & Audio Modal Styles */
+.options-modal {
+  max-width: 440px;
+}
+
+.options-section {
+  background: white;
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 1px 4px var(--shadow);
+}
+
+.options-section h3 {
+  margin: 0 0 10px 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--brown);
+}
+
+.sound-controls-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sound-control-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sound-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--brown);
+}
+
+.sound-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.options-slider {
+  flex: 1;
+  accent-color: #ff758f;
+  cursor: pointer;
+}
+
+.vol-label {
+  min-width: 36px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brown-light);
+}
+
+.options-btn-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.import-btn-label {
+  display: block;
+  text-align: center;
+  cursor: pointer;
 }
 
 /* Shop Modal Styles */
@@ -790,12 +964,43 @@ body.tool-pet-active, body.tool-pet-active canvas {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   background: white;
   padding: 10px 14px;
   border-radius: 14px;
   margin-bottom: 12px;
   box-shadow: 0 1px 4px var(--shadow);
   font-size: 13px;
+}
+
+.area-reassign-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.sort-all-cats-btn {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1.5px solid #bbf7d0;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 6px 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.sort-all-cats-btn:hover {
+  background: #dcfce7;
+  transform: translateY(-1px);
 }
 
 /* Journal Modal Styles */
@@ -1245,8 +1450,9 @@ body.tool-pet-active, body.tool-pet-active canvas {
 
 .quick-care-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  width: 100%;
 }
 
 .quick-care-btn {
@@ -1254,14 +1460,14 @@ body.tool-pet-active, body.tool-pet-active canvas {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 7px 2px;
-  border-radius: 12px;
+  gap: 4px;
+  padding: 9px 4px;
+  border-radius: 14px;
   border: 1.5px solid rgba(77, 56, 39, 0.1);
   background: var(--cream);
   color: var(--brown);
   font-family: inherit;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 800;
   cursor: pointer;
   box-shadow: 0 2px 5px var(--shadow);

@@ -1,4 +1,4 @@
-import type { Cat, GameState, RareCatType } from '../data/types';
+import type { Cat, CatArea, GameState, RareCatType } from '../data/types';
 import { generateCat, generateRareCat } from '../data/catFactory';
 
 export type PlinkoTier = 'miss' | 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
@@ -27,6 +27,21 @@ export interface PlinkoOdds {
 
 export class PlinkoSystem {
   constructor(private state: GameState) {}
+
+  /**
+   * Checks if there is space in any unlocked area of the sanctuary.
+   */
+  hasRemainingSanctuarySpace(): boolean {
+    let totalCap = 0;
+    const totalCats = this.state.cats.length;
+    for (const key of Object.keys(this.state.areas) as CatArea[]) {
+      const a = this.state.areas[key];
+      if (a?.unlocked) {
+        totalCap += a.capacity;
+      }
+    }
+    return totalCats < totalCap;
+  }
 
   /**
    * Calculates dynamic odds for a given Star wager.
@@ -132,11 +147,43 @@ export class PlinkoSystem {
   }
 
   /**
-   * Generates cats according to the determined tier.
+   * Generates cats according to the determined tier, assigning them to the preferred area
+   * if there is space, or automatically to the first unlocked area with available capacity.
    */
-  generateCatsForTier(tier: PlinkoTier, count: number): Cat[] {
+  generateCatsForTier(tier: PlinkoTier, count: number, preferredArea: CatArea = 'yard'): Cat[] {
     const generated: Cat[] = [];
     const usedNames = new Set(this.state.cats.map((c) => c.name));
+
+    // Track area occupancy including new additions in this drop
+    const areaCounts: Record<string, number> = {};
+    for (const key of ['yard', 'shelter', 'sunroom', 'cafe']) {
+      areaCounts[key] = this.state.cats.filter((c) => c.area === key).length;
+    }
+
+    const findBestAvailableArea = (): CatArea => {
+      // 1. Defaults to preferred area if unlocked and not full
+      const prefState = this.state.areas[preferredArea];
+      if (prefState?.unlocked && (areaCounts[preferredArea] || 0) < prefState.capacity) {
+        areaCounts[preferredArea] = (areaCounts[preferredArea] || 0) + 1;
+        return preferredArea;
+      }
+
+      // 2. Otherwise find the first unlocked area with open space
+      const allAreas: CatArea[] = ['yard', 'shelter', 'sunroom', 'cafe'];
+      for (const a of allAreas) {
+        const aState = this.state.areas[a];
+        if (aState?.unlocked && (areaCounts[a] || 0) < aState.capacity) {
+          areaCounts[a] = (areaCounts[a] || 0) + 1;
+          return a;
+        }
+      }
+
+      // Fallback
+      return preferredArea;
+    };
+
+    // Combine existing cats with newly generated cats in this batch for visual duplicate protection
+    const allKnownCats = [...this.state.cats];
 
     for (let i = 0; i < count; i++) {
       let cat: Cat;
@@ -147,38 +194,39 @@ export class PlinkoSystem {
         case 'legendary': {
           const legendRares: RareCatType[] = ['golden', 'ghost', 'royal'];
           const rareType = legendRares[Math.floor(Math.random() * legendRares.length)];
-          cat = generateRareCat(rareType, { day: this.state.day, usedNames });
+          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats });
           break;
         }
         case 'epic': {
           const epicRares: RareCatType[] = ['gameboy', 'radioactive', 'hairless'];
           const rareType = epicRares[Math.floor(Math.random() * epicRares.length)];
-          cat = generateRareCat(rareType, { day: this.state.day, usedNames });
+          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats });
           break;
         }
         case 'rare': {
           const rareTypes: RareCatType[] = ['seal_point', 'hairless', 'gameboy'];
           const rareType = rareTypes[Math.floor(Math.random() * rareTypes.length)];
-          cat = generateRareCat(rareType, { day: this.state.day, usedNames });
+          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats });
           break;
         }
         case 'uncommon': {
           const uncommonCoats = ['yellow_0', 'pink_0', 'teal_0', 'indigo_0', 'red_0', 'red_1', 'white_grey_0', 'white_grey_1'];
           const skin = uncommonCoats[Math.floor(Math.random() * uncommonCoats.length)];
-          cat = generateCat({ day: this.state.day, usedNames, skinId: skin, stage });
+          cat = generateCat({ day: this.state.day, usedNames, existingCats: allKnownCats, skinId: skin, stage });
           break;
         }
         case 'common':
         default: {
           const commonCoats = ['orange_0', 'orange_1', 'orange_2', 'orange_3', 'grey_0', 'grey_1', 'grey_2', 'white_0', 'dark_0', 'peach_0'];
           const skin = commonCoats[Math.floor(Math.random() * commonCoats.length)];
-          cat = generateCat({ day: this.state.day, usedNames, skinId: skin, stage });
+          cat = generateCat({ day: this.state.day, usedNames, existingCats: allKnownCats, skinId: skin, stage });
           break;
         }
       }
 
-      cat.area = this.state.cats.length > 0 ? this.state.cats[0].area : 'yard';
+      cat.area = findBestAvailableArea();
       usedNames.add(cat.name);
+      allKnownCats.push(cat);
       generated.push(cat);
     }
 

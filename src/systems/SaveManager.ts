@@ -22,6 +22,7 @@ export function createNewGameState(): GameState {
     strayArrivalDueAt: null,
     milestoneClaimedIds: [],
     offlineStarLevel: 1,
+    catPerfumeCount: 0,
     totalPetsGiven: 0,
     totalLoveEarned: 0,
     totalRehomedCats: 0,
@@ -53,6 +54,7 @@ export class SaveManager {
       // Migration checks
       if (typeof state.adoptionTokens !== 'number') state.adoptionTokens = 0;
       if (typeof state.offlineStarLevel !== 'number' || state.offlineStarLevel < 1) state.offlineStarLevel = 1;
+      if (typeof state.catPerfumeCount !== 'number' || state.catPerfumeCount < 0) state.catPerfumeCount = 0;
       if (!Array.isArray(state.furniture)) state.furniture = [];
       if (!state.machines || typeof state.machines !== 'object') state.machines = {};
       if (!state.breedingCooldowns || typeof state.breedingCooldowns !== 'object') state.breedingCooldowns = {};
@@ -64,6 +66,22 @@ export class SaveManager {
       if (typeof state.totalRehomeLoveEarned !== 'number') state.totalRehomeLoveEarned = 0;
       if (!state.timeOfDay) state.timeOfDay = 'day';
       if (!state.weather) state.weather = 'sunny';
+
+      // Ensure cats have valid life stages; promote non-kittens or legacy cats to adults
+      if (Array.isArray(state.cats)) {
+        for (let i = 0; i < state.cats.length; i++) {
+          const cat = state.cats[i];
+          if (!cat.stage || cat.growthProgress >= 100 || (cat.ageDays && cat.ageDays >= 1)) {
+            cat.stage = 'adult';
+            cat.growthProgress = 100;
+          }
+          // If sanctuary has cats but fewer than 2 adults, promote the oldest ones so breeding is available
+          if (state.cats.filter((c) => c.stage === 'adult').length < 2 && i < 2) {
+            cat.stage = 'adult';
+            cat.growthProgress = 100;
+          }
+        }
+      }
 
       return state;
     } catch (err) {
