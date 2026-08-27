@@ -48,9 +48,15 @@ export class SoundManager {
   private clickPool: HTMLAudioElement[] = [];
   private popPool: HTMLAudioElement[] = [];
   private coinPool: HTMLAudioElement[] = [];
+  private bouncePool: HTMLAudioElement[] = [];
+  private balldropPool: HTMLAudioElement[] = [];
+  private failPool: HTMLAudioElement[] = [];
+  private bigwinPool: HTMLAudioElement[] = [];
+  private successPool: HTMLAudioElement[] = [];
 
-  // Concurrent meow limiter
+  // Concurrent meow & chirp limiter
   private activeMeowCount = 0;
+  private lastChirpTime = 0;
   private static readonly MAX_CONCURRENT_MEOWS = 2;
 
   constructor() {
@@ -84,6 +90,11 @@ export class SoundManager {
     this.applyVolumeToPool(this.clickPool);
     this.applyVolumeToPool(this.popPool);
     this.applyVolumeToPool(this.coinPool);
+    this.applyVolumeToPool(this.bouncePool);
+    this.applyVolumeToPool(this.balldropPool);
+    this.applyVolumeToPool(this.failPool);
+    this.applyVolumeToPool(this.bigwinPool);
+    this.applyVolumeToPool(this.successPool);
     this.meowPools.forEach(p => this.applyVolumeToPool(p));
     this.kittenPools.forEach(p => this.applyVolumeToPool(p));
     this.chirpPools.forEach(p => this.applyVolumeToPool(p));
@@ -133,6 +144,11 @@ export class SoundManager {
     this.clickPool = makePool(soundUrl('click.mp3'), 4, this.sfxVolume);
     this.popPool = makePool(soundUrl('pop.mp3'), 3, this.sfxVolume);
     this.coinPool = makePool(soundUrl('coin.mp3'), 3, this.sfxVolume);
+    this.bouncePool = makePool(soundUrl('bounce.mp3'), 8, this.sfxVolume * 0.85);
+    this.balldropPool = makePool(soundUrl('balldrop.mp3'), 6, this.sfxVolume);
+    this.failPool = makePool(soundUrl('fail.mp3'), 4, this.sfxVolume * 0.9);
+    this.bigwinPool = makePool(soundUrl('bigwin.mp3'), 4, this.sfxVolume);
+    this.successPool = makePool(soundUrl('success.mp3'), 4, this.sfxVolume);
   }
 
   private playFromPool(pool: HTMLAudioElement[], volume?: number): void {
@@ -204,10 +220,13 @@ export class SoundManager {
     this.playFromPool(this.hungryPool, 0.6);
   }
 
-  /** Chirp – for play state (3 variations) */
+  /** Chirp – rare vocalization for play state (3 variations) */
   playChirp(): void {
     this.initPools();
     if (!this.sfxEnabled) return;
+    const now = Date.now();
+    if (now - this.lastChirpTime < 15000) return; // at most 1 chirp every 15s sanctuary-wide
+    this.lastChirpTime = now;
     const idx = Math.floor(Math.random() * this.chirpPools.length);
     this.playFromPool(this.chirpPools[idx], 0.55);
   }
@@ -233,19 +252,54 @@ export class SoundManager {
     this.playFromPool(this.coinPool);
   }
 
+  // ── Plinko Juicy Sounds ──────────────────────────────────────────────────
+
+  /** Bounce – when a ball hits a peg */
+  playBounce(playbackRate = 1): void {
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    const el = this.bouncePool.find(a => a.paused || a.ended) ?? this.bouncePool[0];
+    el.currentTime = 0;
+    el.volume = this.sfxVolume * 0.85;
+    el.playbackRate = Math.max(0.7, Math.min(1.4, playbackRate));
+    el.play().catch(() => {});
+  }
+
+  /** Ball Drop – for each ball dropped into the chute */
+  playBalldrop(): void {
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    this.playFromPool(this.balldropPool);
+  }
+
+  /** Fail – when a ball falls into a miss slot */
+  playFail(): void {
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    this.playFromPool(this.failPool);
+  }
+
+  /** Big Win – when a ball lands in any non-miss slot */
+  playBigWin(): void {
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    this.playFromPool(this.bigwinPool);
+  }
+
+  /** Success – triumphant fanfare when rewards are delivered */
+  playSuccess(): void {
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    this.playFromPool(this.successPool);
+  }
+
   // ── Legacy aliases (keep existing call-sites working) ────────────────────
 
   playTap(): void { this.playClick(); }
-  playCrunch(): void { this.playChirp(); }      // food eating
+  playCrunch(): void { this.playPop(); }       // food eating
   playSparkle(): void { this.playPop(); }       // sparkle / brush / automation
   playBubble(): void { this.playPop(); }        // wash bubble
-  playAdoptFanfare(): void {
-    // Short chord via Web Audio for fanfare (no file needed)
-    if (!this.sfxEnabled) return;
-    this.playCoin();
-    setTimeout(() => this.playCoin(), 120);
-    setTimeout(() => this.playCoin(), 240);
-  }
+  playAdoptFanfare(): void { this.playSuccess(); }
 
 }
 

@@ -40,27 +40,21 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.createAllAnimations();
+    // Pre-warm the starter coat animations immediately (takes <2ms)
+    ensureSpriteAnimations(this.anims, 'cat_orange_0');
+    ensureSpriteAnimations(this.anims, 'cat_grey_0');
+    ensureSpriteAnimations(this.anims, 'cat_white_0');
     this.scene.start('Sanctuary');
   }
+}
 
-  private createAllAnimations(): void {
-    // Create animations for all cat base skins
-    for (const skin of CAT_SKINS) {
-      this.registerSpriteAnimations(`cat_${skin.id}`);
-    }
+const registeredTextures = new Set<string>();
 
-    // Create animations for all marking overlays
-    for (const marking of CAT_MARKINGS) {
-      if (marking.file) {
-        this.registerSpriteAnimations(`marking_${marking.file}`);
-      }
-    }
-  }
+export function ensureSpriteAnimations(anims: Phaser.Animations.AnimationManager, textureKey: string): void {
+  if (registeredTextures.has(textureKey)) return;
+  registeredTextures.add(textureKey);
 
-  private registerSpriteAnimations(textureKey: string): void {
-    const anims = this.anims;
-    const colsPerRow = 32;
+  const colsPerRow = 32;
 
     // 8 directions: 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW
     for (let dir = 0; dir < 8; dir++) {
@@ -266,4 +260,3 @@ export class BootScene extends Phaser.Scene {
       }
     }
   }
-}

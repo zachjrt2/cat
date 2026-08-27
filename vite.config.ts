@@ -7,7 +7,16 @@ export default defineConfig({
   base: '/cat/',
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes('node_modules/phaser')) {
+            return 'phaser';
+          }
+        },
+      },
+    },
   },
   server: {
     host: true,

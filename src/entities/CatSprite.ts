@@ -3,6 +3,7 @@ import type { Cat, LifeStage, ToolType } from '../data/types';
 import { shouldFallAsleep, shouldWakeUp } from '../systems/NeedsSystem';
 import { sound } from '../systems/SoundManager';
 import { MUTATION_CATALOG } from '../data/mutations';
+import { ensureSpriteAnimations } from '../scenes/BootScene';
 
 const BASE_SPRITE_SCALE = 2.2;
 
@@ -114,6 +115,12 @@ export class CatSprite extends Phaser.GameObjects.Container {
     super(scene, x, y);
     this.cat = cat;
     this.bounds = bounds;
+
+    // Ensure animations are lazily instantiated for this cat's coat and marking
+    ensureSpriteAnimations(scene.anims, `cat_${cat.color}`);
+    if (cat.marking) {
+      ensureSpriteAnimations(scene.anims, `marking_${cat.marking}`);
+    }
 
     const scale = getScaleForCat(cat);
 
@@ -680,7 +687,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
       this.cat.friendshipIds[target.cat.id] = (this.cat.friendshipIds[target.cat.id] || 0) + 6;
       target.cat.friendshipIds[this.cat.id] = (target.cat.friendshipIds[this.cat.id] || 0) + 6;
 
-      sound.playChirp();
+      if (Math.random() < 0.05) {
+        sound.playChirp();
+      }
       this.showEmote('🎉');
       target.showEmote('😸');
 
@@ -1122,10 +1131,12 @@ export class CatSprite extends Phaser.GameObjects.Container {
     }
     if (this.cat.animationState === 'play') {
       this.wanderTimer -= dt;
-      // Chirp while playing, roughly every 3-6s
+      // Rare chirp while playing (1/20 chance every 40-80s)
       if (this.chirpCooldown <= 0) {
-        this.chirpCooldown = 3 + Math.random() * 3;
-        sound.playChirp();
+        this.chirpCooldown = 40 + Math.random() * 40;
+        if (Math.random() < 0.05) {
+          sound.playChirp();
+        }
       }
       if (this.wanderTimer <= 0) {
         const roll = Math.random();

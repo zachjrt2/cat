@@ -340,7 +340,7 @@ export function breedCats(
 
 export function generateRareCat(
   rareType: import('./types').RareCatType,
-  options: { day: number; usedNames?: Set<string>; existingCats?: Cat[]; mutation?: CatMutationType | null },
+  options: { day: number; usedNames?: Set<string>; existingCats?: Cat[]; mutation?: CatMutationType | null; mutationChance?: number },
 ): Cat {
   const { day, usedNames, existingCats } = options;
   const rareSkin = CAT_SKINS.find((s) => s.rareType === rareType) || CAT_SKINS.find((s) => s.isRare)!;
@@ -369,8 +369,9 @@ export function generateRareCat(
     usedNames.add(name);
   }
 
+  const mutChance = options.mutationChance ?? 0.15;
   let mutation: CatMutationType | null = options.mutation ?? null;
-  if (!mutation && Math.random() < 0.15) {
+  if (!mutation && Math.random() < mutChance) {
     mutation = rollRandomMutation();
   }
 

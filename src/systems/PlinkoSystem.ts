@@ -23,6 +23,7 @@ export interface PlinkoOdds {
   epicPercent: number;
   legendaryPercent: number;
   jackpotChancePercent: number;
+  mutationChancePercent: number;
 }
 
 export interface PlinkoBoardRank {
@@ -34,6 +35,17 @@ export interface PlinkoBoardRank {
   slots: PlinkoTier[];
 }
 
+export function getMutationChance(wager: number): number {
+  const W = Math.max(1, Math.floor(wager));
+  if (W >= 250) return 0.95;
+  if (W >= 100) return 0.75;
+  if (W >= 50) return 0.55;
+  if (W >= 25) return 0.38;
+  if (W >= 10) return 0.22;
+  if (W >= 5) return 0.12;
+  return 0.05;
+}
+
 export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
   const W = Math.max(1, Math.floor(wager));
   if (W >= 250) {
@@ -42,7 +54,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
       badge: '🌌 MYTHIC 250+ ⭐',
       color: '#ec4899',
       bgGrad: 'linear-gradient(135deg, rgba(236, 72, 153, 0.18), rgba(168, 85, 247, 0.22))',
-      perks: '✨ 5x Legend Slots • 100% Epic/Legend Guarantee (0% Low Tiers) • Guaranteed Multi-Cat Drop (3–4 Cats)!',
+      perks: '✨ 95% Mutation Chance • 5x Legend Slots • 100% Epic/Legend Guarantee • Multi-Cat Drop (3–4 Cats)!',
       slots: ['epic', 'epic', 'legendary', 'legendary', 'legendary', 'legendary', 'legendary', 'epic', 'epic'],
     };
   }
@@ -52,7 +64,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
       badge: '👑 MASTER 100+ ⭐',
       color: '#a855f7',
       bgGrad: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(99, 102, 241, 0.18))',
-      perks: '✨ Only Rare, Epic & Legend (0% Common/Uncommon) • 3x Legend Slots • 65% Multi-Cat Drop (2–3 Cats)',
+      perks: '✨ 75% Mutation Chance • Only Rare, Epic & Legend • 3x Legend Slots • 65% Multi-Cat Drop (2–3 Cats)',
       slots: ['rare', 'epic', 'epic', 'legendary', 'legendary', 'legendary', 'epic', 'epic', 'rare'],
     };
   }
@@ -62,7 +74,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
       badge: '💎 ELITE 50+ ⭐',
       color: '#0284c7',
       bgGrad: 'linear-gradient(135deg, rgba(2, 132, 199, 0.14), rgba(56, 189, 248, 0.18))',
-      perks: '✨ Commons Eliminated (0% Common) • Triple Legend Slots • 40% Multi-Cat Drop (2–3 Cats)',
+      perks: '✨ 55% Mutation Chance • 0% Common • Triple Legend Slots • 40% Multi-Cat Drop (2–3 Cats)',
       slots: ['uncommon', 'rare', 'epic', 'legendary', 'legendary', 'legendary', 'epic', 'rare', 'uncommon'],
     };
   }
@@ -72,7 +84,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
       badge: '🏆 GOLD 25+ ⭐',
       color: '#b45309',
       bgGrad: 'linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(251, 191, 36, 0.18))',
-      perks: '✨ Legendary Center Slot Unlocked • 25% Multi-Cat Drop (2–3 Cats)',
+      perks: '✨ 38% Mutation Chance • Legendary Center Slot • 25% Multi-Cat Drop (2–3 Cats)',
       slots: ['common', 'uncommon', 'rare', 'epic', 'legendary', 'epic', 'rare', 'uncommon', 'common'],
     };
   }
@@ -82,7 +94,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
       badge: '🥈 SILVER 10+ ⭐',
       color: '#475569',
       bgGrad: 'linear-gradient(135deg, rgba(71, 85, 105, 0.1), rgba(148, 163, 184, 0.15))',
-      perks: '✨ 100% Win Guarantee (0% Miss) • Epic Slots Unlocked • 8% Multi-Cat Drop',
+      perks: '✨ 22% Mutation Chance • 100% Win Guarantee (0% Miss) • Epic Slots Unlocked',
       slots: ['common', 'uncommon', 'rare', 'common', 'epic', 'common', 'rare', 'uncommon', 'common'],
     };
   }
@@ -92,7 +104,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
       badge: '🥉 BRONZE 5+ ⭐',
       color: '#92400e',
       bgGrad: 'linear-gradient(135deg, rgba(146, 64, 14, 0.1), rgba(217, 119, 6, 0.12))',
-      perks: '✨ Low Miss Risk (11%) • Rare Slots Unlocked',
+      perks: '✨ 12% Mutation Chance • Low Miss Risk (11%) • Rare Slots Unlocked',
       slots: ['miss', 'common', 'uncommon', 'rare', 'uncommon', 'common', 'uncommon', 'common', 'common'],
     };
   }
@@ -169,6 +181,8 @@ export class PlinkoSystem {
     else if (W >= 10) jackpotChance = 8;
     else if (W >= 5) jackpotChance = 4;
 
+    const mutChance = getMutationChance(W);
+
     return {
       winChancePercent: Math.round(((total - missCount) / total) * 100),
       missChancePercent: Math.round((missCount / total) * 100),
@@ -178,6 +192,7 @@ export class PlinkoSystem {
       epicPercent: Math.round((epicCount / total) * 100),
       legendaryPercent: Math.round((legendCount / total) * 100),
       jackpotChancePercent: Math.round(jackpotChance),
+      mutationChancePercent: Math.round(mutChance * 100),
     };
   }
 
@@ -249,12 +264,7 @@ export class PlinkoSystem {
     const generated: Cat[] = [];
     const usedNames = new Set(this.state.cats.map((c) => c.name));
 
-    // Calculate mutation chance based on star wager
-    let mutationChance = 0.06;
-    if (wager >= 250) mutationChance = 0.75;
-    else if (wager >= 100) mutationChance = 0.40;
-    else if (wager >= 50) mutationChance = 0.25;
-    else if (wager >= 25) mutationChance = 0.15;
+    const mutationChance = getMutationChance(wager);
 
     // Track area occupancy including new additions in this drop
     const areaCounts: Record<string, number> = {};
@@ -296,19 +306,19 @@ export class PlinkoSystem {
         case 'legendary': {
           const legendRares: RareCatType[] = ['golden', 'ghost', 'royal'];
           const rareType = legendRares[Math.floor(Math.random() * legendRares.length)];
-          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats });
+          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats, mutationChance });
           break;
         }
         case 'epic': {
           const epicRares: RareCatType[] = ['gameboy', 'radioactive', 'hairless'];
           const rareType = epicRares[Math.floor(Math.random() * epicRares.length)];
-          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats });
+          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats, mutationChance });
           break;
         }
         case 'rare': {
           const rareTypes: RareCatType[] = ['seal_point', 'hairless', 'gameboy'];
           const rareType = rareTypes[Math.floor(Math.random() * rareTypes.length)];
-          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats });
+          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats, mutationChance });
           break;
         }
         case 'uncommon': {

@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&display=swap');
-
 :root {
   --cream: #fffaf2;
   --cream-dark: #f5eedf;
@@ -2243,6 +2241,44 @@ body.tool-pet-active, body.tool-pet-active canvas {
   box-shadow: 0 2px 6px rgba(245, 158, 11, 0.25);
 }
 
+.plinko-multiball-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.plinko-multiball-selector {
+  display: flex;
+  gap: 6px;
+}
+
+.plinko-multiball-btn {
+  flex: 1;
+  padding: 6px 4px;
+  background: #ffffff;
+  border: 1.5px solid #eedfcc;
+  border-radius: 8px;
+  color: var(--brown);
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 1px 3px var(--shadow);
+  transition: all 0.15s ease;
+}
+
+.plinko-multiball-btn:hover {
+  background: #fdfaf5;
+  border-color: #ddb892;
+  transform: translateY(-1px);
+}
+
+.plinko-multiball-btn.active {
+  background: #fce7f3;
+  border-color: #ec4899;
+  color: #be185d;
+  box-shadow: 0 2px 6px rgba(236, 72, 153, 0.25);
+}
+
 .plinko-odds-breakdown {
   display: flex;
   gap: 6px;
@@ -2263,10 +2299,11 @@ body.tool-pet-active, body.tool-pet-active canvas {
   box-shadow: 0 1px 3px var(--shadow);
 }
 
-.odds-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+.mutation-pill {
+  background: #fdf4ff;
+  border-color: #f0abfc;
+  color: #a21caf;
+  font-weight: 800;
 }
 
 .plinko-drop-btn {
