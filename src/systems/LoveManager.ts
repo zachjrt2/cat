@@ -33,6 +33,11 @@ export class LoveManager {
     let base = LOVE_CONFIG.baseLovePerInteraction;
     const isDiva = cat.majorTrait === 'diva' || cat.minorTrait === 'diva';
     if (isDiva && tool === 'pet') base *= LOVE_CONFIG.divaMultiplier;
+
+    // Mutation perks
+    if (cat.mutation === 'giant') base *= 1.5;
+    if (cat.mutation === 'gilded') base *= 2.0;
+
     return Math.round(base);
   }
 

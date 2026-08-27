@@ -157,30 +157,34 @@ export class SoundManager {
   // ── SFX API ───────────────────────────────────────────────────────────────
 
   /** Adult cat meow – 5 variations, random pick */
-  playMeow(_pitchOffset = 0): void {
+  playMeow(pitchMultiplier = 1): void {
     this.initPools();
     if (!this.sfxEnabled) return;
     if (this.activeMeowCount >= SoundManager.MAX_CONCURRENT_MEOWS) return;
     const idx = Math.floor(Math.random() * this.meowPools.length);
-    this.playMeowFromPool(this.meowPools[idx]);
+    this.playMeowFromPool(this.meowPools[idx], pitchMultiplier);
   }
 
   /** Kitten meow – 2 variations */
-  playKittenMeow(birth = false): void {
+  playKittenMeow(birth = false, pitchMultiplier = 1): void {
     this.initPools();
     if (!this.sfxEnabled) return;
     if (!birth && this.activeMeowCount >= SoundManager.MAX_CONCURRENT_MEOWS) return;
     const idx = birth ? 0 : Math.floor(Math.random() * this.kittenPools.length);
-    this.playMeowFromPool(this.kittenPools[idx]);
+    this.playMeowFromPool(this.kittenPools[idx], pitchMultiplier);
   }
 
   /** Internal: play from a meow pool and track the active count. */
-  private playMeowFromPool(pool: HTMLAudioElement[]): void {
+  private playMeowFromPool(pool: HTMLAudioElement[], playbackRate = 1): void {
     const el = pool.find(a => a.paused || a.ended) ?? pool[0];
     el.currentTime = 0;
     el.volume = this.sfxVolume;
+    el.playbackRate = Math.max(0.5, Math.min(2.0, playbackRate));
     this.activeMeowCount++;
-    const decrement = () => { this.activeMeowCount = Math.max(0, this.activeMeowCount - 1); };
+    const decrement = () => {
+      this.activeMeowCount = Math.max(0, this.activeMeowCount - 1);
+      el.playbackRate = 1;
+    };
     el.addEventListener('ended', decrement, { once: true });
     el.addEventListener('pause', decrement, { once: true });
     el.play().catch(() => { decrement(); });

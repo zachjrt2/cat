@@ -1,6 +1,7 @@
-import type { Cat, CatJournal } from './types';
+import type { Cat, CatJournal, CatMutationType } from './types';
 import { CAT_SKINS, CAT_MARKINGS, CAT_NAMES, FAVORITE_FOODS, FAVORITE_TOYS } from './catAssets';
 import { pickTwoDistinctTraits } from './traits';
+import { rollRandomMutation } from './mutations';
 
 function randomFrom<T>(arr: readonly T[], rng: () => number = Math.random): T {
   return arr[Math.floor(rng() * arr.length)];
@@ -31,6 +32,8 @@ export interface GenerateCatOptions {
   forceRare?: boolean;
   skinId?: string;
   stage?: import('./types').LifeStage;
+  mutation?: CatMutationType | null;
+  mutationChance?: number;
   rng?: () => number;
 }
 
@@ -88,7 +91,17 @@ function pickUniqueVisualCombo(
 }
 
 export function generateCat(options: GenerateCatOptions): Cat {
-  const { day, usedNames, existingCats, forceRare = false, skinId, stage = 'kitten', rng = Math.random } = options;
+  const {
+    day,
+    usedNames,
+    existingCats,
+    forceRare = false,
+    skinId,
+    stage = 'kitten',
+    mutation: forcedMutation,
+    mutationChance = 0.05,
+    rng = Math.random,
+  } = options;
 
   const existingAppearances = new Set((existingCats ?? []).map((c) => `${c.color}:${c.pattern || 'none'}`));
 
@@ -101,6 +114,12 @@ export function generateCat(options: GenerateCatOptions): Cat {
   const { skin, marking: markingDef } = pickUniqueVisualCombo(pool, skinId, existingAppearances, rng);
   const isRare = !!skin.isRare;
   const rareType = skin.rareType ?? null;
+
+  // Mutation roll
+  let mutation: CatMutationType | null = forcedMutation ?? null;
+  if (mutation === undefined && rng() < mutationChance) {
+    mutation = rollRandomMutation(rng);
+  }
 
   const [majorTrait, minorTrait] = pickTwoDistinctTraits(rng);
 
@@ -122,6 +141,7 @@ export function generateCat(options: GenerateCatOptions): Cat {
     marking: markingDef.file || undefined,
     isRare,
     rareType,
+    mutation,
 
     stage,
     growthProgress: stage === 'adult' ? 100 : 0,
@@ -229,6 +249,30 @@ export function breedCats(
     minorTrait = t1 === majorTrait ? t2 : t1;
   }
 
+  // Genetics & Mutation Inheritance
+  let mutation: CatMutationType | null = null;
+  const parentAMut = parentA.mutation ?? null;
+  const parentBMut = parentB.mutation ?? null;
+
+  if (parentAMut && parentBMut) {
+    // Both parents have mutations
+    const mutRoll = rng();
+    if (mutRoll < 0.40) mutation = parentAMut;
+    else if (mutRoll < 0.80) mutation = parentBMut;
+    else if (mutRoll < 0.95) mutation = rollRandomMutation(rng); // spontaneous new combo mutation!
+  } else if (parentAMut || parentBMut) {
+    // One parent has a mutation
+    const singleMut: CatMutationType = parentAMut || parentBMut!;
+    const mutRoll = rng();
+    if (mutRoll < 0.40) mutation = singleMut;
+    else if (mutRoll < 0.50) mutation = rollRandomMutation(rng);
+  } else {
+    // Spontaneous mutation chance
+    if (rng() < 0.09) {
+      mutation = rollRandomMutation(rng);
+    }
+  }
+
   let name = randomFrom(CAT_NAMES, rng);
   if (usedNames) {
     let attempts = 0;
@@ -247,6 +291,7 @@ export function breedCats(
     marking,
     isRare,
     rareType,
+    mutation,
     stage: 'kitten',
     growthProgress: 0,
     majorTrait,
@@ -295,7 +340,7 @@ export function breedCats(
 
 export function generateRareCat(
   rareType: import('./types').RareCatType,
-  options: { day: number; usedNames?: Set<string>; existingCats?: Cat[] },
+  options: { day: number; usedNames?: Set<string>; existingCats?: Cat[]; mutation?: CatMutationType | null },
 ): Cat {
   const { day, usedNames, existingCats } = options;
   const rareSkin = CAT_SKINS.find((s) => s.rareType === rareType) || CAT_SKINS.find((s) => s.isRare)!;
@@ -324,6 +369,11 @@ export function generateRareCat(
     usedNames.add(name);
   }
 
+  let mutation: CatMutationType | null = options.mutation ?? null;
+  if (!mutation && Math.random() < 0.15) {
+    mutation = rollRandomMutation();
+  }
+
   return {
     id: makeId(),
     name,
@@ -332,6 +382,7 @@ export function generateRareCat(
     marking: markingDef.file || undefined,
     isRare: true,
     rareType,
+    mutation,
     stage: 'adult',
     growthProgress: 100,
     majorTrait,

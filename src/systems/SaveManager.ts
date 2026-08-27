@@ -75,6 +75,9 @@ export class SaveManager {
             cat.stage = 'adult';
             cat.growthProgress = 100;
           }
+          if (cat.mutation === undefined) {
+            cat.mutation = null;
+          }
           // If sanctuary has cats but fewer than 2 adults, promote the oldest ones so breeding is available
           if (state.cats.filter((c) => c.stage === 'adult').length < 2 && i < 2) {
             cat.stage = 'adult';

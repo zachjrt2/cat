@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { Cat, LifeStage, ToolType } from '../data/types';
 import { shouldFallAsleep, shouldWakeUp } from '../systems/NeedsSystem';
 import { sound } from '../systems/SoundManager';
+import { MUTATION_CATALOG } from '../data/mutations';
 
 const BASE_SPRITE_SCALE = 2.2;
 
@@ -25,6 +26,12 @@ function getScaleForStage(stage?: LifeStage): number {
     default:
       return BASE_SPRITE_SCALE;
   }
+}
+
+function getScaleForCat(cat: Cat): number {
+  const base = getScaleForStage(cat.stage);
+  const mutDef = cat.mutation ? MUTATION_CATALOG[cat.mutation] : null;
+  return base * (mutDef ? mutDef.scaleMultiplier : 1);
 }
 
 /**
@@ -91,6 +98,11 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private catChaseDurationTimer = 0;
   private isPouncing = false;
 
+  // Mutation FX
+  private mutationEmitterTimer = 0.5 + Math.random() * 1.5;
+  private chromaticHue = Math.random() * 360;
+  private haloGfx: Phaser.GameObjects.Graphics | null = null;
+
   // AI & Social Interaction Support
   private targetMachineId: string | null = null;
   private availableMachines: AvailableMachineInfo[] = [];
@@ -103,7 +115,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
     this.cat = cat;
     this.bounds = bounds;
 
-    const scale = getScaleForStage(cat.stage);
+    const scale = getScaleForCat(cat);
 
     // 1. Soft Shadow
     this.shadow = scene.add.graphics();
@@ -117,7 +129,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
     this.add(this.hoverGfx);
 
     // 3. Aura Glow
-    if (cat.isRare || cat.color === 'ghost_0' || cat.color === 'gold_0' || cat.color === 'radioactive_0') {
+    if (cat.isRare || cat.color === 'ghost_0' || cat.color === 'gold_0' || cat.color === 'radioactive_0' || cat.mutation === 'sparkly' || cat.mutation === 'gilded') {
       const aura = scene.add.graphics();
       let auraColor = 0xffe66d;
       let auraAlpha = 0.25;
@@ -128,6 +140,12 @@ export class CatSprite extends Phaser.GameObjects.Container {
       } else if (cat.color === 'radioactive_0' || cat.rareType === 'radioactive') {
         auraColor = 0x55ff55;
         auraAlpha = 0.3;
+      } else if (cat.mutation === 'sparkly') {
+        auraColor = 0xf0abfc;
+        auraAlpha = 0.3;
+      } else if (cat.mutation === 'gilded') {
+        auraColor = 0xfbbf24;
+        auraAlpha = 0.35;
       }
 
       aura.fillStyle(auraColor, auraAlpha);
@@ -155,6 +173,15 @@ export class CatSprite extends Phaser.GameObjects.Container {
       this.baseSprite.setAlpha(0.82);
     }
 
+    // Apply mutation tints
+    if (cat.mutation === 'gilded') {
+      this.baseSprite.setTint(0xffd700);
+    } else if (cat.mutation === 'frosted') {
+      this.baseSprite.setTint(0xbbeeff);
+    } else if (cat.mutation === 'inverted') {
+      this.baseSprite.setTint(0x334488);
+    }
+
     this.add(this.baseSprite);
 
     // 5. Marking Overlay
@@ -166,8 +193,32 @@ export class CatSprite extends Phaser.GameObjects.Container {
         if (cat.color === 'ghost_0' || cat.rareType === 'ghost') {
           this.markingSprite.setAlpha(0.82);
         }
+        if (cat.mutation === 'gilded') {
+          this.markingSprite.setTint(0xffd700);
+        } else if (cat.mutation === 'frosted') {
+          this.markingSprite.setTint(0xbbeeff);
+        } else if (cat.mutation === 'inverted') {
+          this.markingSprite.setTint(0x334488);
+        }
         this.add(this.markingSprite);
       }
+    }
+
+    // Angelic Mutation Halo
+    if (cat.mutation === 'angelic') {
+      this.haloGfx = scene.add.graphics();
+      this.haloGfx.lineStyle(2.5, 0xfde047, 0.95);
+      this.haloGfx.strokeEllipse(0, -30 * (scale / BASE_SPRITE_SCALE), 14, 5);
+      this.add(this.haloGfx);
+
+      scene.tweens.add({
+        targets: this.haloGfx,
+        y: -3,
+        duration: 1200,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
     }
 
     // 6. Dirt
@@ -563,12 +614,20 @@ export class CatSprite extends Phaser.GameObjects.Container {
   setChaseTarget(x: number, y: number): void {
     if (this.perfumeFrenzyTimer > 0) return;
     if (this.isDragged || this.cat.animationState === 'sleep') return;
-    this.chaseTarget = { x, y };
-    this.wanderTarget = null;
+    const dist = Math.hypot(x - this.x, y - this.y);
+    if (dist > 15) {
+      this.chaseTarget = { x, y };
+      this.wanderTarget = null;
+      this.cat.animationState = 'run';
+    }
   }
 
   clearChaseTarget(): void {
     this.chaseTarget = null;
+    if (this.cat.animationState === 'run' || this.cat.animationState === 'walk') {
+      this.cat.animationState = 'sit';
+      this.playCurrentAnimation();
+    }
   }
 
   isChasing(): boolean {
@@ -891,16 +950,20 @@ export class CatSprite extends Phaser.GameObjects.Container {
       return;
     }
     const dt = deltaMs / 1000;
+    const startX = this.x;
+    const startY = this.y;
 
     // ── Ambient meow timer (every 5–20 s, staggered) ──────────────────────
     this.ambientMeowTimer -= dt;
     if (this.ambientMeowTimer <= 0) {
       this.ambientMeowTimer = 50 + Math.random() * 150;
       if (this.cat.animationState !== 'sleep') {
+        const mutDef = this.cat.mutation ? MUTATION_CATALOG[this.cat.mutation] : null;
+        const pitch = mutDef ? mutDef.meowPitch : 1;
         if (this.cat.stage === 'kitten') {
-          sound.playKittenMeow(false);
+          sound.playKittenMeow(false, pitch);
         } else {
-          sound.playMeow();
+          sound.playMeow(pitch);
         }
       }
     }
@@ -924,6 +987,33 @@ export class CatSprite extends Phaser.GameObjects.Container {
       if (this.breedReadyHeartTimer <= 0) {
         this.breedReadyHeartTimer = 15 + Math.random() * 15;
         this.showEmote('❤️');
+      }
+    }
+
+    // ── Mutation Ambient Particle & Color Updates ───────────────────────────
+    if (this.cat.mutation === 'chromatic') {
+      this.chromaticHue = (this.chromaticHue + dt * 65) % 360;
+      const color = Phaser.Display.Color.HSLToColor(this.chromaticHue / 360, 0.85, 0.65);
+      this.baseSprite.setTint(color.color);
+      if (this.markingSprite) this.markingSprite.setTint(color.color);
+    }
+
+    this.mutationEmitterTimer -= dt;
+    if (this.mutationEmitterTimer <= 0) {
+      if (this.cat.mutation === 'stinky' && this.cat.animationState !== 'sleep') {
+        this.mutationEmitterTimer = 10 + Math.random() * 14;
+        this.spawnStinkyPuff();
+      } else if (this.cat.mutation === 'sparkly') {
+        this.mutationEmitterTimer = 0.35 + Math.random() * 0.25;
+        this.spawnSparkleParticle();
+      } else if (this.cat.mutation === 'flaming' && (this.cat.animationState === 'walk' || this.cat.animationState === 'run')) {
+        this.mutationEmitterTimer = 0.22 + Math.random() * 0.2;
+        this.spawnEmberParticle();
+      } else if (this.cat.mutation === 'frosted') {
+        this.mutationEmitterTimer = 0.5 + Math.random() * 0.4;
+        this.spawnFrostParticle();
+      } else {
+        this.mutationEmitterTimer = 1.2;
       }
     }
 
@@ -984,7 +1074,6 @@ export class CatSprite extends Phaser.GameObjects.Container {
         }
       } else {
         // All mates visited or alone in room: run joyous zoomie victory lap with floating hearts
-        this.cat.animationState = 'run';
         if (!this.wanderTarget || Math.hypot(this.wanderTarget.x - this.x, this.wanderTarget.y - this.y) < 20) {
           this.wanderTarget = new Phaser.Math.Vector2(
             Phaser.Math.Between(this.bounds.left + 30, this.bounds.right - 30),
@@ -995,11 +1084,16 @@ export class CatSprite extends Phaser.GameObjects.Container {
         const dx = target.x - this.x;
         const dy = target.y - this.y;
         const dist = Math.hypot(dx, dy);
-        if (dist > 5) {
+        if (dist > 6) {
           const speed = 175 * dt;
           this.x += (dx / dist) * speed;
           this.y += (dy / dist) * speed;
           this.currentDirection = vectorToDirection(dx, dy);
+          this.cat.animationState = 'run';
+          this.playCurrentAnimation();
+        } else {
+          this.wanderTarget = null;
+          this.cat.animationState = 'sit';
           this.playCurrentAnimation();
         }
       }
@@ -1198,7 +1292,11 @@ export class CatSprite extends Phaser.GameObjects.Container {
         }
         this.playCurrentAnimation();
       } else {
-        const speed = (this.cat.animationState === 'run' ? 88 : 34) * ((this.cat.majorTrait === 'zoomie' || this.cat.minorTrait === 'zoomie') ? 1.35 : 1) * dt;
+        // Enforce moving animation state when translating position across the room
+        if (this.cat.animationState !== 'run' && this.cat.animationState !== 'walk') {
+          this.cat.animationState = 'walk';
+        }
+        const speed = (this.cat.animationState === 'run' ? 88 : 34) * ((this.cat.majorTrait === 'zoomie' || this.cat.minorTrait === 'zoomie') ? 1.35 : 1) * (this.cat.mutation === 'tiny' ? 1.25 : 1) * dt;
         this.x += ((this.wanderTarget.x - this.x) / dist) * speed;
         this.y += ((this.wanderTarget.y - this.y) / dist) * speed;
         this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
@@ -1207,6 +1305,15 @@ export class CatSprite extends Phaser.GameObjects.Container {
         this.playCurrentAnimation();
       }
     }
+
+    // ── Motion & Animation State Sync Invariant ────────────────────────────
+    // If the cat did not translate position this tick and is in a moving animation state, normalize to 'sit'
+    const moved = Math.hypot(this.x - startX, this.y - startY) > 0.04;
+    if (!moved && !this.isPouncing && !this.isDragged && (this.cat.animationState === 'walk' || this.cat.animationState === 'run')) {
+      this.cat.animationState = 'sit';
+      this.playCurrentAnimation();
+    }
+
     this.setDepth(this.y);
   }
 
@@ -1374,22 +1481,137 @@ export class CatSprite extends Phaser.GameObjects.Container {
       }
     }
 
-    this.wanderTarget = this.findLeastCrowdedPosition();
+    const candidate = this.findLeastCrowdedPosition();
+    const distToCand = Math.hypot(candidate.x - this.x, candidate.y - this.y);
+    if (distToCand < 16) {
+      this.wanderTarget = null;
+      this.cat.animationState = 'sit';
+      this.wanderTimer = 2.5 + Math.random() * 2.5;
+      this.playCurrentAnimation();
+      return;
+    }
+
+    this.wanderTarget = candidate;
     this.cat.animationState = (isKitten && Math.random() < 0.45) || (!isKitten && Math.random() < 0.12) ? 'run' : 'walk';
     this.wanderTimer = 6.5;
     this.playCurrentAnimation();
   }
 
+  private spawnStinkyPuff(): void {
+    const puff = this.scene.add.graphics();
+    puff.setDepth(this.y + 2);
+    const px = this.x + Phaser.Math.Between(-8, 8);
+    const py = this.y + 8;
+    puff.fillStyle(0x4ade80, 0.65);
+    puff.fillCircle(0, 0, 5.5);
+    puff.fillStyle(0x22c55e, 0.75);
+    puff.fillCircle(-2.5, -1.5, 3.5);
+    puff.fillCircle(3, 1, 3);
+    puff.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: puff,
+      y: py - 26,
+      scaleX: 1.8,
+      scaleY: 1.8,
+      alpha: 0,
+      duration: 1400,
+      ease: 'Sine.easeOut',
+      onComplete: () => puff.destroy(),
+    });
+  }
+
+  private spawnSparkleParticle(): void {
+    const glint = this.scene.add.graphics();
+    glint.setDepth(this.y + 2);
+    const px = this.x + Phaser.Math.Between(-14, 14);
+    const py = this.y + Phaser.Math.Between(-16, 12);
+    glint.fillStyle(0xfde047, 0.9);
+    glint.fillCircle(0, 0, Phaser.Math.Between(1.8, 3.2));
+    glint.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: glint,
+      y: py - 14,
+      scaleX: 1.4,
+      scaleY: 1.4,
+      alpha: 0,
+      duration: 550,
+      ease: 'Quad.easeOut',
+      onComplete: () => glint.destroy(),
+    });
+  }
+
+  private spawnEmberParticle(): void {
+    const ember = this.scene.add.graphics();
+    ember.setDepth(this.y + 1);
+    const px = this.x + Phaser.Math.Between(-10, 10);
+    const py = this.y + 12 + Phaser.Math.Between(-3, 3);
+    ember.fillStyle(Phaser.Math.RND.pick([0xf97316, 0xfbbf24, 0xef4444]), 0.85);
+    ember.fillCircle(0, 0, Phaser.Math.Between(1.5, 2.5));
+    ember.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: ember,
+      y: py - 10,
+      x: px + (Math.random() - 0.5) * 6,
+      alpha: 0,
+      duration: 400,
+      onComplete: () => ember.destroy(),
+    });
+  }
+
+  private spawnFrostParticle(): void {
+    const frost = this.scene.add.graphics();
+    frost.setDepth(this.y + 2);
+    const px = this.x + Phaser.Math.Between(-14, 14);
+    const py = this.y - 18 + Phaser.Math.Between(0, 8);
+    frost.fillStyle(Phaser.Math.RND.pick([0xe0f2fe, 0xbae6fd, 0xffffff]), 0.8);
+    frost.fillCircle(0, 0, Phaser.Math.Between(1.5, 2.8));
+    frost.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: frost,
+      y: py + 22,
+      x: px + (Math.random() - 0.5) * 8,
+      alpha: 0,
+      duration: 900,
+      ease: 'Sine.easeIn',
+      onComplete: () => frost.destroy(),
+    });
+  }
+
   setAreaBounds(bounds: Phaser.Geom.Rectangle): void { this.bounds = bounds; }
 
   refreshVisuals(): void {
-    const scale = getScaleForStage(this.cat.stage);
+    const scale = getScaleForCat(this.cat);
     this.baseSprite.setScale(scale);
     if (this.markingSprite) this.markingSprite.setScale(scale);
 
     const prefix = this.cat.isRare ? '✨ ' : '';
     const stageSuffix = this.cat.stage === 'kitten' ? ' (Kitten)' : this.cat.stage === 'teen' ? ' (Teen)' : '';
     this.nameLabel.setText(`${prefix}${this.cat.name}${stageSuffix}`);
+
+    if (this.cat.mutation === 'gilded') {
+      this.baseSprite.setTint(0xffd700);
+      if (this.markingSprite) this.markingSprite.setTint(0xffd700);
+    } else if (this.cat.mutation === 'frosted') {
+      this.baseSprite.setTint(0xbbeeff);
+      if (this.markingSprite) this.markingSprite.setTint(0xbbeeff);
+    } else if (this.cat.mutation === 'inverted') {
+      this.baseSprite.setTint(0x334488);
+      if (this.markingSprite) this.markingSprite.setTint(0x334488);
+    }
+
+    if (this.cat.mutation === 'angelic') {
+      if (!this.haloGfx) {
+        this.haloGfx = this.scene.add.graphics();
+        this.add(this.haloGfx);
+      }
+      this.haloGfx.clear();
+      this.haloGfx.lineStyle(2.5, 0xfde047, 0.95);
+      this.haloGfx.strokeEllipse(0, -30 * (scale / BASE_SPRITE_SCALE), 14, 5);
+    }
 
     this.updateDirtGfx();
     this.updateNeedIndicator();

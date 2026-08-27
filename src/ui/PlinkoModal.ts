@@ -1,9 +1,10 @@
 import type { Cat, CatArea, GameState } from '../data/types';
-import { PlinkoSystem, type PlinkoTier } from '../systems/PlinkoSystem';
+import { PlinkoSystem, getPlinkoBoardRank, type PlinkoTier, type PlinkoBoardRank } from '../systems/PlinkoSystem';
 import { EventBus } from './EventBus';
 import { sound } from '../systems/SoundManager';
 import { SVG_ICONS } from './icons';
 import { AREA_INFO_MAP } from '../data/constants';
+import { MUTATION_CATALOG } from '../data/mutations';
 
 interface Peg {
   x: number;
@@ -119,6 +120,7 @@ export class PlinkoModal {
   private renderModalContent(modal: HTMLElement): void {
     const starBalance = this.state.adoptionTokens || 0;
     const odds = this.plinkoSystem.calculateOdds(this.wager);
+    const rank = getPlinkoBoardRank(this.wager);
 
     modal.innerHTML = `
       <div class="plinko-header">
@@ -129,10 +131,14 @@ export class PlinkoModal {
             <span id="plinko-star-balance" class="plinko-star-val">${starBalance}</span>
           </div>
         </div>
-        <p class="plinko-subtitle">Drop stars to discover new cats! Higher bets boost win rate & unlock rare jackpots.</p>
+        <p class="plinko-subtitle">Drop stars to discover new cats! Higher bets upgrade the board & unlock multi-cat drops.</p>
       </div>
 
       <div class="plinko-game-container">
+        <div class="plinko-board-rank-container" id="plinko-board-rank-container">
+          ${this.renderBoardRankCard(rank)}
+        </div>
+
         <div class="plinko-canvas-wrapper">
           <canvas id="plinko-canvas" width="${this.width}" height="${this.height}"></canvas>
         </div>
@@ -152,10 +158,12 @@ export class PlinkoModal {
 
             <div class="plinko-quick-bets">
               <button class="plinko-chip-btn ${this.wager === 1 ? 'active' : ''}" data-bet="1">1 ⭐</button>
-              <button class="plinko-chip-btn ${this.wager === 2 ? 'active' : ''}" data-bet="2">2 ⭐</button>
               <button class="plinko-chip-btn ${this.wager === 5 ? 'active' : ''}" data-bet="5">5 ⭐</button>
               <button class="plinko-chip-btn ${this.wager === 10 ? 'active' : ''}" data-bet="10">10 ⭐</button>
               <button class="plinko-chip-btn ${this.wager === 25 ? 'active' : ''}" data-bet="25">25 ⭐</button>
+              <button class="plinko-chip-btn ${this.wager === 50 ? 'active' : ''}" data-bet="50">50 ⭐</button>
+              <button class="plinko-chip-btn ${this.wager === 100 ? 'active' : ''}" data-bet="100">100 ⭐</button>
+              <button class="plinko-chip-btn ${this.wager === 250 ? 'active' : ''}" data-bet="250">250 ⭐</button>
               <button class="plinko-chip-btn" id="plinko-max-btn">Max</button>
             </div>
           </div>
@@ -177,37 +185,85 @@ export class PlinkoModal {
     this.bindControls(modal);
   }
 
-  private renderOddsBreakdown(odds: ReturnType<PlinkoSystem['calculateOdds']>): string {
+  private renderBoardRankCard(rank: PlinkoBoardRank): string {
     return `
-      <div class="odds-pill common-pill" title="Common tier">
-        <span class="odds-dot" style="background:#2d6a4f;"></span>
-        <span>Common: <b>${odds.commonPercent}%</b></span>
+      <div class="plinko-board-rank-card" style="border-left: 4px solid ${rank.color}; background: ${rank.bgGrad};">
+        <div class="rank-badge" style="background: ${rank.color}; color: #fff;">${rank.badge}</div>
+        <div class="rank-info">
+          <div class="rank-name" style="color: ${rank.color};">${rank.name}</div>
+          <div class="rank-perks">${rank.perks}</div>
+        </div>
       </div>
-      <div class="odds-pill uncommon-pill" title="Uncommon tier">
-        <span class="odds-dot" style="background:#0284c7;"></span>
-        <span>Uncommon: <b>${odds.uncommonPercent}%</b></span>
-      </div>
-      <div class="odds-pill rare-pill" title="Rare tier">
-        <span class="odds-dot" style="background:#7e22ce;"></span>
-        <span>Rare: <b>${odds.rarePercent}%</b></span>
-      </div>
-      <div class="odds-pill epic-pill" title="Epic tier">
-        <span class="odds-dot" style="background:#be185d;"></span>
-        <span>Epic: <b>${odds.epicPercent}%</b></span>
-      </div>
-      <div class="odds-pill legendary-pill" title="Legendary tier">
-        <span class="odds-dot" style="background:#b45309;"></span>
-        <span>Legend: <b>${odds.legendaryPercent}%</b></span>
-      </div>
-      ${
-        odds.jackpotChancePercent > 0
-          ? `<div class="odds-pill jackpot-pill" title="Jackpot Multi-Drop chance">
-              <span class="odds-dot" style="background:#ec4899;"></span>
-              <span>Jackpot: <b>${odds.jackpotChancePercent}%</b></span>
-            </div>`
-          : ''
-      }
     `;
+  }
+
+  private renderOddsBreakdown(odds: ReturnType<PlinkoSystem['calculateOdds']>): string {
+    const pills: string[] = [];
+
+    if (odds.missChancePercent > 0) {
+      pills.push(`
+        <div class="odds-pill miss-pill" title="Miss rate">
+          <span class="odds-dot" style="background:#8d7865;"></span>
+          <span>Miss: <b>${odds.missChancePercent}%</b></span>
+        </div>
+      `);
+    }
+
+    if (odds.commonPercent > 0) {
+      pills.push(`
+        <div class="odds-pill common-pill" title="Common tier">
+          <span class="odds-dot" style="background:#2d6a4f;"></span>
+          <span>Common: <b>${odds.commonPercent}%</b></span>
+        </div>
+      `);
+    }
+
+    if (odds.uncommonPercent > 0) {
+      pills.push(`
+        <div class="odds-pill uncommon-pill" title="Uncommon tier">
+          <span class="odds-dot" style="background:#0284c7;"></span>
+          <span>Uncommon: <b>${odds.uncommonPercent}%</b></span>
+        </div>
+      `);
+    }
+
+    if (odds.rarePercent > 0) {
+      pills.push(`
+        <div class="odds-pill rare-pill" title="Rare tier">
+          <span class="odds-dot" style="background:#7e22ce;"></span>
+          <span>Rare: <b>${odds.rarePercent}%</b></span>
+        </div>
+      `);
+    }
+
+    if (odds.epicPercent > 0) {
+      pills.push(`
+        <div class="odds-pill epic-pill" title="Epic tier">
+          <span class="odds-dot" style="background:#be185d;"></span>
+          <span>Epic: <b>${odds.epicPercent}%</b></span>
+        </div>
+      `);
+    }
+
+    if (odds.legendaryPercent > 0) {
+      pills.push(`
+        <div class="odds-pill legendary-pill" title="Legendary tier">
+          <span class="odds-dot" style="background:#b45309;"></span>
+          <span>Legend: <b>${odds.legendaryPercent}%</b></span>
+        </div>
+      `);
+    }
+
+    if (odds.jackpotChancePercent > 0) {
+      pills.push(`
+        <div class="odds-pill jackpot-pill" title="Multi-Cat Jackpot chance">
+          <span class="odds-dot" style="background:#ec4899;"></span>
+          <span>Multi-Drop: <b>${odds.jackpotChancePercent}%</b></span>
+        </div>
+      `);
+    }
+
+    return pills.join('');
   }
 
   private bindControls(modal: HTMLElement): void {
@@ -227,6 +283,11 @@ export class PlinkoModal {
       this.updateSlotsForWager(this.wager);
 
       const odds = this.plinkoSystem.calculateOdds(this.wager);
+      const rank = getPlinkoBoardRank(this.wager);
+
+      const rankContainer = modal.querySelector('#plinko-board-rank-container');
+      if (rankContainer) rankContainer.innerHTML = this.renderBoardRankCard(rank);
+
       const winRateEl = modal.querySelector('#plinko-win-rate');
       if (winRateEl) winRateEl.innerHTML = `Win Chance: <b>${odds.winChancePercent}%</b>`;
 
@@ -336,26 +397,8 @@ export class PlinkoModal {
       legendary: { label: 'Legend', color: '#b45309', bgHex: '#fef3c7', borderHex: '#fcd34d' },
     };
 
-    let tiers: PlinkoTier[];
-    if (wager <= 1) {
-      // 1 Star: 66% Miss (6 slots), 33% Common (3 slots)
-      tiers = ['miss', 'miss', 'common', 'miss', 'common', 'miss', 'common', 'miss', 'miss'];
-    } else if (wager <= 2) {
-      // 2 Stars: ~44% Miss (4 slots), 44% Common (4 slots), 11% Uncommon (1 slot)
-      tiers = ['miss', 'miss', 'common', 'uncommon', 'common', 'common', 'common', 'miss', 'miss'];
-    } else if (wager <= 4) {
-      // 3-4 Stars: ~33% Miss (3 slots), 44% Common (4 slots), 22% Uncommon (2 slots)
-      tiers = ['miss', 'common', 'uncommon', 'common', 'uncommon', 'common', 'common', 'miss', 'miss'];
-    } else if (wager <= 9) {
-      // 5-9 Stars: ~11% Miss (1 slot), 44% Common, 33% Uncommon, 11% Rare
-      tiers = ['miss', 'common', 'uncommon', 'rare', 'uncommon', 'common', 'uncommon', 'common', 'common'];
-    } else if (wager <= 24) {
-      // 10-24 Stars: 0% Miss (95-100% win), mostly Common + Uncommon + Rare + Epic
-      tiers = ['common', 'uncommon', 'rare', 'common', 'epic', 'common', 'rare', 'uncommon', 'common'];
-    } else {
-      // 25+ Stars: High roller jackpot board
-      tiers = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'epic', 'rare', 'uncommon', 'common'];
-    }
+    const rank = getPlinkoBoardRank(wager);
+    const tiers = rank.slots;
 
     for (let s = 0; s < slotCount; s++) {
       const t = tiers[s];
@@ -551,7 +594,7 @@ export class PlinkoModal {
         sound.playPop();
         EventBus.emit('toast', { message: '💨 Missed this drop! Higher star wagers guarantee better odds.' });
       } else {
-        const catsWon = this.plinkoSystem.generateCatsForTier(landedSlot.tier, catsCount, this.preferredArea);
+        const catsWon = this.plinkoSystem.generateCatsForTier(landedSlot.tier, catsCount, this.preferredArea, this.wager);
         for (const cat of catsWon) {
           this.state.cats.push(cat);
           EventBus.emit('cat-acquired-from-plinko', { cat });
@@ -575,9 +618,15 @@ export class PlinkoModal {
     const catCardsHtml = cats
       .map((c) => {
         const areaMeta = AREA_INFO_MAP[c.area];
+        const mutDef = c.mutation ? MUTATION_CATALOG[c.mutation] : null;
+        const mutHtml = mutDef
+          ? `<div class="reward-cat-mutation" style="background:${mutDef.tagBg};color:${mutDef.tagColor};border:1.5px solid ${mutDef.borderHex};border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800;display:inline-block;margin-top:4px;">${mutDef.badgeLabel}</div>`
+          : '';
+
         return `
         <div class="plinko-cat-reward-card">
           <div class="reward-cat-title"><b>${c.name}</b> (${cap(c.stage)})</div>
+          ${mutHtml}
           <div class="reward-cat-trait">✨ Personality: ${cap(c.majorTrait)} & ${cap(c.minorTrait)}</div>
           <div class="reward-cat-area">🏡 Settled in: <b>${areaMeta?.label || c.area}</b></div>
           <div class="reward-cat-favorite">🐟 Favorite: ${c.favoriteFood}</div>

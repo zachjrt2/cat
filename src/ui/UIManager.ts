@@ -3,9 +3,11 @@ import { EventBus } from './EventBus';
 import { sound } from '../systems/SoundManager';
 import { CAT_SKINS, CAT_MARKINGS } from '../data/catAssets';
 import { TRAITS } from '../data/traits';
+import { MUTATION_CATALOG } from '../data/mutations';
 import { SVG_ICONS } from './icons';
 import { AREA_INFO_MAP, AUTOMATION_CATALOG, FURNITURE_CATALOG, OFFLINE_STAR_UPGRADES, calculateRehomeLove, getAreaCapacityUpgradeCost } from '../data/constants';
 import { PlinkoModal } from './PlinkoModal';
+import { CatGlossaryModal } from './CatGlossaryModal';
 
 const TOOLS: { id: ToolType; svg: string; label: string }[] = [
   { id: 'food', svg: SVG_ICONS.food, label: 'Food' },
@@ -491,6 +493,17 @@ export class UIManager {
         ? `<span class="badge rare-badge"><span class="svg-inline">${SVG_ICONS.sparkle}</span> ${skinDef?.description || 'Rare Collector Cat'}</span>`
         : '';
 
+      const mutDef = cat.mutation ? MUTATION_CATALOG[cat.mutation] : null;
+      const mutationBadge = mutDef
+        ? `
+          <div class="mutation-badge-card" style="background:${mutDef.tagBg};color:${mutDef.tagColor};border:1.5px solid ${mutDef.borderHex};border-radius:10px;padding:6px 10px;margin-top:6px;text-align:left;">
+            <div style="font-size:12px;font-weight:900;letter-spacing:0.3px;margin-bottom:2px;">${escapeHtml(mutDef.badgeLabel)}</div>
+            <div style="font-size:11px;opacity:0.9;margin-bottom:3px;line-height:1.3;">${escapeHtml(mutDef.description)}</div>
+            <div style="font-size:11px;font-weight:700;line-height:1.3;"><b>Perk:</b> ${escapeHtml(mutDef.perk)}</div>
+          </div>
+        `
+        : '';
+
       const areaOptions = AREA_KEYS.map((k) => {
         const meta = AREA_INFO_MAP[k];
         const isUnlocked = activeAreas[k]?.unlocked;
@@ -572,8 +585,12 @@ export class UIManager {
         </div>
 
         <div class="journal-header">
-          <div class="journal-avatar-wrapper">
+          <div class="journal-avatar-wrapper clickable-avatar" id="open-cat-glossary-btn" title="Click to view Cat Types & Mutations Glossary 📖">
             <canvas id="journal-cat-canvas" width="64" height="64" class="journal-avatar-canvas"></canvas>
+            <div class="avatar-glossary-badge" title="Open Cat Types Glossary">
+              <span class="svg-inline">${SVG_ICONS.book}</span>
+              <span>Glossary</span>
+            </div>
           </div>
           <div class="journal-title-box">
             <div class="name-edit-row" id="name-display-row">
@@ -589,8 +606,12 @@ export class UIManager {
                 <button class="rename-cancel-btn" id="rename-cancel-btn">Cancel</button>
               </div>
             </div>
-            <div class="coat-tag">${escapeHtml(skinName)} · ${stageLabel}</div>
+            <div class="coat-tag clickable-coat-tag" id="open-coat-tag-glossary-btn" title="Click to view all markings for ${escapeHtml(skinName)} in Glossary">
+              <span>${escapeHtml(skinName)} · ${stageLabel}</span>
+              <span class="coat-tag-book-icon">${SVG_ICONS.book}</span>
+            </div>
             ${rareBadge}
+            ${mutationBadge}
           </div>
         </div>
 
@@ -680,21 +701,20 @@ export class UIManager {
           ${[...cat.journal.entries].reverse().slice(0, 8).map((e) => `<li><b>Day ${e.day}:</b> ${escapeHtml(e.message)}</li>`).join('')}
         </ul>
 
-        <!-- Loving Home Rehome Card -->
-        <div class="rehome-card">
-          <div class="rehome-card-header">
+        <!-- Compact Loving Forever Home Row -->
+        <div class="rehome-compact-row">
+          <div class="rehome-compact-info">
             <span class="svg-inline">${SVG_ICONS.lovingHome}</span>
-            <b>Find a Loving Forever Home</b>
+            <span class="rehome-compact-text">Find a Loving Forever Home</span>
           </div>
-          <p class="rehome-desc">Send ${escapeHtml(cat.name)} to a caring adoptive home to receive generous Care Points for sanctuary expansion.</p>
-          <div class="rehome-reward-pill">
-            <span class="rehome-reward-amount">+${rehomeVal.total.toLocaleString()} 💗 Love</span>
-          </div>
-          <button class="rehome-action-btn" id="rehome-cat-btn">
-            <span class="svg-inline">${SVG_ICONS.lovingHome}</span>
-            <span>Rehome ${escapeHtml(cat.name)}</span>
+          <button class="rehome-compact-btn" id="rehome-cat-btn" title="Adopt out ${escapeHtml(cat.name)} for +${rehomeVal.total.toLocaleString()} Care Points">
+            <span>+${rehomeVal.total.toLocaleString()} 💗</span>
           </button>
         </div>
+
+        <button class="modal-action-btn glossary-action-btn" id="open-glossary-action-btn">
+          <span class="svg-inline">${SVG_ICONS.book}</span> Cat Coats & Markings Glossary
+        </button>
 
         <button class="modal-action-btn export-card-btn" id="export-card-btn">
           <span class="svg-inline">${SVG_ICONS.camera}</span> Save Adoption Card (.PNG)
@@ -712,6 +732,21 @@ export class UIManager {
       modal.querySelector('#next-cat-btn')?.addEventListener('click', () => {
         const nextIdx = (currentIndex + 1) % this.catsList.length;
         navigateToCat(nextIdx, 'next');
+      });
+
+      modal.querySelector('#open-cat-glossary-btn')?.addEventListener('click', () => {
+        sound.playTap();
+        new CatGlossaryModal(this.root, { cats: this.catsList } as any).open('all', cat.color);
+      });
+
+      modal.querySelector('#open-coat-tag-glossary-btn')?.addEventListener('click', () => {
+        sound.playTap();
+        new CatGlossaryModal(this.root, { cats: this.catsList } as any).open('all', cat.color);
+      });
+
+      modal.querySelector('#open-glossary-action-btn')?.addEventListener('click', () => {
+        sound.playTap();
+        new CatGlossaryModal(this.root, { cats: this.catsList } as any).open('all', cat.color);
       });
 
       modal.querySelector('#instant-grow-btn')?.addEventListener('click', () => {

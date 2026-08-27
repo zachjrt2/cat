@@ -53,6 +53,18 @@ export interface CatJournal {
 
 export type RareCatType = 'golden' | 'ghost' | 'radioactive' | 'gameboy' | 'seal_point' | 'hairless' | 'heterochromia' | 'royal';
 
+export type CatMutationType =
+  | 'giant'
+  | 'tiny'
+  | 'stinky'
+  | 'sparkly'
+  | 'inverted'
+  | 'chromatic'
+  | 'flaming'
+  | 'frosted'
+  | 'angelic'
+  | 'gilded';
+
 export type LifeStage = 'kitten' | 'teen' | 'adult';
 
 export interface Cat {
@@ -63,6 +75,7 @@ export interface Cat {
   marking?: string; // Optional marking overlay key (e.g. 'Tabby Markings 000', 'Feet 000', etc.)
   isRare: boolean;
   rareType: RareCatType | null;
+  mutation?: CatMutationType | null;
 
   stage: LifeStage;
   growthProgress: number; // 0..100 towards next life stage

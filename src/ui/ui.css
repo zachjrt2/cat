@@ -1125,6 +1125,32 @@ body.tool-pet-active, body.tool-pet-active canvas {
   color: var(--brown-light);
 }
 
+.coat-tag.clickable-coat-tag {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: #fdfaf5;
+  border: 1px solid #eedfcc;
+  border-radius: 8px;
+  margin-top: 2px;
+  transition: all 0.15s ease;
+}
+
+.coat-tag.clickable-coat-tag:hover {
+  background: #f5f0e8;
+  border-color: #a855f7;
+  color: #7c3aed;
+  transform: translateY(-1px);
+}
+
+.coat-tag-book-icon svg {
+  width: 13px;
+  height: 13px;
+  fill: #a855f7;
+}
+
 .badge {
   display: inline-block;
   font-size: 11px;
@@ -1378,6 +1404,77 @@ body.tool-pet-active, body.tool-pet-active canvas {
   line-height: 1.35;
 }
 
+/* ---------- Compact Rehome Row in Cat Journal ---------- */
+.rehome-compact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #ffffff;
+  border: 1.5px solid #fed7aa;
+  border-radius: 12px;
+  padding: 8px 12px;
+  margin: 10px 0 12px;
+  box-shadow: 0 1px 4px var(--shadow);
+}
+
+.rehome-compact-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--brown);
+  min-width: 0;
+}
+
+.rehome-compact-info .svg-inline {
+  display: flex;
+  align-items: center;
+  color: #ea580c;
+  flex-shrink: 0;
+}
+
+.rehome-compact-info .svg-inline svg {
+  width: 18px;
+  height: 18px;
+}
+
+.rehome-compact-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rehome-compact-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(234, 88, 12, 0.3);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.rehome-compact-btn:hover {
+  background: linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(234, 88, 12, 0.42);
+}
+
+.rehome-compact-btn:active {
+  transform: scale(0.96);
+}
+
 .modal-close, .modal-action-btn {
   width: 100%;
   padding: 12px;
@@ -1398,6 +1495,18 @@ body.tool-pet-active, body.tool-pet-active canvas {
   color: var(--brown);
   box-shadow: 0 2px 8px var(--shadow);
   margin-bottom: 8px;
+}
+
+.glossary-action-btn {
+  background: #faf5ff;
+  color: #7e22ce;
+  border: 1.5px solid #d8b4fe;
+  font-weight: 800;
+}
+
+.glossary-action-btn:hover {
+  background: #f3e8ff;
+  border-color: #c084fc;
 }
 
 .export-card-btn {
@@ -1962,7 +2071,52 @@ body.tool-pet-active, body.tool-pet-active canvas {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  width: 100%;
+}
+
+.plinko-board-rank-container {
+  width: 100%;
+}
+
+.plinko-board-rank-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.plinko-board-rank-card .rank-badge {
+  font-size: 10.5px;
+  font-weight: 900;
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.plinko-board-rank-card .rank-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.plinko-board-rank-card .rank-name {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.plinko-board-rank-card .rank-perks {
+  font-size: 11px;
+  color: var(--brown);
+  line-height: 1.3;
 }
 
 .plinko-canvas-wrapper {
@@ -2294,5 +2448,444 @@ body.tool-pet-active, body.tool-pet-active canvas {
   transform: none;
   box-shadow: none;
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   📖 CAT TYPES & MUTATIONS GLOSSARY ENCYCLOPEDIA STYLES
+   ══════════════════════════════════════════════════════════════════ */
+.journal-avatar-wrapper.clickable-avatar {
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.journal-avatar-wrapper.clickable-avatar:hover {
+  transform: scale(1.08) rotate(-1.5deg);
+  box-shadow: 0 4px 14px rgba(120, 85, 55, 0.25);
+}
+
+.avatar-glossary-badge {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(45, 30, 20, 0.84);
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 2px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  backdrop-filter: blur(3px);
+  letter-spacing: 0.3px;
+  transition: background 0.15s ease;
+}
+
+.journal-avatar-wrapper.clickable-avatar:hover .avatar-glossary-badge {
+  background: rgba(168, 85, 247, 0.92);
+}
+
+.avatar-glossary-badge svg {
+  width: 10px;
+  height: 10px;
+  fill: #fde047;
+}
+
+.glossary-modal-backdrop {
+  z-index: 10060;
+  background: rgba(38, 28, 20, 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.glossary-modal {
+  max-width: 560px;
+  width: 95vw;
+  height: 86vh;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px;
+  background: #fdfaf5;
+  border: 2px solid #eedfcc;
+  border-radius: 20px;
+  box-shadow: 0 12px 36px rgba(77, 56, 39, 0.25);
+  color: var(--brown);
+  overflow: hidden;
+}
+
+.glossary-header {
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
+.glossary-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.glossary-title-row h2 {
+  margin: 0;
+  font-size: 19px;
+  color: var(--brown);
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.glossary-title-row h2 svg {
+  fill: #a855f7;
+  width: 20px;
+  height: 20px;
+}
+
+.modal-close-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brown-light);
+  border-radius: 50%;
+  transition: all 0.15s ease;
+}
+
+.modal-close-icon:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--brown);
+}
+
+.glossary-subtitle {
+  margin: 2px 0 10px;
+  font-size: 12px;
+  color: var(--brown-light);
+}
+
+.glossary-progress-card {
+  background: #ffffff;
+  border: 1.5px solid #eedfcc;
+  border-radius: 14px;
+  padding: 10px 14px;
+  box-shadow: 0 2px 6px var(--shadow);
+  margin-bottom: 12px;
+}
+
+.glossary-progress-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12.5px;
+  margin-bottom: 6px;
+}
+
+.glossary-progress-pct {
+  font-weight: 900;
+  color: #db2777;
+  font-size: 12.5px;
+}
+
+.glossary-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #f1ede6;
+  margin-bottom: 8px;
+}
+
+.glossary-stats-chips {
+  display: flex;
+  gap: 8px;
+}
+
+.glossary-chip {
+  background: #f8f4ed;
+  border: 1px solid #e5dac9;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  color: var(--brown);
+}
+
+.glossary-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.glossary-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.glossary-tab-btn {
+  background: #ffffff;
+  border: 1.5px solid #eedfcc;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--brown);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.glossary-tab-btn:hover {
+  background: #fdfaf5;
+  border-color: #ddb892;
+  transform: translateY(-1px);
+}
+
+.glossary-tab-btn.active {
+  background: #a855f7;
+  border-color: #9333ea;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(168, 85, 247, 0.35);
+}
+
+.glossary-cards-container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+  margin-bottom: 12px;
+}
+
+.glossary-coat-group {
+  flex-shrink: 0;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1.5px solid #eedfcc;
+  box-shadow: 0 2px 6px var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.glossary-coat-group.rare-group {
+  background: #fffdf5;
+  border-color: #fde68a;
+}
+
+.glossary-coat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 10px;
+  background: rgba(253, 250, 245, 0.7);
+  border-bottom: 1.5px solid #f0e6d8;
+}
+
+.glossary-coat-preview-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #f4ede4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.glossary-skin-canvas,
+.glossary-marking-canvas {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+  width: 48px;
+  height: 48px;
+}
+
+.glossary-coat-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.glossary-coat-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 2px;
+}
+
+.glossary-coat-name {
+  font-size: 14.5px;
+  font-weight: 900;
+  color: var(--brown);
+}
+
+.glossary-coat-desc {
+  font-size: 11.5px;
+  color: var(--brown-light);
+  line-height: 1.3;
+}
+
+.glossary-coat-progress-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.coat-progress-num {
+  font-size: 14px;
+  color: #7c3aed;
+  font-weight: 900;
+}
+
+.coat-progress-label {
+  font-size: 10px;
+  color: var(--brown-light);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.coat-sanctuary-count {
+  font-size: 10px;
+  color: #059669;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.glossary-markings-section {
+  padding: 12px 14px;
+  background: #ffffff;
+}
+
+.glossary-markings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.glossary-marking-card {
+  background: #fdfaf5;
+  border: 1.5px solid #eedfcc;
+  border-radius: 12px;
+  padding: 8px 6px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 1px 3px var(--shadow);
+  transition: all 0.15s ease;
+}
+
+.glossary-marking-card.unlocked {
+  background: #ffffff;
+}
+
+.glossary-marking-card.unlocked:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(168, 85, 247, 0.15);
+  border-color: #c084fc;
+}
+
+.glossary-marking-card.locked {
+  background: #f6f5f3;
+  border: 1.5px dashed #d6d0c7;
+}
+
+.glossary-marking-portrait-wrap {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background: #f0eae1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.glossary-lock-badge {
+  position: absolute;
+  font-size: 15px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+}
+
+.glossary-marking-name {
+  font-size: 10.5px;
+  color: var(--brown);
+  line-height: 1.25;
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.glossary-marking-status {
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.2px;
+}
+
+.status-unlocked {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.status-locked {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+}
+
+.glossary-tag {
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 999px;
+  letter-spacing: 0.2px;
+}
+
+.standard-tag {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.rare-tag {
+  background: #fef08a;
+  color: #854d0e;
+}
+
+.completed-tag {
+  background: #fdf2f8;
+  color: #be185d;
+  border: 1px solid #fbcfe8;
+}
+
+.glossary-footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.glossary-empty-msg {
+  text-align: center;
+  padding: 24px 12px;
+  color: var(--brown-light);
+  font-size: 13px;
+}
+
 
 
