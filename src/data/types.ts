@@ -28,7 +28,8 @@ export type CatAnimationState =
   | 'sleep'    // Recover Energy
   | 'walk'     // Wander
   | 'run'      // Zoomies
-  | 'play';    // Toy Interaction
+  | 'play'     // Toy Interaction
+  | 'pounce';  // Pounce leap attack
 
 export type ToolType = 'food' | 'pet' | 'brush' | 'toy' | 'wash';
 

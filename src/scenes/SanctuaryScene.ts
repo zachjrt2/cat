@@ -2272,29 +2272,34 @@ export class SanctuaryScene extends Phaser.Scene {
           sprite.clearChaseTarget();
         }
 
-        // Cat catches & bats the ball
-        if (dist <= 30 && this.toyBall.canBeBatted) {
-          const kickAngle = Phaser.Math.Between(0, 360) * (Math.PI / 180);
-          const kickPower = Phaser.Math.Between(260, 420);
-          this.toyBall.kick(Math.cos(kickAngle) * kickPower, Math.sin(kickAngle) * kickPower);
+        // Cat catches & pounces/bats the ball
+        if (dist <= 60 && !sprite.isPounceActive() && this.toyBall.canBeBatted) {
+          const ball = this.toyBall;
+          sprite.clearChaseTarget();
+          sprite.executePounce(ball.x, ball.y, () => {
+            if (!this.toyBall) return;
+            const kickAngle = Phaser.Math.Between(0, 360) * (Math.PI / 180);
+            const kickPower = Phaser.Math.Between(280, 440);
+            ball.kick(Math.cos(kickAngle) * kickPower, Math.sin(kickAngle) * kickPower);
 
-          // Fast Fun meter gain!
-          sprite.cat.fun = Math.min(100, sprite.cat.fun + 22);
-          sprite.cat.affection = Math.min(100, sprite.cat.affection + 6);
-          sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 8);
-          this.growth.addGrowth(sprite.cat, 8);
+            // Fast Fun meter gain!
+            sprite.cat.fun = Math.min(100, sprite.cat.fun + 24);
+            sprite.cat.affection = Math.min(100, sprite.cat.affection + 7);
+            sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 8);
+            this.growth.addGrowth(sprite.cat, 8);
 
-          // Award Care Points
-          this.love.add(5);
-          this.state.totalLoveEarned += 5;
-          EventBus.emit('love-changed', { love: this.love.love });
+            // Award Care Points
+            this.love.add(5);
+            this.state.totalLoveEarned += 5;
+            EventBus.emit('love-changed', { love: this.love.love });
 
-          sound.playMeow(sprite.cat.stage === 'kitten' ? 4 : 2);
-          sound.playSparkle();
-          sprite.triggerPlayState(1.8);
-          sprite.showEmote('🧶');
-          sprite.refreshVisuals();
-          this.notifyUiState();
+            sound.playMeow(sprite.cat.stage === 'kitten' ? 4 : 2);
+            sound.playSparkle();
+            sprite.triggerPlayState(1.8);
+            sprite.showEmote('🧶');
+            sprite.refreshVisuals();
+            this.notifyUiState();
+          });
         }
       }
     }
@@ -2338,7 +2343,7 @@ export class SanctuaryScene extends Phaser.Scene {
           }
 
           if (nearestPiece) {
-            if (minDist <= 22) {
+            if (minDist <= 20) {
               sprite.clearChaseTarget();
               nearestPiece.eat();
               sound.playCrunch();
@@ -2359,7 +2364,32 @@ export class SanctuaryScene extends Phaser.Scene {
               sprite.showEmote(wasVeryHungry ? '🐟' : '😋');
               sprite.refreshVisuals();
               this.notifyUiState();
-            } else if (minDist < 650) {
+            } else if (minDist <= 55 && !sprite.isPounceActive() && Math.random() < 0.45) {
+              // Playful pounce onto food piece before eating!
+              const targetPiece = nearestPiece;
+              sprite.clearChaseTarget();
+              sprite.executePounce(targetPiece.x, targetPiece.y, () => {
+                if (targetPiece.active && !targetPiece.isEaten) {
+                  targetPiece.eat();
+                  sound.playCrunch();
+
+                  const wasVeryHungry = sprite.cat.hunger < 50;
+                  sprite.cat.hunger = Math.min(100, sprite.cat.hunger + 32);
+                  sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 8);
+                  sprite.cat.affection = Math.min(100, sprite.cat.affection + 4);
+                  this.growth.addGrowth(sprite.cat, 6);
+
+                  this.love.add(3);
+                  this.state.totalLoveEarned += 3;
+                  EventBus.emit('love-changed', { love: this.love.love });
+
+                  sprite.triggerPlayState(1.4);
+                  sprite.showEmote(wasVeryHungry ? '🐟' : '😋');
+                  sprite.refreshVisuals();
+                  this.notifyUiState();
+                }
+              });
+            } else if (minDist < 650 && !sprite.isPounceActive()) {
               sprite.setChaseTarget(nearestPiece.x, nearestPiece.y);
             }
           }

@@ -77,6 +77,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private isBreedReady = false;
   private crowdCheckTimer = 1.0 + Math.random() * 2.0;
 
+  // Playful Cat-Chase-Cat Tag Game
+  private chasingCatSprite: CatSprite | null = null;
+  private fleeingFromCatSprite: CatSprite | null = null;
+  private catChaseCooldownTimer = 6.0 + Math.random() * 10.0;
+  private catChaseDurationTimer = 0;
+  private isPouncing = false;
+
   // AI & Social Interaction Support
   private targetMachineId: string | null = null;
   private availableMachines: AvailableMachineInfo[] = [];
@@ -216,6 +223,8 @@ export class CatSprite extends Phaser.GameObjects.Container {
   setDragged(dragged: boolean): void {
     this.isDragged = dragged;
     if (dragged) {
+      if (this.chasingCatSprite) this.stopCatChase(false);
+      if (this.fleeingFromCatSprite) this.fleeingFromCatSprite = null;
       this.wanderTarget = null;
       this.setDepth(9999);
       this.scene.tweens.killTweensOf(this);
@@ -459,7 +468,72 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   isChasing(): boolean {
-    return this.chaseTarget !== null;
+    return this.chaseTarget !== null || this.chasingCatSprite !== null;
+  }
+
+  isFleeing(): boolean {
+    return this.fleeingFromCatSprite !== null;
+  }
+
+  isChasingCat(): boolean {
+    return this.chasingCatSprite !== null;
+  }
+
+  startChasingCat(target: CatSprite): void {
+    if (this.isDragged || this.cat.animationState === 'sleep') return;
+    this.chasingCatSprite = target;
+    this.catChaseDurationTimer = 3.8;
+    this.wanderTarget = null;
+    this.cat.animationState = 'run';
+    this.showEmote('😼');
+  }
+
+  startFleeingFrom(chaser: CatSprite): void {
+    if (this.isDragged || this.cat.animationState === 'sleep') return;
+    this.fleeingFromCatSprite = chaser;
+    this.wanderTarget = null;
+    this.cat.animationState = 'run';
+    this.showEmote('🙀');
+  }
+
+  stopCatChase(didTag: boolean): void {
+    const target = this.chasingCatSprite;
+    this.chasingCatSprite = null;
+
+    if (target && target.fleeingFromCatSprite === this) {
+      target.fleeingFromCatSprite = null;
+    }
+
+    if (didTag && target) {
+      // Fun & happiness boost for both playing cats
+      this.cat.fun = Math.min(100, this.cat.fun + 28);
+      target.cat.fun = Math.min(100, target.cat.fun + 20);
+      this.cat.happiness = Math.min(100, this.cat.happiness + 8);
+      target.cat.happiness = Math.min(100, target.cat.happiness + 6);
+
+      // Friendship bonding
+      this.cat.friendshipIds[target.cat.id] = (this.cat.friendshipIds[target.cat.id] || 0) + 6;
+      target.cat.friendshipIds[this.cat.id] = (target.cat.friendshipIds[this.cat.id] || 0) + 6;
+
+      sound.playChirp();
+      this.showEmote('🎉');
+      target.showEmote('😸');
+
+      this.triggerPlayState(2.0);
+      target.triggerPlayState(2.0);
+      this.refreshVisuals();
+      target.refreshVisuals();
+    } else {
+      this.showEmote('💨');
+      this.cat.animationState = 'look';
+      this.wanderTimer = 2.0;
+      this.playCurrentAnimation();
+      if (target) {
+        target.cat.animationState = 'sit';
+        target.wanderTimer = 2.0;
+        target.playCurrentAnimation();
+      }
+    }
   }
 
   slinkAwayFrom(fromX: number, fromY: number, dt: number): void {
@@ -484,6 +558,181 @@ export class CatSprite extends Phaser.GameObjects.Container {
     this.cat.animationState = 'walk';
     this.playCurrentAnimation();
     this.setDepth(this.y);
+  }
+
+  isPounceActive(): boolean {
+    return this.isPouncing;
+  }
+
+  playSpecificAnimation(animSuffix: string): void {
+    const dir = this.currentDirection;
+    const baseKey = `cat_${this.cat.color}_${animSuffix}_${dir}`;
+    if (this.scene.anims.exists(baseKey)) this.baseSprite.play(baseKey, true);
+    if (this.markingSprite && this.cat.marking) {
+      const markingKey = `marking_${this.cat.marking}_${animSuffix}_${dir}`;
+      if (this.scene.anims.exists(markingKey)) this.markingSprite.play(markingKey, true);
+    }
+    this.sleepZzz.setAlpha(0);
+  }
+
+  executePounce(targetX: number, targetY: number, onLand?: () => void): void {
+    if (this.isDragged || this.cat.animationState === 'sleep' || this.isPouncing) return;
+
+    this.isPouncing = true;
+    this.cat.animationState = 'pounce';
+    this.wanderTarget = null;
+    this.chaseTarget = null;
+
+    const startX = this.x;
+    const startY = this.y;
+    const dx = targetX - startX;
+    const dy = targetY - startY;
+    const dist = Math.hypot(dx, dy);
+    this.currentDirection = vectorToDirection(dx, dy);
+
+    const scale = getScaleForStage(this.cat.stage);
+
+    // ── Phase 1: Crouch / Prep (140ms, 3rd running frame) ────────────────
+    this.playSpecificAnimation('pounce_prep');
+
+    this.scene.tweens.add({
+      targets: [this.baseSprite, this.markingSprite].filter(Boolean),
+      scaleX: scale * 1.15,
+      scaleY: scale * 0.82,
+      duration: 130,
+      yoyo: true,
+      ease: 'Quad.easeInOut',
+      onComplete: () => {
+        if (!this.active || this.isDragged) {
+          this.isPouncing = false;
+          return;
+        }
+
+        // ── Phase 2 & 3: Airborne Leap Ascent & Descent (420ms) ───────────
+        // Target landing position (clamped within room bounds)
+        const landX = Phaser.Math.Clamp(targetX, this.bounds.left + 24, this.bounds.right - 24);
+        const landY = Phaser.Math.Clamp(targetY, this.bounds.top + 24, this.bounds.bottom - 24);
+
+        // 4th & 5th running frames on ascent
+        this.playSpecificAnimation('pounce_ascent');
+
+        const leapHeight = Math.min(36, Math.max(18, dist * 0.45));
+        const leapDuration = 420;
+
+        // Move horizontally across ground
+        this.scene.tweens.add({
+          targets: this,
+          x: landX,
+          y: landY,
+          duration: leapDuration,
+          ease: 'Linear',
+        });
+
+        // Vertical Parabolic Arc (applied to sprite offset so shadow stays on ground)
+        let switchedToDescent = false;
+        this.scene.tweens.addCounter({
+          from: 0,
+          to: 1,
+          duration: leapDuration,
+          onUpdate: (tw) => {
+            const t = Number(tw.getValue() ?? 0);
+            const arc = 4 * t * (1 - t);
+            const yOffset = -arc * leapHeight;
+
+            if (this.baseSprite) this.baseSprite.y = yOffset;
+            if (this.markingSprite) this.markingSprite.y = yOffset;
+
+            // Shadow contracts and softens during leap
+            this.shadow.setScale(1 - arc * 0.45);
+            this.shadow.setAlpha(0.22 * (1 - arc * 0.55));
+
+            // Phase 3: 1st running frame on descent (past apex t > 0.52)
+            if (t > 0.52 && !switchedToDescent) {
+              switchedToDescent = true;
+              this.playSpecificAnimation('pounce_descent');
+            }
+          },
+          onComplete: () => {
+            if (!this.active || this.isDragged) {
+              this.isPouncing = false;
+              return;
+            }
+
+            if (this.baseSprite) this.baseSprite.y = 0;
+            if (this.markingSprite) this.markingSprite.y = 0;
+            this.shadow.setScale(1);
+            this.shadow.setAlpha(0.22);
+
+            // ── Phase 4: Landing & Impact (130ms, 2nd running frame) ─────────
+            this.playSpecificAnimation('pounce_land');
+            sound.playPop();
+            this.spawnPounceDust();
+
+            // Landing squash and settle
+            this.scene.tweens.add({
+              targets: [this.baseSprite, this.markingSprite].filter(Boolean),
+              scaleX: scale * 1.22,
+              scaleY: scale * 0.76,
+              duration: 80,
+              yoyo: true,
+              ease: 'Quad.easeOut',
+              onComplete: () => {
+                this.isPouncing = false;
+                if (onLand) {
+                  onLand();
+                } else {
+                  // Phase 5: Settle to normal animations
+                  const roll = Math.random();
+                  this.cat.animationState = roll < 0.45 ? 'sit' : roll < 0.75 ? 'look' : 'walk';
+                  this.wanderTimer = 1.5 + Math.random() * 2.0;
+                  this.playCurrentAnimation();
+                }
+              },
+            });
+          },
+        });
+      },
+    });
+  }
+
+  private spawnPounceDust(): void {
+    const dustGfx = this.scene.add.graphics();
+    dustGfx.setDepth(this.y + 1);
+    const dustParticles: Array<{ x: number; y: number; vx: number; vy: number; size: number }> = [];
+
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI * 2 * i) / 6 + (Math.random() - 0.5);
+      const spd = Phaser.Math.Between(18, 38);
+      dustParticles.push({
+        x: this.x + Math.cos(angle) * 4,
+        y: this.y + 12 + Math.sin(angle) * 2,
+        vx: Math.cos(angle) * spd,
+        vy: Math.sin(angle) * spd * 0.4 - 6,
+        size: Phaser.Math.Between(1.8, 3.2),
+      });
+    }
+
+    let elapsed = 0;
+    this.scene.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: 260,
+      onUpdate: (tw) => {
+        const p = Number(tw.getValue() ?? 0);
+        const dt = (tw.elapsed - elapsed) / 1000;
+        elapsed = tw.elapsed;
+        dustGfx.clear();
+        for (const d of dustParticles) {
+          d.x += d.vx * dt;
+          d.y += d.vy * dt;
+          dustGfx.fillStyle(0xd5bdaf, Math.max(0, 0.7 * (1 - p)));
+          dustGfx.fillCircle(d.x, d.y, d.size * (1 - p * 0.4));
+        }
+      },
+      onComplete: () => {
+        dustGfx.destroy();
+      },
+    });
   }
 
   private playCurrentAnimation(): void {
@@ -512,6 +761,10 @@ export class CatSprite extends Phaser.GameObjects.Container {
   update(deltaMs: number): void {
     if (this.isDragged) {
       this.setDepth(9999);
+      return;
+    }
+    if (this.isPouncing) {
+      this.setDepth(this.y);
       return;
     }
     const dt = deltaMs / 1000;
@@ -595,12 +848,88 @@ export class CatSprite extends Phaser.GameObjects.Container {
       return;
     }
 
+    // ── Active Fleeing from Chaser Cat (Playful Tag) ──────────────────────
+    if (this.fleeingFromCatSprite) {
+      if (!this.fleeingFromCatSprite.active || this.fleeingFromCatSprite.isCurrentlyDragged() || this.fleeingFromCatSprite.chasingCatSprite !== this) {
+        this.fleeingFromCatSprite = null;
+      } else {
+        const dx = this.x - this.fleeingFromCatSprite.x;
+        const dy = this.y - this.fleeingFromCatSprite.y;
+        const dist = Math.hypot(dx, dy);
+        const angle = dist < 1 ? Math.random() * Math.PI * 2 : Math.atan2(dy, dx);
+
+        const speed = (this.cat.stage === 'kitten' ? 120 : 138) * ((this.cat.majorTrait === 'zoomie' || this.cat.minorTrait === 'zoomie') ? 1.35 : 1) * dt;
+        this.x += Math.cos(angle) * speed;
+        this.y += Math.sin(angle) * speed;
+        this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
+        this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
+        this.currentDirection = vectorToDirection(Math.cos(angle), Math.sin(angle));
+        this.cat.animationState = 'run';
+        this.playCurrentAnimation();
+        this.setDepth(this.y);
+        return;
+      }
+    }
+
+    // ── Active Chasing Another Cat (Playful Tag) ──────────────────────────
+    if (this.chasingCatSprite) {
+      if (!this.chasingCatSprite.active || this.chasingCatSprite.isCurrentlyDragged() || this.catChaseDurationTimer <= 0) {
+        this.stopCatChase(false);
+      } else {
+        this.catChaseDurationTimer -= dt;
+        const dist = Math.hypot(this.chasingCatSprite.x - this.x, this.chasingCatSprite.y - this.y);
+        if (dist <= 52 && !this.isPouncing) {
+          // Epic flying pounce tag!
+          const targetCat = this.chasingCatSprite;
+          this.executePounce(targetCat.x, targetCat.y, () => {
+            this.stopCatChase(true);
+          });
+          return;
+        } else {
+          const speed = (this.cat.stage === 'kitten' ? 135 : 152) * ((this.cat.majorTrait === 'zoomie' || this.cat.minorTrait === 'zoomie') ? 1.35 : 1) * dt;
+          this.x += ((this.chasingCatSprite.x - this.x) / dist) * speed;
+          this.y += ((this.chasingCatSprite.y - this.y) / dist) * speed;
+          this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
+          this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
+          this.currentDirection = vectorToDirection(this.chasingCatSprite.x - this.x, this.chasingCatSprite.y - this.y);
+          this.cat.animationState = 'run';
+          this.playCurrentAnimation();
+          this.setDepth(this.y);
+          return;
+        }
+      }
+    }
+
+    // ── Playful Tag Game Trigger for Bored / Mischievous Cats ─────────────
+    this.catChaseCooldownTimer -= dt;
+    if (this.catChaseCooldownTimer <= 0) {
+      this.catChaseCooldownTimer = 12.0 + Math.random() * 16.0;
+      if (!this.chaseTarget && !this.chasingCatSprite && !this.fleeingFromCatSprite && this.otherSpritesProvider) {
+        const isBored = this.cat.fun < 60;
+        const isPlayfulTrait = this.cat.majorTrait === 'mischievous' || this.cat.majorTrait === 'zoomie' || this.cat.stage === 'kitten' || this.cat.stage === 'teen';
+        if (isBored || isPlayfulTrait || Math.random() < 0.35) {
+          const others = this.otherSpritesProvider().filter(
+            (o) => o !== this && o.cat.animationState !== 'sleep' && !o.isCurrentlyDragged() && !o.isChasing() && !o.isFleeing() && !o.chaseTarget
+          );
+          const reachable = others.filter((o) => {
+            const d = Math.hypot(o.x - this.x, o.y - this.y);
+            return d >= 45 && d <= 230;
+          });
+          if (reachable.length > 0) {
+            const targetCat = reachable[Math.floor(Math.random() * reachable.length)];
+            this.startChasingCat(targetCat);
+            targetCat.startFleeingFrom(this);
+          }
+        }
+      }
+    }
+
     // ── Anti-Crowding / Group Dispersion Check ────────────────────────────
     // If 3 or more cats gather in a tight bunch (or 2 stacked within 45px), disperse to open space
     this.crowdCheckTimer -= dt;
     if (this.crowdCheckTimer <= 0) {
       this.crowdCheckTimer = 1.5 + Math.random() * 2.0;
-      if (!this.chaseTarget) {
+      if (!this.chaseTarget && !this.chasingCatSprite && !this.fleeingFromCatSprite) {
         const crowd = this.getNearbyCrowdInfo(85);
         if (crowd.count >= 2 || (crowd.count >= 1 && this.getNearbyCrowdInfo(45).count >= 1)) {
           // Crowd of 3+ cats (or tightly packed) -> walk away to a spacious area
@@ -784,6 +1113,27 @@ export class CatSprite extends Phaser.GameObjects.Container {
       this.cat.animationState = 'play';
       this.wanderTimer = 1.5 + Math.random() * 2.5;
       this.playCurrentAnimation();
+      return;
+    }
+
+    // ── Spontaneous Ambient Pounce (leaves, bugs, motes) ───────────────────
+    const isHunter = this.cat.majorTrait === 'hunter' || this.cat.minorTrait === 'hunter';
+    const isMischief = this.cat.majorTrait === 'mischievous' || this.cat.majorTrait === 'zoomie';
+    const isKittenOrTeen = isKitten || this.cat.stage === 'teen';
+    const pounceChance = (isHunter ? 0.28 : 0) + (isMischief ? 0.22 : 0) + (isKittenOrTeen ? 0.16 : 0.06);
+
+    if (Math.random() < pounceChance && !this.isPouncing) {
+      const pounceDist = Phaser.Math.Between(45, 95);
+      const angle = Math.random() * Math.PI * 2;
+      const targetX = Phaser.Math.Clamp(this.x + Math.cos(angle) * pounceDist, this.bounds.left + 24, this.bounds.right - 24);
+      const targetY = Phaser.Math.Clamp(this.y + Math.sin(angle) * pounceDist, this.bounds.top + 24, this.bounds.bottom - 24);
+
+      this.executePounce(targetX, targetY, () => {
+        this.cat.fun = Math.min(100, this.cat.fun + 12);
+        this.cat.happiness = Math.min(100, this.cat.happiness + 5);
+        this.showEmote(Math.random() < 0.5 ? '✨' : '🐾');
+        this.triggerPlayState(1.5);
+      });
       return;
     }
 

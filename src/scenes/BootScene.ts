@@ -197,6 +197,73 @@ export class BootScene extends Phaser.Scene {
           repeat: -1,
         });
       }
+
+      // 8. Pounce (Leap attack: 3rd frame start/prep, 4th/5th ascent, 1st descent, 2nd landing)
+      const pounceAnimKey = `${textureKey}_pounce_${dir}`;
+      if (!anims.exists(pounceAnimKey)) {
+        anims.create({
+          key: pounceAnimKey,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [
+              rowTop * colsPerRow + 22, // 3rd running frame: start crouch prep
+              rowTop * colsPerRow + 23, // 4th running frame: ascent launch
+              rowBot * colsPerRow + 20, // 5th running frame: ascent apex
+              rowTop * colsPerRow + 20, // 1st running frame: descent
+              rowTop * colsPerRow + 21, // 2nd running frame: landing impact
+            ],
+          }),
+          frameRate: 7,
+          repeat: 0,
+        });
+      }
+
+      const pouncePrepKey = `${textureKey}_pounce_prep_${dir}`;
+      if (!anims.exists(pouncePrepKey)) {
+        anims.create({
+          key: pouncePrepKey,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [rowTop * colsPerRow + 22],
+          }),
+          frameRate: 1,
+          repeat: -1,
+        });
+      }
+
+      const pounceAscentKey = `${textureKey}_pounce_ascent_${dir}`;
+      if (!anims.exists(pounceAscentKey)) {
+        anims.create({
+          key: pounceAscentKey,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [rowTop * colsPerRow + 23, rowBot * colsPerRow + 20],
+          }),
+          frameRate: 8,
+          repeat: -1,
+        });
+      }
+
+      const pounceDescentKey = `${textureKey}_pounce_descent_${dir}`;
+      if (!anims.exists(pounceDescentKey)) {
+        anims.create({
+          key: pounceDescentKey,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [rowTop * colsPerRow + 20],
+          }),
+          frameRate: 1,
+          repeat: -1,
+        });
+      }
+
+      const pounceLandKey = `${textureKey}_pounce_land_${dir}`;
+      if (!anims.exists(pounceLandKey)) {
+        anims.create({
+          key: pounceLandKey,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [rowTop * colsPerRow + 21],
+          }),
+          frameRate: 1,
+          repeat: -1,
+        });
+      }
     }
   }
 }
