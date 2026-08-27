@@ -1579,10 +1579,19 @@ export class UIManager {
           const catId = target.dataset.catId;
           const toArea = target.value as CatArea;
           if (catId && toArea) {
+            sound.playTap();
             EventBus.emit('move-cat', { catId, toArea });
             const cat = this.catsList.find((c) => c.id === catId);
-            if (cat) cat.area = toArea;
-            renderRoster();
+            if (cat) {
+              cat.area = toArea;
+              const row = target.closest('.roster-cat-row');
+              const subEl = row?.querySelector('.roster-sub');
+              const skin = CAT_SKINS.find((s) => s.id === cat.color);
+              const currentMeta = AREA_INFO_MAP[toArea];
+              if (subEl && currentMeta) {
+                subEl.textContent = `${skin?.label || cat.color} · in ${currentMeta.label}`;
+              }
+            }
           }
         });
       });
