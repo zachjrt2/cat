@@ -30,6 +30,7 @@ interface SlotZone {
   label: string;
   color: string;
   bgHex: string;
+  borderHex: string;
 }
 
 export class PlinkoModal {
@@ -175,23 +176,23 @@ export class PlinkoModal {
   private renderOddsBreakdown(odds: ReturnType<PlinkoSystem['calculateOdds']>): string {
     return `
       <div class="odds-pill common-pill" title="Common tier">
-        <span class="odds-dot" style="background:#94a3b8;"></span>
+        <span class="odds-dot" style="background:#2d6a4f;"></span>
         <span>Common: <b>${odds.commonPercent}%</b></span>
       </div>
       <div class="odds-pill uncommon-pill" title="Uncommon tier">
-        <span class="odds-dot" style="background:#10b981;"></span>
+        <span class="odds-dot" style="background:#0284c7;"></span>
         <span>Uncommon: <b>${odds.uncommonPercent}%</b></span>
       </div>
       <div class="odds-pill rare-pill" title="Rare tier">
-        <span class="odds-dot" style="background:#3b82f6;"></span>
+        <span class="odds-dot" style="background:#7e22ce;"></span>
         <span>Rare: <b>${odds.rarePercent}%</b></span>
       </div>
       <div class="odds-pill epic-pill" title="Epic tier">
-        <span class="odds-dot" style="background:#8b5cf6;"></span>
+        <span class="odds-dot" style="background:#be185d;"></span>
         <span>Epic: <b>${odds.epicPercent}%</b></span>
       </div>
       <div class="odds-pill legendary-pill" title="Legendary tier">
-        <span class="odds-dot" style="background:#f59e0b;"></span>
+        <span class="odds-dot" style="background:#b45309;"></span>
         <span>Legend: <b>${odds.legendaryPercent}%</b></span>
       </div>
       ${
@@ -314,13 +315,13 @@ export class PlinkoModal {
     const slotWidth = this.width / slotCount;
     this.slots = [];
 
-    const tierMeta: Record<PlinkoTier, { label: string; color: string; bgHex: string }> = {
-      miss: { label: 'Miss', color: '#64748b', bgHex: '#1e293b' },
-      common: { label: 'Common', color: '#94a3b8', bgHex: '#334155' },
-      uncommon: { label: 'Uncommon', color: '#10b981', bgHex: '#064e3b' },
-      rare: { label: 'Rare', color: '#3b82f6', bgHex: '#1e3a8a' },
-      epic: { label: 'Epic', color: '#8b5cf6', bgHex: '#4c1d95' },
-      legendary: { label: 'Legend', color: '#f59e0b', bgHex: '#78350f' },
+    const tierMeta: Record<PlinkoTier, { label: string; color: string; bgHex: string; borderHex: string }> = {
+      miss: { label: 'Miss', color: '#8d7865', bgHex: '#f1ede6', borderHex: '#d5cbbe' },
+      common: { label: 'Common', color: '#2d6a4f', bgHex: '#e8f5e9', borderHex: '#a7d7b0' },
+      uncommon: { label: 'Uncommon', color: '#0284c7', bgHex: '#e0f2fe', borderHex: '#7dd3fc' },
+      rare: { label: 'Rare', color: '#7e22ce', bgHex: '#f3e8ff', borderHex: '#d8b4fe' },
+      epic: { label: 'Epic', color: '#be185d', bgHex: '#fce7f3', borderHex: '#f9a8d4' },
+      legendary: { label: 'Legend', color: '#b45309', bgHex: '#fef3c7', borderHex: '#fcd34d' },
     };
 
     let tiers: PlinkoTier[];
@@ -355,7 +356,8 @@ export class PlinkoModal {
         label: meta.label,
         color: meta.color,
         bgHex: meta.bgHex,
-      });
+        borderHex: meta.borderHex,
+      } as any);
     }
   }
 
@@ -590,12 +592,12 @@ export class PlinkoModal {
 
   private getTierColor(tier: PlinkoTier): string {
     switch (tier) {
-      case 'legendary': return '#f59e0b';
-      case 'epic': return '#8b5cf6';
-      case 'rare': return '#3b82f6';
-      case 'uncommon': return '#10b981';
-      case 'common': return '#94a3b8';
-      default: return '#64748b';
+      case 'legendary': return '#b45309';
+      case 'epic': return '#be185d';
+      case 'rare': return '#7e22ce';
+      case 'uncommon': return '#0284c7';
+      case 'common': return '#2d6a4f';
+      default: return '#8d7865';
     }
   }
 
@@ -603,54 +605,129 @@ export class PlinkoModal {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
 
-    // 1. Board background gradient
+    // 1. Cozy Honey Birch Wood Board Base
     const bgGrad = ctx.createLinearGradient(0, 0, 0, this.height);
-    bgGrad.addColorStop(0, '#1e1b4b');
-    bgGrad.addColorStop(1, '#0f172a');
+    bgGrad.addColorStop(0, '#fdfaf5');
+    bgGrad.addColorStop(0.5, '#f7efe2');
+    bgGrad.addColorStop(1, '#eedecb');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, this.width, this.height);
 
-    // 2. Guide Rails (borders)
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(6, 6, this.width - 12, this.height - 12);
-
-    // 3. Pegs
-    for (const peg of this.pegs) {
+    // Subtle Warm Vertical Wood Grain Lines
+    ctx.strokeStyle = 'rgba(180, 140, 100, 0.08)';
+    ctx.lineWidth = 1;
+    for (let gx = 16; gx < this.width - 12; gx += 14) {
       ctx.beginPath();
-      ctx.arc(peg.x, peg.y, peg.r, 0, Math.PI * 2);
-      ctx.fillStyle = peg.flash > 0 ? '#ffedd5' : '#cbd5e1';
-      ctx.shadowColor = peg.flash > 0 ? '#f59e0b' : 'transparent';
-      ctx.shadowBlur = peg.flash > 0 ? 12 : 0;
-      ctx.fill();
-      ctx.shadowBlur = 0;
-
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 1;
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx + (gx % 28 === 0 ? 6 : -4), this.height);
       ctx.stroke();
     }
 
-    // 4. Bottom Slots
-    const slotY = this.height - 35;
-    const slotH = 28;
+    // 2. Polished Mahogany / Oak Wooden Frame Borders
+    ctx.strokeStyle = '#a67c52';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(6, 6, this.width - 12, this.height - 12);
+
+    ctx.strokeStyle = '#d4a373';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(9, 9, this.width - 18, this.height - 18);
+
+    // Cute Brass Corner Rivets
+    const corners = [
+      [14, 14],
+      [this.width - 14, 14],
+      [14, this.height - 14],
+      [this.width - 14, this.height - 14],
+    ];
+    for (const [cx, cy] of corners) {
+      ctx.fillStyle = '#e09f3e';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff4d4';
+      ctx.beginPath();
+      ctx.arc(cx - 0.7, cy - 0.7, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 3. Golden Brass Pegs
+    for (const peg of this.pegs) {
+      // Soft shadow underneath
+      ctx.fillStyle = 'rgba(90, 60, 35, 0.2)';
+      ctx.beginPath();
+      ctx.arc(peg.x, peg.y + 1.8, peg.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Brass body gradient
+      const pegGrad = ctx.createRadialGradient(peg.x - 1.2, peg.y - 1.2, 0.5, peg.x, peg.y, peg.r);
+      if (peg.flash > 0) {
+        pegGrad.addColorStop(0, '#ffffff');
+        pegGrad.addColorStop(0.5, '#fef08a');
+        pegGrad.addColorStop(1, '#f59e0b');
+        ctx.shadowColor = '#fbbf24';
+        ctx.shadowBlur = 14 * peg.flash;
+      } else {
+        pegGrad.addColorStop(0, '#fff4cc');
+        pegGrad.addColorStop(0.4, '#ffd166');
+        pegGrad.addColorStop(0.85, '#e09f3e');
+        pegGrad.addColorStop(1, '#b07d2b');
+        ctx.shadowBlur = 0;
+      }
+
+      ctx.fillStyle = pegGrad;
+      ctx.beginPath();
+      ctx.arc(peg.x, peg.y, peg.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Peg Brass Rim Outline
+      ctx.strokeStyle = peg.flash > 0 ? '#fde047' : '#935817';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Highlight gleam
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.beginPath();
+      ctx.arc(peg.x - 1.3, peg.y - 1.3, peg.r * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 4. Bottom Catch Compartments / Slots
+    const slotY = this.height - 38;
+    const slotH = 30;
 
     for (const slot of this.slots) {
+      const sx = slot.xStart + 2;
+      const sw = (slot.xEnd - slot.xStart) - 4;
+
+      // Slot Compartment Tray Drop Shadow
+      ctx.fillStyle = 'rgba(90, 60, 35, 0.15)';
+      ctx.fillRect(sx, slotY + 2, sw, slotH);
+
+      // Pastel Felt Inset Background
       ctx.fillStyle = slot.bgHex;
-      ctx.fillRect(slot.xStart + 2, slotY, (slot.xEnd - slot.xStart) - 4, slotH);
+      ctx.fillRect(sx, slotY, sw, slotH);
 
-      ctx.strokeStyle = slot.color;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(slot.xStart + 2, slotY, (slot.xEnd - slot.xStart) - 4, slotH);
+      // Compartment Border
+      ctx.strokeStyle = slot.borderHex || slot.color;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(sx, slotY, sw, slotH);
 
-      // Label
+      // Top divider post caps
+      ctx.fillStyle = '#b08968';
+      ctx.fillRect(slot.xStart - 1.5, slotY - 4, 3, 6);
+      ctx.fillStyle = '#ffd166';
+      ctx.fillRect(slot.xStart - 1, slotY - 5, 2, 2);
+
+      // Slot Label
       ctx.fillStyle = slot.color;
-      ctx.font = 'bold 9px "Nunito", sans-serif';
+      ctx.font = 'bold 9.5px "Nunito", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(slot.label, (slot.xStart + slot.xEnd) / 2, slotY + slotH / 2);
     }
 
-    // 5. Particles
+    // 5. Celebration & Impact Particles
     for (const p of this.particles) {
       ctx.save();
       ctx.globalAlpha = p.alpha;
@@ -661,32 +738,52 @@ export class PlinkoModal {
       ctx.restore();
     }
 
-    // 6. Ball & Trail
+    // 6. Glowing Golden Star Marble Ball & Trail
     if (this.ball && this.ball.active) {
       const b = this.ball;
 
-      // Draw Trail
+      // Star Sparkle Trail
       for (let t = 0; t < b.trail.length; t++) {
         const pt = b.trail[t];
-        const alpha = (1 - t / b.trail.length) * 0.4;
-        ctx.fillStyle = `rgba(251, 191, 36, ${alpha})`;
+        const alpha = (1 - t / b.trail.length) * 0.45;
+        const radius = b.r * (1 - t / b.trail.length * 0.55);
+        ctx.fillStyle = `rgba(255, 183, 3, ${alpha})`;
         ctx.beginPath();
-        ctx.arc(pt.x, pt.y, b.r * (1 - t / b.trail.length * 0.5), 0, Math.PI * 2);
+        ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // Ball body
+      // Ball Soft Drop Shadow on Board
+      ctx.fillStyle = 'rgba(77, 56, 39, 0.25)';
+      ctx.beginPath();
+      ctx.arc(b.x + 1.5, b.y + 2.5, b.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Ball Glowing Golden Body
+      const ballGrad = ctx.createRadialGradient(b.x - 2.2, b.y - 2.2, 1, b.x, b.y, b.r);
+      ballGrad.addColorStop(0, '#ffffff');
+      ballGrad.addColorStop(0.25, '#fff0a6');
+      ballGrad.addColorStop(0.7, '#ffb703');
+      ballGrad.addColorStop(1, '#e07a00');
+
+      ctx.fillStyle = ballGrad;
+      ctx.shadowColor = '#fbbf24';
+      ctx.shadowBlur = 12;
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-      ctx.fillStyle = '#f59e0b';
-      ctx.shadowColor = '#fbbf24';
-      ctx.shadowBlur = 10;
       ctx.fill();
       ctx.shadowBlur = 0;
 
-      ctx.strokeStyle = '#fff';
+      // Ball Outer Golden Rim
+      ctx.strokeStyle = '#fff8db';
       ctx.lineWidth = 1.5;
       ctx.stroke();
+
+      // Top Specular Star Shine
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(b.x - 2.2, b.y - 2.2, 2, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 }
