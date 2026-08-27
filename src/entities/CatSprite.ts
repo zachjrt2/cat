@@ -1144,13 +1144,18 @@ export class CatSprite extends Phaser.GameObjects.Container {
       const dist = Math.hypot(this.chaseTarget.x - this.x, this.chaseTarget.y - this.y);
       if (dist > 12) {
         const speed = (this.cat.stage === 'kitten' ? 140 : 165) * ((this.cat.majorTrait === 'zoomie' || this.cat.minorTrait === 'zoomie') ? 1.4 : 1) * dt;
-        this.x += ((this.chaseTarget.x - this.x) / dist) * speed;
-        this.y += ((this.chaseTarget.y - this.y) / dist) * speed;
+        const safeDist = Math.max(0.01, dist);
+        this.x += ((this.chaseTarget.x - this.x) / safeDist) * speed;
+        this.y += ((this.chaseTarget.y - this.y) / safeDist) * speed;
         this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
         this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
         this.currentDirection = vectorToDirection(this.chaseTarget.x - this.x, this.chaseTarget.y - this.y);
         this.cat.animationState = 'run';
         this.playCurrentAnimation();
+      } else {
+        // Reached chase destination: clear target and settle
+        this.clearChaseTarget();
+        this.wanderTimer = 1.5 + Math.random() * 2.0;
       }
       this.setDepth(this.y);
       return;

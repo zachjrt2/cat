@@ -1411,21 +1411,22 @@ export class SanctuaryScene extends Phaser.Scene {
         }
       } else {
         if (this.toyBall) {
+          const dyingToy = this.toyBall;
+          this.toyBall = null;
+          for (const sprite of this.catSprites.values()) {
+            sprite.clearChaseTarget();
+          }
           this.tweens.add({
-            targets: this.toyBall,
+            targets: dyingToy,
             scaleX: 0,
             scaleY: 0,
             alpha: 0,
             duration: 150,
             ease: 'Quad.easeIn',
             onComplete: () => {
-              this.toyBall?.destroy();
-              this.toyBall = null;
+              dyingToy.destroy();
             },
           });
-          for (const sprite of this.catSprites.values()) {
-            sprite.clearChaseTarget();
-          }
         }
       }
 
@@ -2655,7 +2656,7 @@ export class SanctuaryScene extends Phaser.Scene {
     }
 
     // Update Interactive Toy Ball and Cat Chase AI
-    if (this.toyBall) {
+    if (this.toyBall && this.toyBall.active) {
       this.toyBall.update(deltaSeconds);
       const ballSpeed = Math.hypot(this.toyBall.vx, this.toyBall.vy);
       const isMoving = ballSpeed > 25 || this.toyBall.isDragging;
@@ -2670,7 +2671,7 @@ export class SanctuaryScene extends Phaser.Scene {
 
         if (isMoving && dist < 320) {
           sprite.setChaseTarget(this.toyBall.x, this.toyBall.y);
-        } else if (!isMoving && dist > 40 && sprite.isChasing()) {
+        } else if (!isMoving && dist > 40 && sprite.isChasing() && !sprite.isChasingCat()) {
           sprite.clearChaseTarget();
         }
 
@@ -2702,6 +2703,13 @@ export class SanctuaryScene extends Phaser.Scene {
             sprite.refreshVisuals();
             this.notifyUiState();
           });
+        }
+      }
+    } else {
+      // Toy inactive or removed: clear any stale chase target on cats
+      for (const sprite of this.catSprites.values()) {
+        if (sprite.isChasing() && !sprite.isChasingCat()) {
+          sprite.clearChaseTarget();
         }
       }
     }
