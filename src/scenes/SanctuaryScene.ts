@@ -214,6 +214,7 @@ export class SanctuaryScene extends Phaser.Scene {
       offlineStarLevel: this.state.offlineStarLevel || 1,
       catPerfumeCount: this.state.catPerfumeCount || 0,
       fenceLayout: this.state.fenceLayout || 'none',
+      plinkoUpgrades: this.state.plinkoUpgrades || {},
     });
   }
 
@@ -422,6 +423,13 @@ export class SanctuaryScene extends Phaser.Scene {
 
     EventBus.on('spend-tokens', ({ amount }: { amount: number }) => {
       this.milestones.spendTokens(amount);
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+    });
+
+    EventBus.on('upgrade-plinko', ({ upgradeId, level }: { upgradeId: string; level: number }) => {
+      if (!this.state.plinkoUpgrades) this.state.plinkoUpgrades = {};
+      this.state.plinkoUpgrades[upgradeId] = level;
       this.saveManager.save(this.state);
       this.notifyUiState();
     });

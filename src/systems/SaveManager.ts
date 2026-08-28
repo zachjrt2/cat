@@ -31,6 +31,7 @@ export function createNewGameState(): GameState {
     timeOfDay: 'day',
     weather: 'sunny',
     day: 1,
+    plinkoUpgrades: {},
     lastSavedAt: now,
     createdAt: now,
   };
@@ -70,6 +71,7 @@ export class SaveManager {
       if (typeof state.totalRehomeLoveEarned !== 'number') state.totalRehomeLoveEarned = 0;
       if (!state.timeOfDay) state.timeOfDay = 'day';
       if (!state.weather) state.weather = 'sunny';
+      if (!state.plinkoUpgrades || typeof state.plinkoUpgrades !== 'object') state.plinkoUpgrades = {};
 
       // Ensure cats have valid life stages; promote non-kittens or legacy cats to adults
       if (Array.isArray(state.cats)) {

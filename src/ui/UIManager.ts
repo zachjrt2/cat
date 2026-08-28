@@ -48,6 +48,7 @@ export class UIManager {
   private offlineStarLevel = 1;
   private catPerfumeCount = 0;
   private currentFenceLayout: FenceLayout = 'none';
+  private plinkoUpgrades: Record<string, number> = {};
 
   constructor(container: HTMLElement) {
     this.root = container;
@@ -226,6 +227,7 @@ export class UIManager {
         offlineStarLevel?: number;
         fenceLayout?: FenceLayout;
         catPerfumeCount?: number;
+        plinkoUpgrades?: Record<string, number>;
       }) => {
         this.areasState = payload.areas;
         this.currentArea = payload.currentArea;
@@ -237,6 +239,7 @@ export class UIManager {
         this.offlineStarLevel = payload.offlineStarLevel ?? 1;
         this.catPerfumeCount = payload.catPerfumeCount ?? 0;
         this.currentFenceLayout = payload.fenceLayout ?? 'none';
+        this.plinkoUpgrades = payload.plinkoUpgrades ?? {};
 
         this.headerHud.updateTokens(this.currentTokens);
         this.headerHud.updateAreas(this.areasState, this.currentArea, this.catsList);
@@ -309,6 +312,7 @@ export class UIManager {
       offlineStarLevel: this.offlineStarLevel,
       catPerfumeCount: this.catPerfumeCount,
       fenceLayout: this.currentFenceLayout,
+      plinkoUpgrades: this.plinkoUpgrades,
       totalPetsGiven: 0,
       totalLoveEarned: 0,
       totalRehomedCats: 0,

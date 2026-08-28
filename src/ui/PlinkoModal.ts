@@ -453,6 +453,7 @@ export class PlinkoModal {
           upgrades[upId] = curLevel + 1;
           this.state.plinkoUpgrades = upgrades;
 
+          EventBus.emit('upgrade-plinko', { upgradeId: upId, level: curLevel + 1, cost: cost.stars });
           EventBus.emit('spend-tokens', { amount: cost.stars });
           EventBus.emit('tokens-changed', { tokens: this.state.adoptionTokens });
           sound.playAdoptFanfare();
