@@ -943,7 +943,6 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
             // ── Phase 4: Landing & Impact (130ms, 2nd running frame) ─────────
             this.playSpecificAnimation('pounce_land');
-            sound.playPop();
             this.spawnPounceDust();
 
             // Landing squash and settle

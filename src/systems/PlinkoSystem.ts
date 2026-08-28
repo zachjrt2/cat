@@ -35,26 +35,60 @@ export interface PlinkoBoardRank {
   slots: PlinkoTier[];
 }
 
-export function getMutationChance(wager: number): number {
+export function getMutationChance(wager: number, upgrades?: Record<string, number>): number {
   const W = Math.max(1, Math.floor(wager));
-  if (W >= 250) return 0.95;
-  if (W >= 100) return 0.75;
-  if (W >= 50) return 0.55;
-  if (W >= 25) return 0.38;
-  if (W >= 10) return 0.22;
-  if (W >= 5) return 0.12;
-  return 0.05;
+  let base = 0.05;
+  if (W >= 250) base = 0.95;
+  else if (W >= 100) base = 0.75;
+  else if (W >= 50) base = 0.55;
+  else if (W >= 25) base = 0.38;
+  else if (W >= 10) base = 0.22;
+  else if (W >= 5) base = 0.12;
+
+  const mutLvl = upgrades?.mutation_overdrive ?? 0;
+  const bonus = mutLvl === 1 ? 0.12 : mutLvl === 2 ? 0.25 : mutLvl === 3 ? 0.40 : 0;
+  return Math.min(1.0, base + bonus);
 }
 
-export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
+export function getMultiballDiscount(ballCount: number, upgrades?: Record<string, number>): number {
+  if (ballCount <= 1) return 0;
+  const lvl = upgrades?.multiball_discount ?? 0;
+  if (lvl === 1) return 0.10;
+  if (lvl === 2) return 0.20;
+  if (lvl === 3) return 0.35;
+  return 0;
+}
+
+export function getGoldenPegCount(upgrades?: Record<string, number>): number {
+  const lvl = upgrades?.lucky_pegs ?? 0;
+  if (lvl === 1) return 2;
+  if (lvl === 2) return 4;
+  if (lvl === 3) return 6;
+  return 0;
+}
+
+export function getRarityCharmBonus(upgrades?: Record<string, number>): number {
+  const lvl = upgrades?.rarity_charm ?? 0;
+  if (lvl === 1) return 0.15;
+  if (lvl === 2) return 0.30;
+  if (lvl === 3) return 0.50;
+  return 0;
+}
+
+export function getPlinkoBoardRank(wager: number, upgrades?: Record<string, number>): PlinkoBoardRank {
   const W = Math.max(1, Math.floor(wager));
+  const charmBonus = getRarityCharmBonus(upgrades);
+  const mutBonus = Math.round(((upgrades?.mutation_overdrive ?? 0) === 1 ? 12 : (upgrades?.mutation_overdrive ?? 0) === 2 ? 25 : (upgrades?.mutation_overdrive ?? 0) === 3 ? 40 : 0));
+  const charmTag = charmBonus > 0 ? ` • +${Math.round(charmBonus * 100)}% Rarity Charm` : '';
+  const mutTag = mutBonus > 0 ? ` • +${mutBonus}% Mutagen Overdrive` : '';
+
   if (W >= 250) {
     return {
       name: 'Cosmic Mythic Board',
       badge: '🌌 MYTHIC 250+ ⭐',
       color: '#ec4899',
       bgGrad: 'linear-gradient(135deg, rgba(236, 72, 153, 0.18), rgba(168, 85, 247, 0.22))',
-      perks: '✨ 95% Mutation Chance • 5x Legend Slots • 100% Epic/Legend Guarantee • Multi-Cat Drop (3–4 Cats)!',
+      perks: `✨ ${Math.min(100, 95 + mutBonus)}% Mutation Chance • 5x Legend Slots • 100% Epic/Legend Guarantee • Multi-Cat Drop (3–4 Cats)!${charmTag}${mutTag}`,
       slots: ['epic', 'epic', 'legendary', 'legendary', 'legendary', 'legendary', 'legendary', 'epic', 'epic'],
     };
   }
@@ -64,7 +98,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
       badge: '👑 MASTER 100+ ⭐',
       color: '#a855f7',
       bgGrad: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(99, 102, 241, 0.18))',
-      perks: '✨ 75% Mutation Chance • Only Rare, Epic & Legend • 3x Legend Slots • 65% Multi-Cat Drop (2–3 Cats)',
+      perks: `✨ ${Math.min(100, 75 + mutBonus)}% Mutation Chance • Only Rare, Epic & Legend • 3x Legend Slots • 65% Multi-Cat Drop (2–3 Cats)${charmTag}${mutTag}`,
       slots: ['rare', 'epic', 'epic', 'legendary', 'legendary', 'legendary', 'epic', 'epic', 'rare'],
     };
   }
@@ -74,7 +108,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
       badge: '💎 ELITE 50+ ⭐',
       color: '#0284c7',
       bgGrad: 'linear-gradient(135deg, rgba(2, 132, 199, 0.14), rgba(56, 189, 248, 0.18))',
-      perks: '✨ 55% Mutation Chance • 0% Common • Triple Legend Slots • 40% Multi-Cat Drop (2–3 Cats)',
+      perks: `✨ ${Math.min(100, 55 + mutBonus)}% Mutation Chance • 0% Common • Triple Legend Slots • 40% Multi-Cat Drop (2–3 Cats)${charmTag}${mutTag}`,
       slots: ['uncommon', 'rare', 'epic', 'legendary', 'legendary', 'legendary', 'epic', 'rare', 'uncommon'],
     };
   }
@@ -84,7 +118,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
       badge: '🏆 GOLD 25+ ⭐',
       color: '#b45309',
       bgGrad: 'linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(251, 191, 36, 0.18))',
-      perks: '✨ 38% Mutation Chance • Legendary Center Slot • 25% Multi-Cat Drop (2–3 Cats)',
+      perks: `✨ ${Math.min(100, 38 + mutBonus)}% Mutation Chance • Legendary Center Slot • 25% Multi-Cat Drop (2–3 Cats)${charmTag}${mutTag}`,
       slots: ['common', 'uncommon', 'rare', 'epic', 'legendary', 'epic', 'rare', 'uncommon', 'common'],
     };
   }
@@ -94,7 +128,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
       badge: '🥈 SILVER 10+ ⭐',
       color: '#475569',
       bgGrad: 'linear-gradient(135deg, rgba(71, 85, 105, 0.1), rgba(148, 163, 184, 0.15))',
-      perks: '✨ 22% Mutation Chance • 100% Win Guarantee (0% Miss) • Epic Slots Unlocked',
+      perks: `✨ ${Math.min(100, 22 + mutBonus)}% Mutation Chance • 100% Win Guarantee (0% Miss) • Epic Slots Unlocked${charmTag}${mutTag}`,
       slots: ['common', 'uncommon', 'rare', 'common', 'epic', 'common', 'rare', 'uncommon', 'common'],
     };
   }
@@ -104,7 +138,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
       badge: '🥉 BRONZE 5+ ⭐',
       color: '#92400e',
       bgGrad: 'linear-gradient(135deg, rgba(146, 64, 14, 0.1), rgba(217, 119, 6, 0.12))',
-      perks: '✨ 12% Mutation Chance • Low Miss Risk (11%) • Rare Slots Unlocked',
+      perks: `✨ ${Math.min(100, 12 + mutBonus)}% Mutation Chance • Low Miss Risk (11%) • Rare Slots Unlocked${charmTag}${mutTag}`,
       slots: ['miss', 'common', 'uncommon', 'rare', 'uncommon', 'common', 'uncommon', 'common', 'common'],
     };
   }
@@ -114,7 +148,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
       badge: '⭐ NOVICE 3+ ⭐',
       color: '#059669',
       bgGrad: 'linear-gradient(135deg, rgba(5, 150, 105, 0.08), rgba(52, 211, 153, 0.12))',
-      perks: '67% Win Rate • Uncommon Slots Available',
+      perks: `67% Win Rate • Uncommon Slots Available${charmTag}${mutTag}`,
       slots: ['miss', 'common', 'uncommon', 'common', 'uncommon', 'common', 'common', 'miss', 'miss'],
     };
   }
@@ -124,7 +158,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
       badge: '⭐ BEGINNER 2 ⭐',
       color: '#059669',
       bgGrad: 'linear-gradient(135deg, rgba(5, 150, 105, 0.08), rgba(52, 211, 153, 0.12))',
-      perks: '55% Win Rate • Uncommon Slot Unlocked',
+      perks: `55% Win Rate • Uncommon Slot Unlocked${charmTag}${mutTag}`,
       slots: ['miss', 'miss', 'common', 'uncommon', 'common', 'common', 'common', 'miss', 'miss'],
     };
   }
@@ -133,7 +167,7 @@ export function getPlinkoBoardRank(wager: number): PlinkoBoardRank {
     badge: '⭐ STARTER 1 ⭐',
     color: '#6b7280',
     bgGrad: 'linear-gradient(135deg, rgba(107, 114, 128, 0.08), rgba(156, 163, 175, 0.12))',
-    perks: '33% Win Rate • 66% Miss Risk',
+    perks: `33% Win Rate • 66% Miss Risk${charmTag}${mutTag}`,
     slots: ['miss', 'miss', 'common', 'miss', 'common', 'miss', 'common', 'miss', 'miss'],
   };
 }
@@ -161,7 +195,7 @@ export class PlinkoSystem {
    */
   calculateOdds(wager: number): PlinkoOdds {
     const W = Math.max(1, Math.floor(wager));
-    const rank = getPlinkoBoardRank(W);
+    const rank = getPlinkoBoardRank(W, this.state.plinkoUpgrades);
     const tiers = rank.slots;
 
     const total = tiers.length;
@@ -181,7 +215,7 @@ export class PlinkoSystem {
     else if (W >= 10) jackpotChance = 8;
     else if (W >= 5) jackpotChance = 4;
 
-    const mutChance = getMutationChance(W);
+    const mutChance = getMutationChance(W, this.state.plinkoUpgrades);
 
     return {
       winChancePercent: Math.round(((total - missCount) / total) * 100),
@@ -264,7 +298,7 @@ export class PlinkoSystem {
     const generated: Cat[] = [];
     const usedNames = new Set(this.state.cats.map((c) => c.name));
 
-    const mutationChance = getMutationChance(wager);
+    const mutationChance = getMutationChance(wager, this.state.plinkoUpgrades);
 
     // Track area occupancy including new additions in this drop
     const areaCounts: Record<string, number> = {};

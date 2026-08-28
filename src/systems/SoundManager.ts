@@ -34,9 +34,10 @@ export class SoundManager {
   private sfxEnabled = true;
   private musicEnabled = true;
 
-  // Music element
+  // Music elements
   private musicEl: HTMLAudioElement | null = null;
-  private musicStarted = false;
+  private plinkoMusicEl: HTMLAudioElement | null = null;
+  private inPlinkoMode = false;
 
   // SFX pools (loaded lazily on first interaction)
   private poolsReady = false;
@@ -53,6 +54,7 @@ export class SoundManager {
   private failPool: HTMLAudioElement[] = [];
   private bigwinPool: HTMLAudioElement[] = [];
   private successPool: HTMLAudioElement[] = [];
+  private openChestPool: HTMLAudioElement[] = [];
 
   // Concurrent meow & chirp limiter
   private activeMeowCount = 0;
@@ -65,11 +67,38 @@ export class SoundManager {
     this.sfxEnabled = (localStorage.getItem('cozy_sfx_enabled') ?? 'true') === 'true';
     this.musicEnabled = (localStorage.getItem('cozy_music_enabled') ?? 'true') === 'true';
 
-    // Initialise music element immediately (muted until user interaction)
-    this.musicEl = new Audio(soundUrl('music.mp3'));
-    this.musicEl.loop = true;
-    this.musicEl.volume = this.musicEnabled ? this.musicVolume : 0;
-    this.musicEl.preload = 'metadata';
+    // Initialise music element immediately
+    this.initMusic();
+  }
+
+  private initMusic(): void {
+    if (!this.musicEl) {
+      this.musicEl = new Audio(soundUrl('music.mp3'));
+      this.musicEl.loop = true;
+      this.musicEl.volume = this.musicEnabled ? this.musicVolume : 0;
+      this.musicEl.preload = 'auto';
+
+      this.musicEl.addEventListener('ended', () => {
+        if (this.musicEnabled && this.musicEl && !this.inPlinkoMode) {
+          this.musicEl.currentTime = 0;
+          this.musicEl.play().catch(() => {});
+        }
+      });
+    }
+
+    if (!this.plinkoMusicEl) {
+      this.plinkoMusicEl = new Audio(soundUrl('music2.mp3'));
+      this.plinkoMusicEl.loop = true;
+      this.plinkoMusicEl.volume = this.musicEnabled ? this.musicVolume : 0;
+      this.plinkoMusicEl.preload = 'auto';
+
+      this.plinkoMusicEl.addEventListener('ended', () => {
+        if (this.musicEnabled && this.plinkoMusicEl && this.inPlinkoMode) {
+          this.plinkoMusicEl.currentTime = 0;
+          this.plinkoMusicEl.play().catch(() => {});
+        }
+      });
+    }
   }
 
   // ── Volume API (called from UI sliders) ──────────────────────────────────
@@ -78,6 +107,10 @@ export class SoundManager {
   getMusicVolume(): number { return this.musicVolume; }
   isSfxEnabled(): boolean { return this.sfxEnabled; }
   isMusicEnabled(): boolean { return this.musicEnabled; }
+  isMusicPlaying(): boolean {
+    const activeEl = this.inPlinkoMode ? this.plinkoMusicEl : this.musicEl;
+    return !!(activeEl && !activeEl.paused && !activeEl.ended);
+  }
 
   /** Legacy compat — returns true if any sound is on */
   isSoundEnabled(): boolean { return this.sfxEnabled || this.musicEnabled; }
@@ -95,6 +128,7 @@ export class SoundManager {
     this.applyVolumeToPool(this.failPool);
     this.applyVolumeToPool(this.bigwinPool);
     this.applyVolumeToPool(this.successPool);
+    this.applyVolumeToPool(this.openChestPool);
     this.meowPools.forEach(p => this.applyVolumeToPool(p));
     this.kittenPools.forEach(p => this.applyVolumeToPool(p));
     this.chirpPools.forEach(p => this.applyVolumeToPool(p));
@@ -103,7 +137,8 @@ export class SoundManager {
   setMusicVolume(v: number): void {
     this.musicVolume = Math.max(0, Math.min(1, v));
     localStorage.setItem('cozy_music_volume', String(this.musicVolume));
-    if (this.musicEl) this.musicEl.volume = this.musicEnabled ? this.musicVolume : 0;
+    if (this.musicEl) this.musicEl.volume = this.musicEnabled && !this.inPlinkoMode ? this.musicVolume : 0;
+    if (this.plinkoMusicEl) this.plinkoMusicEl.volume = this.musicEnabled && this.inPlinkoMode ? this.musicVolume : 0;
   }
 
   setSfxEnabled(on: boolean): void {
@@ -114,8 +149,27 @@ export class SoundManager {
   setMusicEnabled(on: boolean): void {
     this.musicEnabled = on;
     localStorage.setItem('cozy_music_enabled', String(on));
-    if (this.musicEl) this.musicEl.volume = on ? this.musicVolume : 0;
-    if (on && !this.musicStarted) this.startMusic();
+    if (this.inPlinkoMode) {
+      if (this.plinkoMusicEl) {
+        if (on) {
+          this.plinkoMusicEl.volume = this.musicVolume;
+          this.plinkoMusicEl.play().catch(() => {});
+        } else {
+          this.plinkoMusicEl.pause();
+        }
+      }
+    } else {
+      if (this.musicEl) {
+        if (on) {
+          this.musicEl.volume = this.musicVolume;
+          this.startMusic();
+        } else {
+          this.musicEl.pause();
+        }
+      } else if (on) {
+        this.startMusic();
+      }
+    }
   }
 
   /** Legacy toggle — flips SFX, returns new state */
@@ -149,6 +203,7 @@ export class SoundManager {
     this.failPool = makePool(soundUrl('fail.mp3'), 4, this.sfxVolume * 0.9);
     this.bigwinPool = makePool(soundUrl('bigwin.mp3'), 4, this.sfxVolume);
     this.successPool = makePool(soundUrl('success.mp3'), 4, this.sfxVolume);
+    this.openChestPool = makePool(soundUrl('open.mp3'), 3, this.sfxVolume);
   }
 
   private playFromPool(pool: HTMLAudioElement[], volume?: number): void {
@@ -161,13 +216,77 @@ export class SoundManager {
 
   // ── Music ─────────────────────────────────────────────────────────────────
 
-  /** Called once after first user gesture */
+  /** Plays background music (with retry on user interaction) */
   startMusic(): void {
-    if (!this.musicEl || this.musicStarted) return;
-    this.musicStarted = true;
+    if (this.inPlinkoMode) return;
     if (!this.musicEnabled) return;
+    if (!this.musicEl) {
+      this.initMusic();
+    }
+    if (!this.musicEl) return;
+
     this.musicEl.volume = this.musicVolume;
     this.musicEl.play().catch(() => {});
+  }
+
+  /** Switches to high-energy Plinko BGM (music2.mp3) */
+  startPlinkoMusic(): void {
+    this.inPlinkoMode = true;
+    if (this.musicEl) {
+      this.musicEl.pause();
+    }
+    if (!this.musicEnabled) return;
+    this.initMusic();
+    if (this.plinkoMusicEl) {
+      this.plinkoMusicEl.volume = this.musicVolume;
+      this.plinkoMusicEl.currentTime = 0;
+      this.plinkoMusicEl.play().catch(() => {
+        // If music2.mp3 is not yet created or blocked, fallback
+      });
+    }
+  }
+
+  /** Stops Plinko BGM and resumes ambient sanctuary music (music.mp3) */
+  stopPlinkoMusic(): void {
+    this.inPlinkoMode = false;
+    if (this.plinkoMusicEl) {
+      this.plinkoMusicEl.pause();
+      this.plinkoMusicEl.currentTime = 0;
+    }
+    if (this.musicEnabled && this.musicEl) {
+      this.musicEl.volume = this.musicVolume;
+      this.musicEl.play().catch(() => {});
+    }
+  }
+
+  /** Plays chest opening buildup sound effect (chestreward.mp3) */
+  playChestReward(): void {
+    if (!this.sfxEnabled) return;
+    try {
+      const audio = new Audio(soundUrl('chestreward.mp3'));
+      audio.volume = this.sfxVolume;
+      const p = audio.play();
+      if (p !== undefined) {
+        p.catch(() => {});
+      }
+    } catch {}
+  }
+
+  /** Plays chest opening sound effect (open.mp3 / success.mp3) */
+  playChestOpen(): void {
+    if (!this.sfxEnabled) return;
+    try {
+      const audio = new Audio(soundUrl('chestreward.mp3'));
+      audio.volume = this.sfxVolume;
+      const p = audio.play();
+      if (p !== undefined) {
+        p.catch(() => {
+          this.playSuccess();
+        });
+      }
+    } catch {
+      this.playSuccess();
+    }
   }
 
   // ── SFX API ───────────────────────────────────────────────────────────────

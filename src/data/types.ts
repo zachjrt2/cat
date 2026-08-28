@@ -170,6 +170,7 @@ export interface GameState {
   strayArrivalDueAt?: number | null; // Timestamp for stray cat arrival safety net
   milestoneClaimedIds: string[];
   offlineStarLevel?: number; // 1..5: Passive Star rate per hour when offline (1=1/hr, 2=2/hr, 3=3/hr, 4=4/hr, 5=5/hr)
+  plinkoUpgrades?: Record<string, number>; // upgradeId -> level (1, 2, 3)
   catPerfumeCount?: number; // Number of consumable Cat Perfumes owned
   fenceLayout?: FenceLayout; // Customizable area divider fence layout
   totalPetsGiven: number;

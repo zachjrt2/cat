@@ -596,3 +596,99 @@ export const ADOPTION_BASE_COST = 20; // Love cost, scales gently with cat count
 export const CAT_PERFUME_COST = 200; // 200 Care Points
 export const CAT_PERFUME_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes per cat
 export const CAT_PERFUME_FRENZY_SECONDS = 15; // 15 seconds of breeding frenzy
+
+export interface PlinkoUpgradeDef {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  maxLevel: number;
+  costs: { stars: number; love?: number }[];
+  effectLabel: string[];
+}
+
+export const PLINKO_UPGRADES_CATALOG: PlinkoUpgradeDef[] = [
+  {
+    id: 'multiball_discount',
+    name: 'Multiball Discount',
+    icon: '',
+    description: 'Star discount on multiballs',
+    maxLevel: 3,
+    costs: [
+      { stars: 25 },
+      { stars: 60 },
+      { stars: 150 },
+    ],
+    effectLabel: [
+      '-10% Star cost',
+      '-20% Star cost',
+      '-35% Star cost',
+    ],
+  },
+  {
+    id: 'lucky_pegs',
+    name: 'Golden Pegs',
+    icon: '',
+    description: 'Center balls & award +1 Star',
+    maxLevel: 3,
+    costs: [
+      { stars: 20 },
+      { stars: 50 },
+      { stars: 120 },
+    ],
+    effectLabel: [
+      '2 Golden Pegs (+1 Star)',
+      '4 Golden Pegs (+1 Star)',
+      '6 Golden Pegs (+1 Star)',
+    ],
+  },
+  {
+    id: 'rarity_charm',
+    name: 'Rarity Charm',
+    icon: '',
+    description: 'Boosts rare cat odds',
+    maxLevel: 3,
+    costs: [
+      { stars: 30 },
+      { stars: 75 },
+      { stars: 180 },
+    ],
+    effectLabel: [
+      '+15% Rare Odds',
+      '+30% Rare Odds',
+      '+50% Rare Odds',
+    ],
+  },
+  {
+    id: 'mutation_overdrive',
+    name: 'Mutation Boost',
+    icon: '',
+    description: 'Boosts mutation chance',
+    maxLevel: 3,
+    costs: [
+      { stars: 35 },
+      { stars: 80 },
+      { stars: 200 },
+    ],
+    effectLabel: [
+      '+12% Mutation Chance',
+      '+25% Mutation Chance',
+      '+40% Mutation Chance',
+    ],
+  },
+  {
+    id: 'fever_meter',
+    name: 'Fever Meter',
+    icon: '',
+    description: 'Guarantees high tiers',
+    maxLevel: 2,
+    costs: [
+      { stars: 50 },
+      { stars: 125 },
+    ],
+    effectLabel: [
+      'Fever Mode active',
+      '+50% Charge Speed',
+    ],
+  },
+];

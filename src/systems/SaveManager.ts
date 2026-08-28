@@ -140,7 +140,7 @@ export class SaveManager {
     for (let simulated = 0; simulated < cappedMinutesAway; simulated += STEP) {
       const step = Math.min(STEP, cappedMinutesAway - simulated);
       for (const cat of state.cats) {
-        tickCatNeeds(cat, step);
+        tickCatNeeds(cat, step, state.machines);
 
         if (cat.energy <= 15 && cat.animationState !== 'sleep') {
           cat.animationState = 'sleep';

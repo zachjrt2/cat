@@ -1,5 +1,6 @@
 import type { AutomationMachineDef, AutomationNeedType, Cat, CatArea, GameState } from '../data/types';
 import { AUTOMATION_CATALOG } from '../data/constants';
+import { applyAutomationThresholds } from './NeedsSystem';
 import { LoveManager } from './LoveManager';
 import { sound } from './SoundManager';
 import { EventBus } from '../ui/EventBus';
@@ -55,6 +56,14 @@ export class AutomationSystem {
     }
 
     this.state.machines[machineId] = 1;
+
+    // Immediately raise all cats in that area to the new threshold
+    for (const cat of this.state.cats) {
+      if (cat.area === def.area) {
+        applyAutomationThresholds(cat, this.state.machines);
+      }
+    }
+
     sound.playAdoptFanfare();
     EventBus.emit('toast', { message: `✨ Installed ${def.name} in ${def.area.toUpperCase()}!` });
     return true;
@@ -82,6 +91,14 @@ export class AutomationSystem {
     }
 
     this.state.machines[machineId] = currentLevel + 1;
+
+    // Immediately raise all cats in that area to the upgraded threshold
+    for (const cat of this.state.cats) {
+      if (cat.area === def.area) {
+        applyAutomationThresholds(cat, this.state.machines);
+      }
+    }
+
     sound.playSparkle();
     EventBus.emit('toast', { message: `🚀 Upgraded ${def.name} to Tier ${currentLevel + 1}!` });
     return true;

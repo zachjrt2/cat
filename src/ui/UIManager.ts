@@ -129,12 +129,16 @@ export class UIManager {
       this.openPlinkoModal();
     });
 
-    // Start background music on first user gesture
-    const startMusicOnce = () => {
-      sound.startMusic();
-      document.removeEventListener('pointerdown', startMusicOnce);
+    // Start background music on user gestures until successfully playing
+    const tryStartMusic = () => {
+      if (sound.isMusicEnabled() && !sound.isMusicPlaying()) {
+        sound.startMusic();
+      }
     };
-    document.addEventListener('pointerdown', startMusicOnce, { once: true });
+    window.addEventListener('pointerdown', tryStartMusic);
+    window.addEventListener('keydown', tryStartMusic);
+    window.addEventListener('touchstart', tryStartMusic, { passive: true });
+    window.addEventListener('click', tryStartMusic);
 
     hud.querySelector('#shop-btn')!.addEventListener('click', () => {
       sound.playTap();
@@ -1449,7 +1453,7 @@ export class UIManager {
   private renderShopMachinesContent(): string {
     return `
       <div class="machines-intro">
-        Install automated stations for each area. Cats sense when their need is below the station's tier threshold (<b>50% at Tier 1</b>, <b>80% at Tier 2</b>, <b>100% at Tier 3</b>) and seek them out!
+        Install automated stations for each area. Automatically and passively keeps all cats in that area to their care thresholds (<b>50% at Tier 1</b>, <b>80% at Tier 2</b>, <b>100% at Tier 3</b>) regardless of interaction!
       </div>
       <div class="machines-catalog-grid">
         ${AUTOMATION_CATALOG.map((m) => {

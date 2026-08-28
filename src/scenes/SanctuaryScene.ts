@@ -12,7 +12,7 @@ import { MilestoneManager } from '../systems/MilestoneManager';
 import { GrowthSystem } from '../systems/GrowthSystem';
 import { AutomationSystem } from '../systems/AutomationSystem';
 import { BreedingSystem } from '../systems/BreedingSystem';
-import { tickCatNeeds } from '../systems/NeedsSystem';
+import { tickCatNeeds, applyAutomationThresholds } from '../systems/NeedsSystem';
 import { CatSprite, type AvailableMachineInfo } from '../entities/CatSprite';
 import { ToyBall } from '../entities/ToyBall';
 import { KibbleBag, KibblePiece } from '../entities/KibbleBag';
@@ -79,6 +79,7 @@ export class SanctuaryScene extends Phaser.Scene {
   private lastWashLoveTime = 0;
   private lastPetLoveTime = 0;
   private lastBubbleSpawnTime = 0;
+  private lastPerfumeBondSoundTime = 0;
   private relationshipTickAccum = 0;
   private animTimer = 0;
 
@@ -2505,7 +2506,11 @@ export class SanctuaryScene extends Phaser.Scene {
     this.saveManager.save(this.state);
     this.notifyUiState();
 
-    sound.playAdoptFanfare();
+    const now = this.time.now;
+    if (!this.lastPerfumeBondSoundTime || now - this.lastPerfumeBondSoundTime > 350) {
+      this.lastPerfumeBondSoundTime = now;
+      sound.playPop();
+    }
     this.createHeartBurst(x, y);
     EventBus.emit('toast', { message: `🌸 ${catA.name} & ${catB.name} bonded in a perfume frenzy! (+1 Star ⭐)` });
   }
@@ -2686,8 +2691,10 @@ export class SanctuaryScene extends Phaser.Scene {
 
     const prevArea = cat.area;
     cat.area = toArea;
+    applyAutomationThresholds(cat, this.state.machines);
     this.journal.log(cat, `Moved from ${AREA_INFO_MAP[prevArea].label} to ${AREA_INFO_MAP[toArea].label}.`);
     sound.playTap();
+    this.saveManager.save(this.state);
 
     if (prevArea === this.currentArea || toArea === this.currentArea) {
       this.spawnCatsInCurrentArea();
@@ -3510,9 +3517,9 @@ export class SanctuaryScene extends Phaser.Scene {
       }
     }
 
-    // Tick needs for ALL cats in the sanctuary
+    // Tick needs for ALL cats in the sanctuary (with passive automation floors)
     for (const cat of this.state.cats) {
-      tickCatNeeds(cat, deltaMinutes);
+      tickCatNeeds(cat, deltaMinutes, this.state.machines);
     }
 
     // Tick Life Stage Growth
