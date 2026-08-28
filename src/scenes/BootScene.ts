@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { CAT_SKINS, CAT_MARKINGS } from '../data/catAssets';
+import { EventBus } from '../ui/EventBus';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -7,19 +8,6 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Show a cozy loading text
-    const w = this.scale.width;
-    const h = this.scale.height;
-    const loadingText = this.add.text(w / 2, h / 2, '🐾 Waking up cozy cats...', {
-      fontFamily: '"Nunito", "Segoe UI", sans-serif',
-      fontSize: '18px',
-      color: '#5a4632',
-    }).setOrigin(0.5);
-
-    this.load.on('progress', (val: number) => {
-      loadingText.setText(`🐾 Waking up cozy cats... ${Math.round(val * 100)}%`);
-    });
-
     // 1. Load all 27 Cat Color Sheets (32x32 frames)
     for (const skin of CAT_SKINS) {
       this.load.spritesheet(`cat_${skin.id}`, `assets/cats/${skin.file}`, {
@@ -45,6 +33,7 @@ export class BootScene extends Phaser.Scene {
     ensureSpriteAnimations(this.anims, 'cat_grey_0');
     ensureSpriteAnimations(this.anims, 'cat_white_0');
     this.scene.start('Sanctuary');
+    EventBus.emit('game-ready');
   }
 }
 
