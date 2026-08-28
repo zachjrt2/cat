@@ -15,3 +15,9 @@ export type CatSelectedPayload = { catId: string | null };
 export type OfflineSummaryPayload = { minutesAway: number; loveEarned: number; headlines: string[] };
 export type ToastPayload = { message: string };
 export type CatsChangedPayload = { count: number };
+
+export function isAnyModalOpen(): boolean {
+  if (typeof document === 'undefined') return false;
+  return Boolean(document.querySelector('.modal-backdrop, .modal, .plinko-modal-backdrop, .glossary-modal-backdrop'));
+}
+

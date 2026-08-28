@@ -5,7 +5,7 @@ import { BreedingSystem } from '../../systems/BreedingSystem';
 import { GrowthSystem } from '../../systems/GrowthSystem';
 import { LoveManager } from '../../systems/LoveManager';
 import { sound } from '../../systems/SoundManager';
-import { EventBus } from '../../ui/EventBus';
+import { EventBus, isAnyModalOpen } from '../../ui/EventBus';
 
 export interface DragCandidate {
   cat: Cat;
@@ -49,6 +49,7 @@ export class CatDragDropManager {
   ) {}
 
   onCatPointerDown(cat: Cat, sprite: CatSprite, pointer: Phaser.Input.Pointer): void {
+    if (isAnyModalOpen()) return;
     this.dragCandidate = {
       cat,
       sprite,

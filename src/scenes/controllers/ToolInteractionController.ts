@@ -7,7 +7,7 @@ import { GrowthSystem } from '../../systems/GrowthSystem';
 import { InteractionSystem } from '../../systems/InteractionSystem';
 import { LoveManager } from '../../systems/LoveManager';
 import { sound } from '../../systems/SoundManager';
-import { EventBus } from '../../ui/EventBus';
+import { EventBus, isAnyModalOpen } from '../../ui/EventBus';
 
 export interface ToolControllerCallbacks {
   getWalkableBounds: () => Phaser.Geom.Rectangle;
@@ -181,7 +181,12 @@ export class ToolInteractionController {
   }
 
   onScenePointerMove(pointer: Phaser.Input.Pointer, animTimer: number): void {
+    if (isAnyModalOpen()) {
+      if (this.washBrushFollower) this.washBrushFollower.setVisible(false);
+      return;
+    }
     if (this.washBrushFollower) {
+      this.washBrushFollower.setVisible(true);
       this.washBrushFollower.setPosition(pointer.worldX, pointer.worldY);
       if (pointer.isDown || Math.hypot(pointer.velocity.x, pointer.velocity.y) > 15) {
         this.washBrushFollower.rotation = Math.sin(animTimer * 16) * 0.22;
@@ -233,18 +238,18 @@ export class ToolInteractionController {
     }
 
     // Wash tool active drag
-    if (this.selectedTool === 'wash') {
+    if (this.selectedTool === 'wash' && pointer.isDown) {
       const px = pointer.worldX;
       const py = pointer.worldY;
       const now = this.scene.time.now;
-      const dt = Math.max(0.016, (this.scene.game.loop.delta || 16) / 1000);
+      const dt = 0.016;
 
       for (const sprite of catSprites.values()) {
         if (sprite.isCurrentlyDragged()) continue;
         const dist = Phaser.Math.Distance.Between(px, py, sprite.x, sprite.y);
 
-        if (dist < 55) {
-          this.spawnSoapBubbles(px, py);
+        if (dist < 75) {
+          this.spawnSoapBubbles(sprite.x + Phaser.Math.Between(-12, 12), sprite.y + Phaser.Math.Between(-8, 8));
 
           const wasDirty = sprite.cat.cleanliness < 98;
           sprite.cat.cleanliness = Math.min(100, sprite.cat.cleanliness + 34 * dt);
@@ -267,6 +272,7 @@ export class ToolInteractionController {
   }
 
   interactWithCat(cat: Cat, sprite: CatSprite, tool: ToolType): void {
+    if (isAnyModalOpen()) return;
     const result = this.interactions.applyTool(cat, tool);
     if (result.loveEarned > 0) {
       this.growth.addGrowth(cat, 10);

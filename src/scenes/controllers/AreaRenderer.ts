@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { CatArea, FenceLayout, GameState } from '../../data/types';
 import { FURNITURE_CATALOG } from '../../data/constants';
 import { sound } from '../../systems/SoundManager';
-import { EventBus } from '../../ui/EventBus';
+import { EventBus, isAnyModalOpen } from '../../ui/EventBus';
 
 export const TOOLBAR_RESERVED_PX = 100;
 export const TOP_BAR_RESERVED_PX = 110;
@@ -1204,6 +1204,7 @@ export class AreaRenderer {
 
     const hitZone = this.scene.add.zone(0, 4, 76, 56).setInteractive({ cursor: 'pointer' });
     hitZone.on('pointerdown', () => {
+      if (isAnyModalOpen()) return;
       sound.playTap();
       EventBus.emit('toast', {
         message: '🏡 Drag any cat into the box to find their loving forever home! (+💗 Care Points)',
@@ -1289,6 +1290,7 @@ export class AreaRenderer {
 
     const hitZone = this.scene.add.zone(0, 0, 60, 60).setInteractive({ cursor: 'pointer' });
     hitZone.on('pointerdown', () => {
+      if (isAnyModalOpen()) return;
       sound.playTap();
       if (state.cats.length > 0) {
         EventBus.emit('cat-info', { cat: state.cats[0] });

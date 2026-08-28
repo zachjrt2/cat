@@ -4,6 +4,7 @@ import { shouldFallAsleep, shouldWakeUp } from '../systems/NeedsSystem';
 import { sound } from '../systems/SoundManager';
 import { MUTATION_CATALOG } from '../data/mutations';
 import { ensureSpriteAnimations } from '../scenes/BootScene';
+import { isAnyModalOpen } from '../ui/EventBus';
 
 const BASE_SPRITE_SCALE = 2.2;
 
@@ -340,9 +341,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
       Phaser.Geom.Circle.Contains,
     );
 
-    this.baseSprite.on('pointerover', () => this.emit('pointerover'));
+    this.baseSprite.on('pointerover', () => {
+      if (isAnyModalOpen()) return;
+      this.emit('pointerover');
+    });
     this.baseSprite.on('pointerout',  () => this.emit('pointerout'));
     this.baseSprite.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
+      if (isAnyModalOpen()) return;
       this.emit('pointerdown', ptr);
       this.emit('cat-pointerdown', ptr);
     });
