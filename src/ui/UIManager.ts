@@ -1,4 +1,4 @@
-import type { Cat, CatArea, GameState, Milestone, SanctuaryArea, TimeOfDay, ToolType, WeatherType } from '../data/types';
+import type { Cat, CatArea, FenceLayout, GameState, Milestone, SanctuaryArea, TimeOfDay, ToolType, WeatherType } from '../data/types';
 import { EventBus } from './EventBus';
 import { sound } from '../systems/SoundManager';
 import { CAT_SKINS, CAT_MARKINGS } from '../data/catAssets';
@@ -47,6 +47,7 @@ export class UIManager {
   private milestonesList: Milestone[] = [];
   private offlineStarLevel = 1;
   private catPerfumeCount = 0;
+  private currentFenceLayout: FenceLayout = 'none';
 
   constructor(container: HTMLElement) {
     this.root = container;
@@ -90,6 +91,9 @@ export class UIManager {
       </div>
 
       <div class="hud-actions">
+        <button class="icon-btn" id="fullscreen-btn" title="Toggle Fullscreen">
+          ${SVG_ICONS.fullscreen}
+        </button>
         <button class="icon-btn plinko-btn" id="plinko-btn" title="⭐ Cat Plinko (Wager Stars to Discover Cats!)">
           ${SVG_ICONS.sparkle}
         </button>
@@ -105,6 +109,42 @@ export class UIManager {
     this.loveEl = hud.querySelector('#love-value')!;
     this.tokensEl = hud.querySelector('#tokens-value')!;
     this.timeWeatherBtn = hud.querySelector('#time-weather-btn')!;
+
+    const fullscreenBtn = hud.querySelector('#fullscreen-btn') as HTMLButtonElement;
+    const updateFullscreenIcon = () => {
+      const isFull = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      fullscreenBtn.innerHTML = isFull ? SVG_ICONS.exitFullscreen : SVG_ICONS.fullscreen;
+      fullscreenBtn.title = isFull ? 'Exit Fullscreen' : 'Enter Fullscreen';
+    };
+
+    const toggleFullscreen = async () => {
+      sound.playTap();
+      try {
+        if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+          if (document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+          } else if ((document.documentElement as any).webkitRequestFullscreen) {
+            await (document.documentElement as any).webkitRequestFullscreen();
+          }
+        } else {
+          if (document.exitFullscreen) {
+            await document.exitFullscreen();
+          } else if ((document as any).webkitExitFullscreen) {
+            await (document as any).webkitExitFullscreen();
+          }
+        }
+      } catch (err) {
+        console.warn('Fullscreen request:', err);
+      }
+      updateFullscreenIcon();
+    };
+
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+    document.addEventListener('fullscreenchange', updateFullscreenIcon);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
+
+    // Show 1-tap mobile fullscreen prompt banner if on mobile touch device
+    this.showMobileFullscreenPrompt(toggleFullscreen);
 
     hud.querySelector('#plinko-btn')!.addEventListener('click', () => {
       sound.playTap();
@@ -131,6 +171,36 @@ export class UIManager {
     hud.querySelector('#save-menu-btn')!.addEventListener('click', () => this.openSaveMenu());
   }
 
+  private showMobileFullscreenPrompt(onEnterFullscreen: () => void): void {
+    const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window || (navigator as any).maxTouchPoints > 0;
+    const isAlreadyFullscreen = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
+    if (!isMobile || isAlreadyFullscreen) return;
+
+    const banner = document.createElement('div');
+    banner.className = 'mobile-fullscreen-banner';
+    banner.innerHTML = `
+      <span>📱 Tap here to play Fullscreen!</span>
+      <button class="banner-close-btn" title="Dismiss">✕</button>
+    `;
+
+    banner.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).classList.contains('banner-close-btn')) {
+        e.stopPropagation();
+        banner.remove();
+        return;
+      }
+      onEnterFullscreen();
+      banner.remove();
+    });
+
+    document.body.appendChild(banner);
+
+    // Auto dismiss after 10 seconds or on first touch elsewhere
+    setTimeout(() => {
+      if (document.body.contains(banner)) banner.remove();
+    }, 10000);
+  }
+
   private buildAreaNav(parent: HTMLElement): void {
     const nav = document.createElement('div');
     nav.className = 'area-nav';
@@ -153,6 +223,7 @@ export class UIManager {
       if (areaState?.unlocked) {
         btn.innerHTML = `<span class="area-svg-icon">${areaSvg}</span><span>${info.label}</span><span class="area-count">${count}/${areaState.capacity}</span>`;
         btn.addEventListener('click', () => {
+          if (this.currentArea === key) return;
           EventBus.emit('switch-area', { area: key });
         });
       } else {
@@ -391,6 +462,7 @@ export class UIManager {
         milestones: Milestone[];
         tokens: number;
         offlineStarLevel?: number;
+        fenceLayout?: FenceLayout;
       }) => {
         this.areasState = payload.areas;
         this.currentArea = payload.currentArea;
@@ -401,6 +473,7 @@ export class UIManager {
         this.currentTokens = payload.tokens ?? 0;
         this.offlineStarLevel = payload.offlineStarLevel ?? 1;
         this.catPerfumeCount = (payload as any).catPerfumeCount ?? 0;
+        this.currentFenceLayout = payload.fenceLayout ?? 'none';
         this.tokensEl.textContent = this.currentTokens.toString();
         this.renderAreaNav();
 
@@ -415,6 +488,11 @@ export class UIManager {
     EventBus.on('toast', ({ message }: { message: string }) => this.showToast(message));
 
     EventBus.on('cat-info', ({ cat }: { cat: Cat }) => this.openJournal(cat));
+
+    EventBus.on('prompt-rehome-modal', ({ cat }: { cat: Cat }) => {
+      const reward = calculateRehomeLove(cat);
+      this.openRehomeConfirmModal(cat, reward, () => {});
+    });
 
     EventBus.on('offline-summary', (summary: { minutesAway: number; loveEarned: number; starsEarned?: number; headlines: string[] }) => {
       this.showOfflineSummary(summary);
@@ -1059,13 +1137,12 @@ export class UIManager {
     modal.innerHTML = `
       <div class="rehome-confirm-header">
         <span class="rehome-confirm-icon">${SVG_ICONS.lovingHome}</span>
-        <h2>Rehome ${escapeHtml(cat.name)}?</h2>
+        <h2>Find ${escapeHtml(cat.name)}'s Forever Home?</h2>
       </div>
 
       <p class="rehome-confirm-body">
-        A loving forever family would cherish adopting <b>${escapeHtml(cat.name)}</b> (${cap(cat.stage)}${rarityBadge}).
+        Would you like to find a loving forever home for <b>${escapeHtml(cat.name)}</b> (${cap(cat.stage)}${rarityBadge})?
       </p>
-
 
       <div class="rehome-breakdown-card">
         <div class="rehome-breakdown-row"><span>Base Care Points:</span> <b>+${reward.base} 💗</b></div>
@@ -1080,7 +1157,7 @@ export class UIManager {
 
       <div class="rehome-dialog-actions">
         <button class="rehome-confirm-btn" id="confirm-rehome-btn">
-          Yes, Find Loving Home (+${reward.total.toLocaleString()} 💗)
+          Yes, Find Forever Home (+${reward.total.toLocaleString()} 💗)
         </button>
         <button class="rehome-cancel-btn" id="cancel-rehome-btn">
           Keep in Sanctuary
@@ -1252,6 +1329,21 @@ export class UIManager {
         btn.addEventListener('click', () => {
           EventBus.emit('buy-cat-perfume', {});
           setTimeout(() => renderTabs('upgrades', true), 200);
+        });
+      });
+
+      // Bind Fence Layout Selector buttons
+      modal.querySelectorAll('.fence-option-card').forEach((card) => {
+        card.addEventListener('click', () => {
+          const layout = (card as HTMLElement).dataset.fenceLayout as FenceLayout;
+          if (layout) {
+            this.currentFenceLayout = layout;
+            EventBus.emit('fence-layout-changed', { layout });
+            EventBus.emit('toast', {
+              message: `🏡 Sanctuary Fence Layout updated to ${layout === 'none' ? 'Open' : layout === 'horizontal' ? 'Horizontal Split' : layout === 'vertical' ? 'Vertical Split' : '4-Quadrant Cross'}!`,
+            });
+            setTimeout(() => renderTabs('upgrades', true), 100);
+          }
         });
       });
     };
@@ -1483,6 +1575,43 @@ export class UIManager {
         <div class="machine-action-wrap">
           <button class="shop-action-btn buy-perfume-btn" ${this.currentLove < 200 ? 'disabled' : ''}>
             Buy Perfume (200 💗)
+          </button>
+        </div>
+      </div>
+
+      <!-- Sanctuary Fences & Sorting Dividers -->
+      <div class="shop-card" style="margin-top:14px;border-left: 4px solid #f59e0b;display:block;">
+        <div class="shop-card-info" style="margin-bottom:10px;">
+          <div class="machine-title-row">
+            <h3>🏡 Sanctuary Sorting Fences</h3>
+            <span class="unlocked-badge" style="background:#fef3c7;color:#92400e;font-weight:bold;">Free Layout Toggle</span>
+          </div>
+          <p>Split your sanctuary into separate pens to sort kittens, breeding pairs, or favorites. Drag cats across fences to sort them anytime!</p>
+        </div>
+
+        <div class="fence-layout-selector">
+          <button type="button" class="fence-option-card ${this.currentFenceLayout === 'none' ? 'active' : ''}" data-fence-layout="none">
+            <div class="fence-diagram fence-diag-none"></div>
+            <span class="fence-card-title">None</span>
+            <span class="fence-card-sub">Open Room</span>
+          </button>
+
+          <button type="button" class="fence-option-card ${this.currentFenceLayout === 'horizontal' ? 'active' : ''}" data-fence-layout="horizontal">
+            <div class="fence-diagram fence-diag-h"></div>
+            <span class="fence-card-title">Horizontal</span>
+            <span class="fence-card-sub">Top / Bottom</span>
+          </button>
+
+          <button type="button" class="fence-option-card ${this.currentFenceLayout === 'vertical' ? 'active' : ''}" data-fence-layout="vertical">
+            <div class="fence-diagram fence-diag-v"></div>
+            <span class="fence-card-title">Vertical</span>
+            <span class="fence-card-sub">Left / Right</span>
+          </button>
+
+          <button type="button" class="fence-option-card ${this.currentFenceLayout === 'both' ? 'active' : ''}" data-fence-layout="both">
+            <div class="fence-diagram fence-diag-both"></div>
+            <span class="fence-card-title">Cross</span>
+            <span class="fence-card-sub">4 Quadrants</span>
           </button>
         </div>
       </div>

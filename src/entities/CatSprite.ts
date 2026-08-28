@@ -55,6 +55,75 @@ export interface AvailableMachineInfo {
 }
 
 export class CatSprite extends Phaser.GameObjects.Container {
+  private static graphicsPool: Phaser.GameObjects.Graphics[] = [];
+  private static textPool: Phaser.GameObjects.Text[] = [];
+  private static readonly MAX_POOL_SIZE = 40;
+
+  static getPooledGraphics(scene: Phaser.Scene): Phaser.GameObjects.Graphics | null {
+    while (CatSprite.graphicsPool.length > 0) {
+      const gfx = CatSprite.graphicsPool.pop()!;
+      if (gfx && gfx.scene) {
+        gfx.clear();
+        gfx.setVisible(true);
+        gfx.setActive(true);
+        gfx.setAlpha(1);
+        gfx.setScale(1);
+        gfx.setAngle(0);
+        gfx.setPosition(0, 0);
+        return gfx;
+      }
+    }
+    return scene.add.graphics();
+  }
+
+  static recycleGraphics(gfx: Phaser.GameObjects.Graphics | null): void {
+    if (!gfx || !gfx.scene) return;
+    gfx.clear();
+    gfx.setVisible(false);
+    gfx.setActive(false);
+    if (CatSprite.graphicsPool.length < CatSprite.MAX_POOL_SIZE) {
+      CatSprite.graphicsPool.push(gfx);
+    } else {
+      gfx.destroy();
+    }
+  }
+
+  static getPooledText(scene: Phaser.Scene, text: string, style: Phaser.Types.GameObjects.Text.TextStyle): Phaser.GameObjects.Text {
+    while (CatSprite.textPool.length > 0) {
+      const t = CatSprite.textPool.pop()!;
+      if (t && t.scene) {
+        t.setText(text);
+        t.setStyle(style);
+        t.setVisible(true);
+        t.setActive(true);
+        t.setAlpha(1);
+        t.setScale(1);
+        t.setAngle(0);
+        t.setPosition(0, 0);
+        return t;
+      }
+    }
+    return scene.add.text(0, 0, text, style);
+  }
+
+  static recycleText(t: Phaser.GameObjects.Text | null): void {
+    if (!t || !t.scene) return;
+    t.setVisible(false);
+    t.setActive(false);
+    if (CatSprite.textPool.length < CatSprite.MAX_POOL_SIZE) {
+      CatSprite.textPool.push(t);
+    } else {
+      t.destroy();
+    }
+  }
+
+  static clearPools(): void {
+    CatSprite.graphicsPool.forEach((g) => g.destroy());
+    CatSprite.graphicsPool = [];
+    CatSprite.textPool.forEach((t) => t.destroy());
+    CatSprite.textPool = [];
+  }
+
   readonly cat: Cat;
   private baseSprite: Phaser.GameObjects.Sprite;
   private markingSprite: Phaser.GameObjects.Sprite | null = null;
@@ -98,6 +167,10 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private catChaseCooldownTimer = 6.0 + Math.random() * 10.0;
   private catChaseDurationTimer = 0;
   private isPouncing = false;
+  private activePounceCounterTween: Phaser.Tweens.Tween | null = null;
+  private activePounceMoveTween: Phaser.Tweens.Tween | null = null;
+  private activePouncePrepTween: Phaser.Tweens.Tween | null = null;
+  private activePounceLandTween: Phaser.Tweens.Tween | null = null;
 
   // Mutation FX
   private mutationEmitterTimer = 0.5 + Math.random() * 1.5;
@@ -537,11 +610,10 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private spawnPerfumeParticle(): void {
     const emojis = ['🌸', '💖', '✨', '💕'];
     const em = emojis[Math.floor(Math.random() * emojis.length)];
-    const p = this.scene.add.text(
+    const p = CatSprite.getPooledText(this.scene, em, { fontSize: '14px' });
+    p.setPosition(
       this.x + Phaser.Math.Between(-14, 14),
       this.y - Phaser.Math.Between(6, 22),
-      em,
-      { fontSize: '14px' },
     ).setOrigin(0.5).setDepth(Math.min(845, this.y + 10));
 
     this.scene.tweens.add({
@@ -552,14 +624,23 @@ export class CatSprite extends Phaser.GameObjects.Container {
       scaleY: 1.3,
       duration: 650,
       ease: 'Quad.easeOut',
-      onComplete: () => p.destroy(),
+      onComplete: () => CatSprite.recycleText(p),
     });
   }
 
   showEmote(emoji: string): void {
     const scale = getScaleForStage(this.cat.stage);
-    const text = this.scene.add.text(this.x, this.y - 20, emoji, { fontSize: '24px' }).setOrigin(0.5, 1).setDepth(100);
-    this.scene.tweens.add({ targets: text, y: this.y - 64, alpha: { from: 1, to: 0 }, scale: { from: 0.8, to: 1.4 }, duration: 1200, ease: 'Cubic.easeOut', onComplete: () => text.destroy() });
+    const text = CatSprite.getPooledText(this.scene, emoji, { fontSize: '24px' });
+    text.setPosition(this.x, this.y - 20).setOrigin(0.5, 1).setDepth(100);
+    this.scene.tweens.add({
+      targets: text,
+      y: this.y - 64,
+      alpha: { from: 1, to: 0 },
+      scale: { from: 0.8, to: 1.4 },
+      duration: 1200,
+      ease: 'Cubic.easeOut',
+      onComplete: () => CatSprite.recycleText(text),
+    });
 
     if (this.baseSprite) {
       this.scene.tweens.killTweensOf(this.baseSprite);
@@ -704,7 +785,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
       this.playCurrentAnimation();
       if (target) {
         target.cat.animationState = 'sit';
-        target.wanderTimer = 2.0;
+        target.wanderTimer = 8.0 + Math.random() * 8.0;
         target.playCurrentAnimation();
       }
     }
@@ -742,6 +823,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   playSpecificAnimation(animSuffix: string): void {
+    if (!this.active || !this.scene || !this.scene.anims || !this.baseSprite) return;
     const dir = this.currentDirection;
     const baseKey = `cat_${this.cat.color}_${animSuffix}_${dir}`;
     if (this.scene.anims.exists(baseKey)) this.baseSprite.play(baseKey, true);
@@ -753,7 +835,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   executePounce(targetX: number, targetY: number, onLand?: () => void): void {
-    if (this.isDragged || this.cat.animationState === 'sleep' || this.isPouncing) return;
+    if (!this.active || !this.scene || !this.scene.tweens || this.isDragged || this.cat.animationState === 'sleep' || this.isPouncing) return;
 
     this.isPouncing = true;
     this.cat.animationState = 'pounce';
@@ -781,7 +863,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
     // ── Phase 1: Crouch / Prep (140ms, 3rd running frame) ────────────────
     this.playSpecificAnimation('pounce_prep');
 
-    this.scene.tweens.add({
+    this.activePouncePrepTween = this.scene.tweens.add({
       targets: [this.baseSprite, this.markingSprite].filter(Boolean),
       scaleX: scale * 1.15,
       scaleY: scale * 0.82,
@@ -789,7 +871,8 @@ export class CatSprite extends Phaser.GameObjects.Container {
       yoyo: true,
       ease: 'Quad.easeInOut',
       onComplete: () => {
-        if (!this.active || this.isDragged) {
+        this.activePouncePrepTween = null;
+        if (!this.active || !this.scene || this.isDragged) {
           this.isPouncing = false;
           if (this.baseSprite) this.baseSprite.setScale(scale);
           if (this.markingSprite) this.markingSprite.setScale(scale);
@@ -797,32 +880,34 @@ export class CatSprite extends Phaser.GameObjects.Container {
         }
 
         // ── Phase 2 & 3: Airborne Leap Ascent & Descent (420ms) ───────────
-        // Target landing position (clamped within room bounds)
         const landX = Phaser.Math.Clamp(targetX, this.bounds.left + 24, this.bounds.right - 24);
         const landY = Phaser.Math.Clamp(targetY, this.bounds.top + 24, this.bounds.bottom - 24);
 
-        // 4th & 5th running frames on ascent
         this.playSpecificAnimation('pounce_ascent');
 
         const leapHeight = Math.min(36, Math.max(18, dist * 0.45));
         const leapDuration = 420;
 
         // Move horizontally across ground
-        this.scene.tweens.add({
+        this.activePounceMoveTween = this.scene.tweens.add({
           targets: this,
           x: landX,
           y: landY,
           duration: leapDuration,
           ease: 'Linear',
+          onComplete: () => {
+            this.activePounceMoveTween = null;
+          },
         });
 
         // Vertical Parabolic Arc (applied to sprite offset so shadow stays on ground)
         let switchedToDescent = false;
-        this.scene.tweens.addCounter({
+        this.activePounceCounterTween = this.scene.tweens.addCounter({
           from: 0,
           to: 1,
           duration: leapDuration,
           onUpdate: (tw) => {
+            if (!this.active || !this.scene) return;
             const t = Number(tw.getValue() ?? 0);
             const arc = 4 * t * (1 - t);
             const yOffset = -arc * leapHeight;
@@ -830,18 +915,19 @@ export class CatSprite extends Phaser.GameObjects.Container {
             if (this.baseSprite) this.baseSprite.y = yOffset;
             if (this.markingSprite) this.markingSprite.y = yOffset;
 
-            // Shadow contracts and softens during leap
-            this.shadow.setScale(1 - arc * 0.45);
-            this.shadow.setAlpha(0.22 * (1 - arc * 0.55));
+            if (this.shadow) {
+              this.shadow.setScale(1 - arc * 0.45);
+              this.shadow.setAlpha(0.22 * (1 - arc * 0.55));
+            }
 
-            // Phase 3: 1st running frame on descent (past apex t > 0.52)
             if (t > 0.52 && !switchedToDescent) {
               switchedToDescent = true;
               this.playSpecificAnimation('pounce_descent');
             }
           },
           onComplete: () => {
-            if (!this.active || this.isDragged) {
+            this.activePounceCounterTween = null;
+            if (!this.active || !this.scene || this.isDragged) {
               this.isPouncing = false;
               if (this.baseSprite) { this.baseSprite.y = 0; this.baseSprite.setScale(scale); }
               if (this.markingSprite) { this.markingSprite.y = 0; this.markingSprite.setScale(scale); }
@@ -850,8 +936,10 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
             if (this.baseSprite) this.baseSprite.y = 0;
             if (this.markingSprite) this.markingSprite.y = 0;
-            this.shadow.setScale(1);
-            this.shadow.setAlpha(0.22);
+            if (this.shadow) {
+              this.shadow.setScale(1);
+              this.shadow.setAlpha(0.22);
+            }
 
             // ── Phase 4: Landing & Impact (130ms, 2nd running frame) ─────────
             this.playSpecificAnimation('pounce_land');
@@ -859,7 +947,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
             this.spawnPounceDust();
 
             // Landing squash and settle
-            this.scene.tweens.add({
+            this.activePounceLandTween = this.scene.tweens.add({
               targets: [this.baseSprite, this.markingSprite].filter(Boolean),
               scaleX: scale * 1.22,
               scaleY: scale * 0.76,
@@ -867,6 +955,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
               yoyo: true,
               ease: 'Quad.easeOut',
               onComplete: () => {
+                this.activePounceLandTween = null;
                 this.isPouncing = false;
                 if (this.baseSprite) this.baseSprite.setScale(scale);
                 if (this.markingSprite) this.markingSprite.setScale(scale);
@@ -875,8 +964,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
                 } else {
                   // Phase 5: Settle to normal animations
                   const roll = Math.random();
-                  this.cat.animationState = roll < 0.45 ? 'sit' : roll < 0.75 ? 'look' : 'walk';
-                  this.wanderTimer = 1.5 + Math.random() * 2.0;
+                  const isSitting = roll < 0.45;
+                  this.cat.animationState = isSitting ? 'sit' : roll < 0.75 ? 'look' : 'walk';
+                  this.wanderTimer = isSitting ? (6.0 + Math.random() * 8.0) : (1.5 + Math.random() * 2.0);
                   this.playCurrentAnimation();
                 }
               },
@@ -888,7 +978,8 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   private spawnPounceDust(): void {
-    const dustGfx = this.scene.add.graphics();
+    const dustGfx = CatSprite.getPooledGraphics(this.scene);
+    if (!dustGfx) return;
     dustGfx.setDepth(this.y + 1);
     const dustParticles: Array<{ x: number; y: number; vx: number; vy: number; size: number }> = [];
 
@@ -922,7 +1013,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
         }
       },
       onComplete: () => {
-        dustGfx.destroy();
+        CatSprite.recycleGraphics(dustGfx);
       },
     });
   }
@@ -930,12 +1021,50 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private playCurrentAnimation(): void {
     const animState = this.cat.animationState;
     const dir = this.currentDirection;
-    const baseKey = `cat_${this.cat.color}_${animState}_${dir}`;
-    if (this.scene.anims.exists(baseKey)) this.baseSprite.play(baseKey, true);
-    if (this.markingSprite && this.cat.marking) {
-      const markingKey = `marking_${this.cat.marking}_${animState}_${dir}`;
-      if (this.scene.anims.exists(markingKey)) this.markingSprite.play(markingKey, true);
+
+    if (animState === 'sit') {
+      const sitDownKey = `cat_${this.cat.color}_sit_down_${dir}`;
+      const sitLoopKey = `cat_${this.cat.color}_sit_${dir}`;
+      const curKey = this.baseSprite.anims.currentAnim?.key;
+
+      if (curKey !== sitLoopKey && curKey !== sitDownKey) {
+        if (this.scene.anims.exists(sitDownKey) && this.scene.anims.exists(sitLoopKey)) {
+          this.baseSprite.play(sitDownKey, true).chain(sitLoopKey);
+        } else if (this.scene.anims.exists(sitLoopKey)) {
+          this.baseSprite.play(sitLoopKey, true);
+        }
+      } else if (curKey === sitDownKey && !this.baseSprite.anims.isPlaying) {
+        if (this.scene.anims.exists(sitLoopKey)) {
+          this.baseSprite.play(sitLoopKey, true);
+        }
+      }
+
+      if (this.markingSprite && this.cat.marking) {
+        const markingDownKey = `marking_${this.cat.marking}_sit_down_${dir}`;
+        const markingLoopKey = `marking_${this.cat.marking}_sit_${dir}`;
+        const curMarkingKey = this.markingSprite.anims.currentAnim?.key;
+
+        if (curMarkingKey !== markingLoopKey && curMarkingKey !== markingDownKey) {
+          if (this.scene.anims.exists(markingDownKey) && this.scene.anims.exists(markingLoopKey)) {
+            this.markingSprite.play(markingDownKey, true).chain(markingLoopKey);
+          } else if (this.scene.anims.exists(markingLoopKey)) {
+            this.markingSprite.play(markingLoopKey, true);
+          }
+        } else if (curMarkingKey === markingDownKey && !this.markingSprite.anims.isPlaying) {
+          if (this.scene.anims.exists(markingLoopKey)) {
+            this.markingSprite.play(markingLoopKey, true);
+          }
+        }
+      }
+    } else {
+      const baseKey = `cat_${this.cat.color}_${animState}_${dir}`;
+      if (this.scene.anims.exists(baseKey)) this.baseSprite.play(baseKey, true);
+      if (this.markingSprite && this.cat.marking) {
+        const markingKey = `marking_${this.cat.marking}_${animState}_${dir}`;
+        if (this.scene.anims.exists(markingKey)) this.markingSprite.play(markingKey, true);
+      }
     }
+
     this.sleepZzz.setAlpha(animState === 'sleep' ? 1 : 0);
   }
 
@@ -1102,7 +1231,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
       if (this.perfumeFrenzyTimer <= 0) {
         this.showEmote('🥰');
         this.cat.animationState = 'sit';
-        this.wanderTimer = 3.0;
+        this.wanderTimer = 12.0 + Math.random() * 8.0;
         this.playCurrentAnimation();
       }
 
@@ -1118,7 +1247,11 @@ export class CatSprite extends Phaser.GameObjects.Container {
       return;
     }
     if (this.cat.animationState === 'sleep') {
-      if (shouldWakeUp(this.cat)) { this.cat.animationState = 'sit'; this.playCurrentAnimation(); }
+      if (shouldWakeUp(this.cat)) {
+        this.cat.animationState = 'sit';
+        this.wanderTimer = 8.0 + Math.random() * 8.0;
+        this.playCurrentAnimation();
+      }
       return;
     }
     if (this.cat.animationState === 'play') {
@@ -1132,8 +1265,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
       }
       if (this.wanderTimer <= 0) {
         const roll = Math.random();
-        this.cat.animationState = roll < 0.5 ? 'sit' : roll < 0.8 ? 'look' : 'lay';
-        this.wanderTimer = 2.0 + Math.random() * 2.5;
+        const isSitting = roll < 0.5;
+        this.cat.animationState = isSitting ? 'sit' : roll < 0.8 ? 'look' : 'lay';
+        this.wanderTimer = isSitting ? (8.0 + Math.random() * 10.0) : (2.0 + Math.random() * 2.5);
         this.playCurrentAnimation();
       }
       return;
@@ -1155,7 +1289,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
       } else {
         // Reached chase destination: clear target and settle
         this.clearChaseTarget();
-        this.wanderTimer = 1.5 + Math.random() * 2.0;
+        this.cat.animationState = 'sit';
+        this.wanderTimer = 8.0 + Math.random() * 8.0;
+        this.playCurrentAnimation();
       }
       this.setDepth(this.y);
       return;
@@ -1266,7 +1402,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
         if (reachedMachineId && this.machineUseCallback) {
           this.machineUseCallback(this.cat, reachedMachineId);
           this.cat.animationState = 'sit';
-          this.wanderTimer = 3.5;
+          this.wanderTimer = 14.0 + Math.random() * 8.0;
           this.playCurrentAnimation();
           this.showEmote('✨');
           return;
@@ -1295,8 +1431,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
             if (friend && friend.getNearbyCrowdInfo(65).count <= 1) { friend.triggerPlayState(2.5); friend.showEmote('🎉'); this.showEmote('🧶'); }
           }
         } else {
-          this.cat.animationState = roll < playChance + 0.32 ? 'sit' : roll < playChance + 0.58 ? 'look' : 'lay';
-          this.wanderTimer = 2.5 + Math.random() * 3.0;
+          const isSitting = roll < playChance + 0.32;
+          this.cat.animationState = isSitting ? 'sit' : roll < playChance + 0.58 ? 'look' : 'lay';
+          this.wanderTimer = isSitting ? (10.0 + Math.random() * 12.0) : (2.5 + Math.random() * 3.0);
         }
         this.playCurrentAnimation();
       } else {
@@ -1320,6 +1457,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
     const moved = Math.hypot(this.x - startX, this.y - startY) > 0.04;
     if (!moved && !this.isPouncing && !this.isDragged && (this.cat.animationState === 'walk' || this.cat.animationState === 'run')) {
       this.cat.animationState = 'sit';
+      this.wanderTimer = 8.0 + Math.random() * 8.0;
+      this.wanderTarget = null;
+      this.targetMachineId = null;
       this.playCurrentAnimation();
     }
 
@@ -1351,11 +1491,11 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   private findLeastCrowdedPosition(): Phaser.Math.Vector2 {
-    const padding = 28;
-    const minX = this.bounds.left + padding;
-    const maxX = this.bounds.right - padding;
-    const minY = this.bounds.top + padding;
-    const maxY = this.bounds.bottom - padding;
+    const padding = 20;
+    const minX = Math.min(this.bounds.left + padding, this.bounds.right - padding);
+    const maxX = Math.max(this.bounds.left + padding, this.bounds.right - padding);
+    const minY = Math.min(this.bounds.top + padding, this.bounds.bottom - padding);
+    const maxY = Math.max(this.bounds.top + padding, this.bounds.bottom - padding);
 
     if (!this.otherSpritesProvider) {
       return new Phaser.Math.Vector2(Phaser.Math.Between(minX, maxX), Phaser.Math.Between(minY, maxY));
@@ -1400,8 +1540,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
     }
 
     if (this.availableMachines.length > 0) {
-      // Senses available machines when under that machine's tier threshold (50% Tier 1, 80% Tier 2, 100% Tier 3)
+      // Senses available machines in this partition when under threshold
       const needyMachines = this.availableMachines.filter((m) => {
+        if (!this.bounds.contains(m.x, m.y)) return false;
         let currentVal = 100;
         if (m.needType === 'food') currentVal = this.cat.hunger;
         else if (m.needType === 'wash' || m.needType === 'brush') currentVal = this.cat.cleanliness;
@@ -1412,7 +1553,6 @@ export class CatSprite extends Phaser.GameObjects.Container {
       });
 
       if (needyMachines.length > 0) {
-        // Pick the machine with the highest deficit below threshold
         needyMachines.sort((a, b) => {
           const valA = a.needType === 'food' ? this.cat.hunger : a.needType === 'pet' ? this.cat.affection : a.needType === 'toy' ? this.cat.fun : this.cat.cleanliness;
           const valB = b.needType === 'food' ? this.cat.hunger : b.needType === 'pet' ? this.cat.affection : b.needType === 'toy' ? this.cat.fun : this.cat.cleanliness;
@@ -1434,8 +1574,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
     if (this.otherSpritesProvider && Math.random() < 0.35) {
       const bestFriendId = this.cat.journal?.bestFriendId;
       const friend = bestFriendId ? this.otherSpritesProvider().find((s) => s.cat.id === bestFriendId) : null;
-      if (friend) {
-        // Only visit friend if the friend is currently alone (forms a cute cozy pair of 2, never crowds)
+      if (friend && this.bounds.contains(friend.x, friend.y)) {
         const friendCrowd = friend.getNearbyCrowdInfo(65);
         if (friendCrowd.count === 0) {
           this.wanderTarget = new Phaser.Math.Vector2(
@@ -1483,8 +1622,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
       if (crowd.count < 2) {
         this.wanderTarget = null;
         const r = Math.random();
-        this.cat.animationState = r < 0.45 ? 'sit' : r < 0.75 ? 'look' : (this.cat.majorTrait === 'lazy' || this.cat.minorTrait === 'lazy' ? 'lay' : 'sit');
-        this.wanderTimer = 2.0 + Math.random() * 3.0;
+        const isSitting = r < 0.45;
+        this.cat.animationState = isSitting ? 'sit' : r < 0.75 ? 'look' : (this.cat.majorTrait === 'lazy' || this.cat.minorTrait === 'lazy' ? 'lay' : 'sit');
+        this.wanderTimer = isSitting ? (8.0 + Math.random() * 12.0) : (2.0 + Math.random() * 3.0);
         this.playCurrentAnimation();
         return;
       }
@@ -1495,7 +1635,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
     if (distToCand < 16) {
       this.wanderTarget = null;
       this.cat.animationState = 'sit';
-      this.wanderTimer = 2.5 + Math.random() * 2.5;
+      this.wanderTimer = 10.0 + Math.random() * 10.0;
       this.playCurrentAnimation();
       return;
     }
@@ -1511,48 +1651,49 @@ export class CatSprite extends Phaser.GameObjects.Container {
     const isSleeping = this.cat.animationState === 'sleep';
 
     if (mut === 'sparkly') {
-      this.mutationEmitterTimer = 0.09 + Math.random() * 0.08;
+      this.mutationEmitterTimer = 0.35 + Math.random() * 0.20;
       this.spawnSparkleParticle();
       if (Math.random() < 0.4) this.spawnSparkleStar();
     } else if (mut === 'flaming') {
-      this.mutationEmitterTimer = 0.08 + Math.random() * 0.07;
+      this.mutationEmitterTimer = 0.32 + Math.random() * 0.18;
       this.spawnEmberParticle();
       if (Math.random() < 0.5) this.spawnFlameTongue();
     } else if (mut === 'frosted') {
-      this.mutationEmitterTimer = 0.12 + Math.random() * 0.10;
+      this.mutationEmitterTimer = 0.40 + Math.random() * 0.22;
       this.spawnFrostParticle();
       if (Math.random() < 0.4) this.spawnSnowflakeParticle();
     } else if (mut === 'gilded') {
-      this.mutationEmitterTimer = 0.10 + Math.random() * 0.09;
+      this.mutationEmitterTimer = 0.38 + Math.random() * 0.20;
       this.spawnGildedParticle();
     } else if (mut === 'angelic') {
-      this.mutationEmitterTimer = 0.14 + Math.random() * 0.12;
+      this.mutationEmitterTimer = 0.45 + Math.random() * 0.25;
       this.spawnAngelicParticle();
     } else if (mut === 'chromatic') {
-      this.mutationEmitterTimer = 0.10 + Math.random() * 0.08;
+      this.mutationEmitterTimer = 0.38 + Math.random() * 0.20;
       this.spawnChromaticParticle();
     } else if (mut === 'stinky' && !isSleeping) {
-      this.mutationEmitterTimer = 0.75 + Math.random() * 0.65;
+      this.mutationEmitterTimer = 1.2 + Math.random() * 0.8;
       this.spawnStinkyPuff();
     } else if (mut === 'inverted') {
-      this.mutationEmitterTimer = 0.12 + Math.random() * 0.10;
+      this.mutationEmitterTimer = 0.42 + Math.random() * 0.22;
       this.spawnInvertedParticle();
     } else if (mut === 'giant') {
-      this.mutationEmitterTimer = 0.28 + Math.random() * 0.22;
+      this.mutationEmitterTimer = 0.60 + Math.random() * 0.35;
       this.spawnGiantTremorParticle();
     } else if (mut === 'tiny') {
-      this.mutationEmitterTimer = 0.12 + Math.random() * 0.10;
+      this.mutationEmitterTimer = 0.42 + Math.random() * 0.22;
       this.spawnTinyFairyParticle();
     } else if (this.cat.isRare || this.cat.rareType || this.cat.color === 'ghost_0' || this.cat.color === 'radioactive_0' || this.cat.color === 'gold_0') {
-      this.mutationEmitterTimer = 0.18 + Math.random() * 0.14;
+      this.mutationEmitterTimer = 0.55 + Math.random() * 0.25;
       this.spawnRareAuraParticle();
     } else {
-      this.mutationEmitterTimer = 1.0;
+      this.mutationEmitterTimer = 1.5;
     }
   }
 
   private spawnStinkyPuff(): void {
-    const puff = this.scene.add.graphics();
+    const puff = CatSprite.getPooledGraphics(this.scene);
+    if (!puff) return;
     puff.setDepth(this.y + 4);
     const px = this.x + Phaser.Math.Between(-10, 10);
     const py = this.y + 6;
@@ -1574,12 +1715,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 1200,
       ease: 'Sine.easeOut',
-      onComplete: () => puff.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(puff),
     });
   }
 
   private spawnSparkleParticle(): void {
-    const glint = this.scene.add.graphics();
+    const glint = CatSprite.getPooledGraphics(this.scene);
+    if (!glint) return;
     glint.setDepth(this.y + 3);
     const px = this.x + Phaser.Math.Between(-18, 18);
     const py = this.y + Phaser.Math.Between(-18, 14);
@@ -1600,12 +1742,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 650,
       ease: 'Quad.easeOut',
-      onComplete: () => glint.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(glint),
     });
   }
 
   private spawnSparkleStar(): void {
-    const star = this.scene.add.graphics();
+    const star = CatSprite.getPooledGraphics(this.scene);
+    if (!star) return;
     star.setDepth(this.y + 4);
     const px = this.x + Phaser.Math.Between(-16, 16);
     const py = this.y + Phaser.Math.Between(-16, 10);
@@ -1613,7 +1756,6 @@ export class CatSprite extends Phaser.GameObjects.Container {
     const size = Phaser.Math.Between(4, 7);
 
     star.fillStyle(color, 0.95);
-    // 4-point star diamond
     star.beginPath();
     star.moveTo(0, -size);
     star.lineTo(size * 0.3, -size * 0.3);
@@ -1636,12 +1778,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 750,
       ease: 'Sine.easeOut',
-      onComplete: () => star.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(star),
     });
   }
 
   private spawnEmberParticle(): void {
-    const ember = this.scene.add.graphics();
+    const ember = CatSprite.getPooledGraphics(this.scene);
+    if (!ember) return;
     ember.setDepth(this.y + 3);
     const px = this.x + Phaser.Math.Between(-14, 14);
     const py = this.y + Phaser.Math.Between(0, 14);
@@ -1658,12 +1801,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 550,
       ease: 'Cubic.easeOut',
-      onComplete: () => ember.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(ember),
     });
   }
 
   private spawnFlameTongue(): void {
-    const flame = this.scene.add.graphics();
+    const flame = CatSprite.getPooledGraphics(this.scene);
+    if (!flame) return;
     flame.setDepth(this.y + 3);
     const px = this.x + Phaser.Math.Between(-12, 12);
     const py = this.y + Phaser.Math.Between(-4, 12);
@@ -1680,12 +1824,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 480,
       ease: 'Quad.easeOut',
-      onComplete: () => flame.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(flame),
     });
   }
 
   private spawnFrostParticle(): void {
-    const frost = this.scene.add.graphics();
+    const frost = CatSprite.getPooledGraphics(this.scene);
+    if (!frost) return;
     frost.setDepth(this.y + 3);
     const px = this.x + Phaser.Math.Between(-18, 18);
     const py = this.y - Phaser.Math.Between(10, 24);
@@ -1702,18 +1847,18 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 850,
       ease: 'Sine.easeIn',
-      onComplete: () => frost.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(frost),
     });
   }
 
   private spawnSnowflakeParticle(): void {
-    const snow = this.scene.add.graphics();
+    const snow = CatSprite.getPooledGraphics(this.scene);
+    if (!snow) return;
     snow.setDepth(this.y + 3);
     const px = this.x + Phaser.Math.Between(-16, 16);
     const py = this.y - Phaser.Math.Between(12, 22);
     snow.lineStyle(1.5, 0xffffff, 0.9);
     const r = 3.5;
-    // 6-point snowflake cross
     snow.lineBetween(0, -r, 0, r);
     snow.lineBetween(-r * 0.866, -r * 0.5, r * 0.866, r * 0.5);
     snow.lineBetween(-r * 0.866, r * 0.5, r * 0.866, -r * 0.5);
@@ -1726,25 +1871,24 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 1100,
       ease: 'Sine.easeInOut',
-      onComplete: () => snow.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(snow),
     });
   }
 
   private spawnGildedParticle(): void {
-    const gold = this.scene.add.graphics();
+    const gold = CatSprite.getPooledGraphics(this.scene);
+    if (!gold) return;
     gold.setDepth(this.y + 3);
     const px = this.x + Phaser.Math.Between(-16, 16);
     const py = this.y + Phaser.Math.Between(-16, 12);
     const color = Phaser.Math.RND.pick([0xfde047, 0xfacc15, 0xeab308, 0xffffff]);
 
     if (Math.random() < 0.5) {
-      // Coin glint
       gold.fillStyle(color, 0.95);
       gold.fillCircle(0, 0, Phaser.Math.FloatBetween(2.2, 4.0));
       gold.lineStyle(1, 0xca8a04, 0.8);
       gold.strokeCircle(0, 0, Phaser.Math.FloatBetween(2.2, 4.0));
     } else {
-      // 4-point gold glint star
       const s = 4.5;
       gold.fillStyle(color, 0.95);
       gold.beginPath();
@@ -1770,12 +1914,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 650,
       ease: 'Quad.easeOut',
-      onComplete: () => gold.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(gold),
     });
   }
 
   private spawnAngelicParticle(): void {
-    const angel = this.scene.add.graphics();
+    const angel = CatSprite.getPooledGraphics(this.scene);
+    if (!angel) return;
     angel.setDepth(this.y + 4);
     const px = this.x + Phaser.Math.Between(-14, 14);
     const py = this.y - Phaser.Math.Between(8, 26);
@@ -1794,12 +1939,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 900,
       ease: 'Sine.easeOut',
-      onComplete: () => angel.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(angel),
     });
   }
 
   private spawnChromaticParticle(): void {
-    const spark = this.scene.add.graphics();
+    const spark = CatSprite.getPooledGraphics(this.scene);
+    if (!spark) return;
     spark.setDepth(this.y + 3);
     const px = this.x + Phaser.Math.Between(-16, 16);
     const py = this.y + Phaser.Math.Between(-16, 12);
@@ -1819,12 +1965,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 700,
       ease: 'Sine.easeOut',
-      onComplete: () => spark.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(spark),
     });
   }
 
   private spawnInvertedParticle(): void {
-    const mote = this.scene.add.graphics();
+    const mote = CatSprite.getPooledGraphics(this.scene);
+    if (!mote) return;
     mote.setDepth(this.y + 3);
     const px = this.x + Phaser.Math.Between(-16, 16);
     const py = this.y + Phaser.Math.Between(-16, 12);
@@ -1843,13 +1990,14 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 550,
       ease: 'Quad.easeInOut',
-      onComplete: () => mote.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(mote),
     });
   }
 
   private spawnGiantTremorParticle(): void {
     if (this.cat.animationState !== 'walk' && this.cat.animationState !== 'run') return;
-    const dust = this.scene.add.graphics();
+    const dust = CatSprite.getPooledGraphics(this.scene);
+    if (!dust) return;
     dust.setDepth(this.y - 1);
     const px = this.x + (Math.random() - 0.5) * 16;
     const py = this.y + 14;
@@ -1865,12 +2013,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 480,
       ease: 'Quad.easeOut',
-      onComplete: () => dust.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(dust),
     });
   }
 
   private spawnTinyFairyParticle(): void {
-    const fairy = this.scene.add.graphics();
+    const fairy = CatSprite.getPooledGraphics(this.scene);
+    if (!fairy) return;
     fairy.setDepth(this.y + 3);
     const px = this.x + Phaser.Math.Between(-12, 12);
     const py = this.y + Phaser.Math.Between(-12, 8);
@@ -1889,12 +2038,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 500,
       ease: 'Quad.easeOut',
-      onComplete: () => fairy.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(fairy),
     });
   }
 
   private spawnRareAuraParticle(): void {
-    const p = this.scene.add.graphics();
+    const p = CatSprite.getPooledGraphics(this.scene);
+    if (!p) return;
     p.setDepth(this.y + 3);
     const px = this.x + Phaser.Math.Between(-16, 16);
     const py = this.y + Phaser.Math.Between(-16, 12);
@@ -1923,7 +2073,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 700,
       ease: 'Sine.easeOut',
-      onComplete: () => p.destroy(),
+      onComplete: () => CatSprite.recycleGraphics(p),
     });
   }
 
@@ -1962,6 +2112,52 @@ export class CatSprite extends Phaser.GameObjects.Container {
     this.updateDirtGfx();
     this.updateNeedIndicator();
     this.playCurrentAnimation();
+  }
+
+  destroy(fromScene?: boolean): void {
+    if (this.activePounceCounterTween) {
+      this.activePounceCounterTween.stop();
+      this.activePounceCounterTween.remove();
+      this.activePounceCounterTween = null;
+    }
+    if (this.activePounceMoveTween) {
+      this.activePounceMoveTween.stop();
+      this.activePounceMoveTween.remove();
+      this.activePounceMoveTween = null;
+    }
+    if (this.activePouncePrepTween) {
+      this.activePouncePrepTween.stop();
+      this.activePouncePrepTween.remove();
+      this.activePouncePrepTween = null;
+    }
+    if (this.activePounceLandTween) {
+      this.activePounceLandTween.stop();
+      this.activePounceLandTween.remove();
+      this.activePounceLandTween = null;
+    }
+    if (this.needPulseTween) {
+      this.needPulseTween.stop();
+      this.needPulseTween.remove();
+      this.needPulseTween = null;
+    }
+    if (this.scene && this.scene.tweens) {
+      this.scene.tweens.killTweensOf(this);
+      if (this.baseSprite) this.scene.tweens.killTweensOf(this.baseSprite);
+      if (this.markingSprite) this.scene.tweens.killTweensOf(this.markingSprite);
+      if (this.haloGfx) this.scene.tweens.killTweensOf(this.haloGfx);
+      if (this.needIndicatorContainer) this.scene.tweens.killTweensOf(this.needIndicatorContainer);
+      if (this.hoverGfx) this.scene.tweens.killTweensOf(this.hoverGfx);
+      if (this.shadow) this.scene.tweens.killTweensOf(this.shadow);
+    }
+    this.isPouncing = false;
+    this.chasingCatSprite = null;
+    this.fleeingFromCatSprite = null;
+    this.wanderTarget = null;
+    this.chaseTarget = null;
+    this.targetMachineId = null;
+    this.otherSpritesProvider = null;
+    this.machineUseCallback = null;
+    super.destroy(fromScene);
   }
 }
 

@@ -299,26 +299,25 @@ export class PlinkoSystem {
 
     for (let i = 0; i < count; i++) {
       let cat: Cat;
-      const stageRoll = Math.random();
-      const stage = stageRoll < 0.35 ? 'kitten' : stageRoll < 0.7 ? 'teen' : 'adult';
+      const stage = 'kitten';
 
       switch (tier) {
         case 'legendary': {
           const legendRares: RareCatType[] = ['golden', 'ghost', 'royal'];
           const rareType = legendRares[Math.floor(Math.random() * legendRares.length)];
-          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats, mutationChance });
+          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats, mutationChance, stage });
           break;
         }
         case 'epic': {
           const epicRares: RareCatType[] = ['gameboy', 'radioactive', 'hairless'];
           const rareType = epicRares[Math.floor(Math.random() * epicRares.length)];
-          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats, mutationChance });
+          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats, mutationChance, stage });
           break;
         }
         case 'rare': {
           const rareTypes: RareCatType[] = ['seal_point', 'hairless', 'gameboy'];
           const rareType = rareTypes[Math.floor(Math.random() * rareTypes.length)];
-          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats, mutationChance });
+          cat = generateRareCat(rareType, { day: this.state.day, usedNames, existingCats: allKnownCats, mutationChance, stage });
           break;
         }
         case 'uncommon': {

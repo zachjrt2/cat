@@ -14,11 +14,19 @@ const config: Phaser.Types.Core.GameConfig = {
     width: window.innerWidth,
     height: window.innerHeight,
   },
+  fps: {
+    min: 30,
+    target: 60,
+    smoothStep: true,
+  },
   scene: [BootScene, SanctuaryScene],
   render: {
     pixelArt: true,
     roundPixels: true,
     antialias: false,
+    transparent: false,
+    powerPreference: 'high-performance',
+    batchSize: 4096,
   },
 };
 

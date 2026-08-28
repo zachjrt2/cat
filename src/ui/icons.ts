@@ -144,8 +144,14 @@ export const SVG_ICONS = {
     <path d="M8 21l-1 2m5-2l-1 2m5-2l-1 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
   </svg>`,
 
-  snow: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-    <path d="M12 2v20m-10-10h20m-14.14-7.07l14.14 14.14m-14.14 0L19.07 4.93" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  snow: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
+    <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
+    <g id="SVGRepo_iconCarrier">
+      <path d="M12 2V18M12 22V18M12 18L15 21M12 18L9 21M15 3L12 6L9 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+      <path d="M3.33978 7.00042L6.80389 9.00042M6.80389 9.00042L17.1962 15.0004M6.80389 9.00042L5.70581 4.90234M6.80389 9.00042L2.70581 10.0985M17.1962 15.0004L20.6603 17.0004M17.1962 15.0004L21.2943 13.9023M17.1962 15.0004L18.2943 19.0985" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+      <path d="M20.66 7.00042L17.1959 9.00042M17.1959 9.00042L6.80364 15.0004M17.1959 9.00042L18.294 4.90234M17.1959 9.00042L21.294 10.0985M6.80364 15.0004L3.33954 17.0004M6.80364 15.0004L2.70557 13.9023M6.80364 15.0004L5.70557 19.0985" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+    </g>
   </svg>`,
 
   // Area Icons
@@ -202,5 +208,15 @@ export const SVG_ICONS = {
   // Gear / Automation Machine Icon
   machine: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
     <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.484.484 0 0 0 14 2h-4c-.25 0-.46.18-.49.42l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.63 8.49c-.14.22-.08.5.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h4c.25 0 .46-.18.49-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.14-.22.07-.5-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+  </svg>`,
+
+  // Fullscreen Expand
+  fullscreen: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+  </svg>`,
+
+  // Fullscreen Exit / Compress
+  exitFullscreen: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-14v3h3v2h-5V5h2z"/>
   </svg>`,
 };

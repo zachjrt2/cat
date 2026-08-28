@@ -23,6 +23,7 @@ export function createNewGameState(): GameState {
     milestoneClaimedIds: [],
     offlineStarLevel: 1,
     catPerfumeCount: 0,
+    fenceLayout: 'none',
     totalPetsGiven: 0,
     totalLoveEarned: 0,
     totalRehomedCats: 0,
@@ -55,6 +56,9 @@ export class SaveManager {
       if (typeof state.adoptionTokens !== 'number') state.adoptionTokens = 0;
       if (typeof state.offlineStarLevel !== 'number' || state.offlineStarLevel < 1) state.offlineStarLevel = 1;
       if (typeof state.catPerfumeCount !== 'number' || state.catPerfumeCount < 0) state.catPerfumeCount = 0;
+      if (!state.fenceLayout || !['none', 'horizontal', 'vertical', 'both'].includes(state.fenceLayout)) {
+        state.fenceLayout = 'none';
+      }
       if (!Array.isArray(state.furniture)) state.furniture = [];
       if (!state.machines || typeof state.machines !== 'object') state.machines = {};
       if (!state.breedingCooldowns || typeof state.breedingCooldowns !== 'object') state.breedingCooldowns = {};

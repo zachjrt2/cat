@@ -61,15 +61,36 @@ export function ensureSpriteAnimations(anims: Phaser.Animations.AnimationManager
       const rowTop = 1 + dir * 2;
       const rowBot = 2 + dir * 2;
 
-      // 1. Sit idle / sit down
-      const sitTopFrames = [0, 1, 2, 3].map((c) => rowTop * colsPerRow + c);
-      const sitBotFrames = [0, 1].map((c) => rowBot * colsPerRow + c);
+      // 1a. Sit down transition (frames 0 -> 1 -> 2 -> 3)
+      const sitDownAnimKey = `${textureKey}_sit_down_${dir}`;
+      if (!anims.exists(sitDownAnimKey)) {
+        anims.create({
+          key: sitDownAnimKey,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [
+              rowTop * colsPerRow + 0,
+              rowTop * colsPerRow + 1,
+              rowTop * colsPerRow + 2,
+              rowTop * colsPerRow + 3,
+            ],
+          }),
+          frameRate: 6,
+          repeat: 0,
+        });
+      }
+
+      // 1b. Sit idle loop (alternates between the last two frames in the sequence)
       const sitAnimKey = `${textureKey}_sit_${dir}`;
       if (!anims.exists(sitAnimKey)) {
         anims.create({
           key: sitAnimKey,
-          frames: anims.generateFrameNumbers(textureKey, { frames: [...sitBotFrames, sitTopFrames[3]] }),
-          frameRate: 2.5,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [
+              rowBot * colsPerRow + 0,
+              rowBot * colsPerRow + 1,
+            ],
+          }),
+          frameRate: 2,
           repeat: -1,
         });
       }

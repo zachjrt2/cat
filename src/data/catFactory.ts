@@ -390,7 +390,14 @@ export function breedCats(
 
 export function generateRareCat(
   rareType: import('./types').RareCatType,
-  options: { day: number; usedNames?: Set<string>; existingCats?: Cat[]; mutation?: CatMutationType | null; mutationChance?: number },
+  options: {
+    day: number;
+    usedNames?: Set<string>;
+    existingCats?: Cat[];
+    mutation?: CatMutationType | null;
+    mutationChance?: number;
+    stage?: 'kitten' | 'teen' | 'adult';
+  },
 ): Cat {
   const { day, usedNames, existingCats } = options;
   const rareSkin = CAT_SKINS.find((s) => s.rareType === rareType) || CAT_SKINS.find((s) => s.isRare)!;
@@ -411,14 +418,16 @@ export function generateRareCat(
   }
 
   const [majorTrait, minorTrait] = pickTwoDistinctTraits();
-  const rawBaseName = rareSkin.label.split(' ')[0];
-  const name = generateUniqueCatName(usedNames, existingCats, Math.random, rawBaseName);
+  // Pull from normal unique name pool instead of forcing the breed label
+  const name = generateUniqueCatName(usedNames, existingCats, Math.random);
 
   const mutChance = options.mutationChance ?? 0.15;
   let mutation: CatMutationType | null = options.mutation ?? null;
   if (!mutation && Math.random() < mutChance) {
     mutation = rollRandomMutation();
   }
+
+  const stage = options.stage ?? 'adult';
 
   return {
     id: makeId(),
@@ -429,8 +438,8 @@ export function generateRareCat(
     isRare: true,
     rareType,
     mutation,
-    stage: 'adult',
-    growthProgress: 100,
+    stage,
+    growthProgress: stage === 'adult' ? 100 : 0,
     majorTrait,
     minorTrait,
     hunger: 95,
@@ -444,7 +453,7 @@ export function generateRareCat(
     favoriteFood: randomFrom(FAVORITE_FOODS),
     area: 'yard',
     adoptedAt: Date.now(),
-    ageDays: 0,
+    ageDays: stage === 'adult' ? 2 : 0,
     journal: emptyJournal(day),
     animationState: 'sit',
   };

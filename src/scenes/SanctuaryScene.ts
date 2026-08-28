@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { Cat, CatArea, GameState, RareCatType, ToolType } from '../data/types';
+import type { Cat, CatArea, FenceLayout, GameState, RareCatType, ToolType } from '../data/types';
 import { generateCat, generateRareCat } from '../data/catFactory';
 import { createNewGameState, SaveManager } from '../systems/SaveManager';
 import { LoveManager } from '../systems/LoveManager';
@@ -38,6 +38,21 @@ interface AmbientEffectItem {
   color: number;
 }
 
+interface WeatherParticle {
+  x: number;
+  y: number;
+  speedY: number;
+  speedX: number;
+  size: number;
+  alpha: number;
+  flakeType?: 'tiny' | 'fluff' | 'crystal' | 'sparkle';
+  swayPhase?: number;
+  swaySpeed?: number;
+  swayAmp?: number;
+  angle?: number;
+  spinSpeed?: number;
+}
+
 export class SanctuaryScene extends Phaser.Scene {
   private state!: GameState;
   private saveManager = new SaveManager();
@@ -70,8 +85,15 @@ export class SanctuaryScene extends Phaser.Scene {
   private weatherParticlesGfx!: Phaser.GameObjects.Graphics;
   private ambientLightingGfx!: Phaser.GameObjects.Graphics;
   private dynamicEffectsGfx!: Phaser.GameObjects.Graphics;
-  private particles: Array<{ x: number; y: number; speedY: number; speedX: number; size: number; alpha: number }> = [];
+  private particles: WeatherParticle[] = [];
   private ambientEffects: AmbientEffectItem[] = [];
+  private lastAmbientColor = -1;
+  private lastAmbientAlpha = -1;
+  private lastAmbientTimeOfDay = '';
+  private lastAmbientBoundsKey = '';
+  private weatherParticlesActive = false;
+  private dynamicEffectsActive = false;
+  private kibbleSearchTimer = 0;
 
   // Cat Drag & Drop Interaction System
   private dragCandidate: {
@@ -85,6 +107,9 @@ export class SanctuaryScene extends Phaser.Scene {
   } | null = null;
   private isDraggingCat = false;
   private currentDropTarget: CatSprite | null = null;
+  private adoptionBoxContainer: Phaser.GameObjects.Container | null = null;
+  private adoptionBoxGlow: Phaser.GameObjects.Graphics | null = null;
+  private isHoveringAdoptionBox = false;
 
   constructor() {
     super('Sanctuary');
@@ -133,6 +158,9 @@ export class SanctuaryScene extends Phaser.Scene {
     this.scale.on('resize', () => {
       this.drawCurrentArea();
     });
+
+    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => CatSprite.clearPools());
+    this.events.on(Phaser.Scenes.Events.DESTROY, () => CatSprite.clearPools());
 
     this.notifyUiState();
   }
@@ -201,17 +229,64 @@ export class SanctuaryScene extends Phaser.Scene {
   private resetWeatherParticles(): void {
     const bounds = this.areaBounds();
     this.particles = [];
-    const count = this.weather.weather === 'rain' ? 65 : this.weather.weather === 'snow' ? 50 : 0;
+    const isRain = this.weather.weather === 'rain';
+    const isSnow = this.weather.weather === 'snow';
+    const count = isRain ? 65 : isSnow ? 55 : 0;
 
     for (let i = 0; i < count; i++) {
-      this.particles.push({
-        x: Phaser.Math.Between(bounds.left, bounds.right),
-        y: Phaser.Math.Between(bounds.top, bounds.bottom),
-        speedY: this.weather.weather === 'rain' ? Phaser.Math.Between(220, 320) : Phaser.Math.Between(35, 75),
-        speedX: this.weather.weather === 'rain' ? -25 : Phaser.Math.Between(-15, 15),
-        size: this.weather.weather === 'rain' ? Phaser.Math.Between(8, 16) : Phaser.Math.Between(2, 4.5),
-        alpha: Phaser.Math.FloatBetween(0.35, 0.85),
-      });
+      if (isRain) {
+        this.particles.push({
+          x: Phaser.Math.Between(bounds.left, bounds.right),
+          y: Phaser.Math.Between(bounds.top, bounds.bottom),
+          speedY: Phaser.Math.Between(220, 320),
+          speedX: -25,
+          size: Phaser.Math.Between(8, 16),
+          alpha: Phaser.Math.FloatBetween(0.35, 0.85),
+        });
+      } else if (isSnow) {
+        const roll = Math.random();
+        let flakeType: 'tiny' | 'fluff' | 'crystal' | 'sparkle' = 'tiny';
+        let size = Phaser.Math.FloatBetween(1.2, 2.2);
+        let speedY = Phaser.Math.Between(24, 45);
+        let alpha = Phaser.Math.FloatBetween(0.4, 0.75);
+
+        if (roll < 0.35) {
+          flakeType = 'tiny';
+          size = Phaser.Math.FloatBetween(1.2, 2.0);
+          speedY = Phaser.Math.Between(22, 38);
+          alpha = Phaser.Math.FloatBetween(0.45, 0.75);
+        } else if (roll < 0.70) {
+          flakeType = 'fluff';
+          size = Phaser.Math.FloatBetween(2.6, 4.2);
+          speedY = Phaser.Math.Between(34, 58);
+          alpha = Phaser.Math.FloatBetween(0.7, 0.95);
+        } else if (roll < 0.90) {
+          flakeType = 'crystal';
+          size = Phaser.Math.FloatBetween(4.0, 6.0);
+          speedY = Phaser.Math.Between(28, 48);
+          alpha = Phaser.Math.FloatBetween(0.75, 0.95);
+        } else {
+          flakeType = 'sparkle';
+          size = Phaser.Math.FloatBetween(3.5, 5.5);
+          speedY = Phaser.Math.Between(26, 44);
+          alpha = Phaser.Math.FloatBetween(0.8, 1.0);
+        }
+
+        this.particles.push({
+          x: Phaser.Math.Between(bounds.left - 10, bounds.right + 10),
+          y: Phaser.Math.Between(bounds.top - 10, bounds.bottom + 10),
+          speedY,
+          speedX: Phaser.Math.FloatBetween(-6, 6),
+          size,
+          alpha,
+          flakeType,
+          swayPhase: Math.random() * Math.PI * 2,
+          swaySpeed: Phaser.Math.FloatBetween(1.2, 2.4),
+          swayAmp: Phaser.Math.FloatBetween(12, 28),
+          angle: Math.random() * Math.PI * 2,
+          spinSpeed: Phaser.Math.FloatBetween(-1.2, 1.2),
+        });
+      }
     }
   }
 
@@ -232,6 +307,7 @@ export class SanctuaryScene extends Phaser.Scene {
       tokens: this.milestones.tokens,
       offlineStarLevel: this.state.offlineStarLevel || 1,
       catPerfumeCount: this.state.catPerfumeCount || 0,
+      fenceLayout: this.state.fenceLayout || 'none',
     });
   }
 
@@ -324,20 +400,378 @@ export class SanctuaryScene extends Phaser.Scene {
     // Render Placed Furniture in this area
     this.drawPlacedFurniture();
 
-    const bounds = this.walkableBounds();
+    // Render Adoption Box in the top-left
+    this.createAdoptionBox();
+
+    // Render Themed Fence Dividers (if active)
+    this.drawFenceDividers();
+
+    const partitions = this.getPartitionBounds(this.state.fenceLayout || 'none');
+    const areaWalkable = this.walkableBounds();
+
     if (this.kibbleBag) {
-      this.kibbleBag.setBounds(bounds);
+      this.kibbleBag.setBounds(areaWalkable);
     }
     if (this.toyBall) {
-      this.toyBall.setBounds(bounds);
+      this.toyBall.setBounds(areaWalkable);
     }
     for (const sprite of this.catSprites.values()) {
-      sprite.setAreaBounds(bounds);
+      if (sprite.cat.area !== this.currentArea) continue;
+      const assignedPart = this.findPartitionForPoint(sprite.x, sprite.y, partitions);
+      sprite.setAreaBounds(assignedPart);
       sprite.setSelectedTool(this.selectedTool);
-      // Ensure any cat is safely clamped within the floor area
-      sprite.x = Phaser.Math.Clamp(sprite.x, bounds.left + 24, bounds.right - 24);
-      sprite.y = Phaser.Math.Clamp(sprite.y, bounds.top + 24, bounds.bottom - 24);
+      // Ensure any cat is safely clamped within its assigned partition
+      sprite.x = Phaser.Math.Clamp(sprite.x, assignedPart.left + 20, assignedPart.right - 20);
+      sprite.y = Phaser.Math.Clamp(sprite.y, assignedPart.top + 20, assignedPart.bottom - 20);
     }
+  }
+
+  /**
+   * Computes the bounding rectangles for the sub-areas based on the active fence layout.
+   */
+  private getPartitionBounds(layout: FenceLayout = this.state.fenceLayout || 'none', area: CatArea = this.currentArea): Phaser.Geom.Rectangle[] {
+    const fullBounds = this.walkableBounds(area);
+    const fencePad = 10; // Gap for the fence divider
+
+    switch (layout) {
+      case 'horizontal': {
+        const midY = fullBounds.centerY;
+        const topH = Math.max(70, midY - fullBounds.top - fencePad);
+        const botH = Math.max(70, fullBounds.bottom - midY - fencePad);
+        return [
+          new Phaser.Geom.Rectangle(fullBounds.x, fullBounds.top, fullBounds.width, topH),
+          new Phaser.Geom.Rectangle(fullBounds.x, midY + fencePad, fullBounds.width, botH),
+        ];
+      }
+      case 'vertical': {
+        const midX = fullBounds.centerX;
+        const leftW = Math.max(70, midX - fullBounds.left - fencePad);
+        const rightW = Math.max(70, fullBounds.right - midX - fencePad);
+        return [
+          new Phaser.Geom.Rectangle(fullBounds.left, fullBounds.top, leftW, fullBounds.height),
+          new Phaser.Geom.Rectangle(midX + fencePad, fullBounds.top, rightW, fullBounds.height),
+        ];
+      }
+      case 'both': {
+        const midX = fullBounds.centerX;
+        const midY = fullBounds.centerY;
+        const leftW = Math.max(70, midX - fullBounds.left - fencePad);
+        const rightW = Math.max(70, fullBounds.right - midX - fencePad);
+        const topH = Math.max(70, midY - fullBounds.top - fencePad);
+        const botH = Math.max(70, fullBounds.bottom - midY - fencePad);
+        return [
+          // Top-Left
+          new Phaser.Geom.Rectangle(fullBounds.left, fullBounds.top, leftW, topH),
+          // Top-Right
+          new Phaser.Geom.Rectangle(midX + fencePad, fullBounds.top, rightW, topH),
+          // Bottom-Left
+          new Phaser.Geom.Rectangle(fullBounds.left, midY + fencePad, leftW, botH),
+          // Bottom-Right
+          new Phaser.Geom.Rectangle(midX + fencePad, midY + fencePad, rightW, botH),
+        ];
+      }
+      case 'none':
+      default:
+        return [fullBounds];
+    }
+  }
+
+  /**
+   * Finds the partition rectangle containing the given coordinate (x, y), or nearest if outside.
+   */
+  private findPartitionForPoint(x: number, y: number, partitions: Phaser.Geom.Rectangle[]): Phaser.Geom.Rectangle {
+    if (partitions.length === 1) return partitions[0];
+
+    for (const p of partitions) {
+      if (p.contains(x, y)) return p;
+    }
+
+    let nearest = partitions[0];
+    let minDist = 999999;
+    for (const p of partitions) {
+      const dist = Math.hypot(x - p.centerX, y - p.centerY);
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = p;
+      }
+    }
+    return nearest;
+  }
+
+  private drawFenceDividers(): void {
+    const layout = this.state.fenceLayout || 'none';
+    if (layout === 'none') return;
+
+    const bounds = this.walkableBounds();
+    const g = this.add.graphics();
+    g.name = 'area-bg';
+    g.setDepth(680);
+
+    const area = this.currentArea;
+    const midX = bounds.centerX;
+    const midY = bounds.centerY;
+
+    if (area === 'yard') {
+      // 🌿 Yard: Classic White Cedar Picket Fence with Ivy
+      const postColor = 0xffffff;
+      const shadowColor = 0xc8c3b5;
+      const railColor = 0xede7d9;
+      const leafColor = 0x40916c;
+
+      if (layout === 'horizontal' || layout === 'both') {
+        g.fillStyle(railColor, 0.95);
+        g.fillRect(bounds.left, midY - 6, bounds.width, 3);
+        g.fillRect(bounds.left, midY + 4, bounds.width, 3);
+
+        const count = Math.floor(bounds.width / 20);
+        for (let i = 0; i < count; i++) {
+          const px = bounds.left + 10 + i * 20;
+          g.fillStyle(postColor, 1);
+          g.fillRect(px - 3, midY - 14, 6, 26);
+          g.fillTriangle(px - 3, midY - 14, px + 3, midY - 14, px, midY - 18);
+          g.fillStyle(shadowColor, 0.8);
+          g.fillRect(px + 1, midY - 14, 2, 26);
+
+          if (i % 3 === 0) {
+            g.fillStyle(leafColor, 0.85);
+            g.fillEllipse(px - 2, midY - 2, 7, 5);
+          }
+        }
+      }
+
+      if (layout === 'vertical' || layout === 'both') {
+        g.fillStyle(railColor, 0.95);
+        g.fillRect(midX - 6, bounds.top, 3, bounds.height);
+        g.fillRect(midX + 4, bounds.top, 3, bounds.height);
+
+        const count = Math.floor(bounds.height / 20);
+        for (let i = 0; i < count; i++) {
+          const py = bounds.top + 10 + i * 20;
+          g.fillStyle(postColor, 1);
+          g.fillRect(midX - 14, py - 3, 26, 6);
+          g.fillStyle(shadowColor, 0.8);
+          g.fillRect(midX - 14, py + 1, 26, 2);
+
+          if (i % 3 === 1) {
+            g.fillStyle(leafColor, 0.85);
+            g.fillEllipse(midX - 4, py - 2, 6, 6);
+          }
+        }
+      }
+    } else if (area === 'shelter') {
+      // 🪵 Shelter: Cozy Dark Timber & Stone Wall
+      const timberColor = 0x5c4033;
+      const stoneColor = 0x8b7355;
+      const highlight = 0xa08264;
+
+      if (layout === 'horizontal' || layout === 'both') {
+        g.fillStyle(stoneColor, 0.95);
+        g.fillRoundedRect(bounds.left, midY - 7, bounds.width, 14, 4);
+        g.fillStyle(timberColor, 1);
+        g.fillRect(bounds.left, midY - 4, bounds.width, 8);
+        g.fillStyle(highlight, 0.7);
+        g.fillRect(bounds.left, midY - 7, bounds.width, 2);
+      }
+
+      if (layout === 'vertical' || layout === 'both') {
+        g.fillStyle(stoneColor, 0.95);
+        g.fillRoundedRect(midX - 7, bounds.top, 14, bounds.height, 4);
+        g.fillStyle(timberColor, 1);
+        g.fillRect(midX - 4, bounds.top, 8, bounds.height);
+        g.fillStyle(highlight, 0.7);
+        g.fillRect(midX - 7, bounds.top, 2, bounds.height);
+      }
+    } else if (area === 'sunroom') {
+      // 🪴 Sunroom: Bamboo Lattice & Glass Partition
+      const bambooColor = 0xd4a373;
+      const glassColor = 0xa8dadc;
+
+      if (layout === 'horizontal' || layout === 'both') {
+        g.fillStyle(glassColor, 0.4);
+        g.fillRect(bounds.left, midY - 6, bounds.width, 12);
+        g.lineStyle(1.8, bambooColor, 0.9);
+        g.lineBetween(bounds.left, midY - 6, bounds.right, midY - 6);
+        g.lineBetween(bounds.left, midY + 6, bounds.right, midY + 6);
+        const count = Math.floor(bounds.width / 24);
+        for (let i = 0; i < count; i++) {
+          const px = bounds.left + 12 + i * 24;
+          g.lineBetween(px, midY - 8, px, midY + 8);
+        }
+      }
+
+      if (layout === 'vertical' || layout === 'both') {
+        g.fillStyle(glassColor, 0.4);
+        g.fillRect(midX - 6, bounds.top, 12, bounds.height);
+        g.lineStyle(1.8, bambooColor, 0.9);
+        g.lineBetween(midX - 6, bounds.top, midX - 6, bounds.bottom);
+        g.lineBetween(midX + 6, bounds.top, midX + 6, bounds.bottom);
+        const count = Math.floor(bounds.height / 24);
+        for (let i = 0; i < count; i++) {
+          const py = bounds.top + 12 + i * 24;
+          g.lineBetween(midX - 8, py, midX + 8, py);
+        }
+      }
+    } else {
+      // ☕ Cafe: Polished Brass Railing & Velvet Rope Divider
+      const brassColor = 0xd4af37;
+      const ropeColor = 0x9b2226;
+
+      if (layout === 'horizontal' || layout === 'both') {
+        g.lineStyle(3, ropeColor, 0.95);
+        g.lineBetween(bounds.left, midY, bounds.right, midY);
+        const count = Math.floor(bounds.width / 36);
+        for (let i = 0; i < count; i++) {
+          const px = bounds.left + 18 + i * 36;
+          g.fillStyle(brassColor, 1);
+          g.fillCircle(px, midY, 4.5);
+          g.fillRect(px - 2, midY, 4, 12);
+        }
+      }
+
+      if (layout === 'vertical' || layout === 'both') {
+        g.lineStyle(3, ropeColor, 0.95);
+        g.lineBetween(midX, bounds.top, midX, bounds.bottom);
+        const count = Math.floor(bounds.height / 36);
+        for (let i = 0; i < count; i++) {
+          const py = bounds.top + 18 + i * 36;
+          g.fillStyle(brassColor, 1);
+          g.fillCircle(midX, py, 4.5);
+          g.fillRect(midX, py - 2, 12, 4);
+        }
+      }
+    }
+  }
+
+  private createAdoptionBox(): void {
+    if (this.adoptionBoxContainer) {
+      this.adoptionBoxContainer.destroy();
+      this.adoptionBoxContainer = null;
+    }
+
+    const bounds = this.areaBounds();
+    const boxX = bounds.left + 54;
+    const boxY = bounds.top + 44;
+
+    const container = this.add.container(boxX, boxY);
+    container.name = 'area-bg';
+    container.setDepth(750);
+
+    // 1. Glow layer (for drag highlight)
+    const glow = this.add.graphics();
+    glow.fillStyle(0xf59e0b, 0.35);
+    glow.fillRoundedRect(-46, -34, 92, 68, 18);
+    glow.lineStyle(2.5, 0xfbbf24, 0.9);
+    glow.strokeRoundedRect(-46, -34, 92, 68, 18);
+    glow.setAlpha(0);
+    container.add(glow);
+    this.adoptionBoxGlow = glow;
+
+    // 2. Ground Shadow (resting flat on floor)
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.18);
+    shadow.fillEllipse(0, 18, 76, 24);
+    container.add(shadow);
+
+    // 3. Cardboard Box Graphics (Open to the sky)
+    const boxGfx = this.add.graphics();
+
+    // Top Flap (folded back)
+    boxGfx.fillStyle(0xae8252, 1);
+    boxGfx.beginPath();
+    boxGfx.moveTo(-24, -14);
+    boxGfx.lineTo(-28, -25);
+    boxGfx.lineTo(28, -25);
+    boxGfx.lineTo(24, -14);
+    boxGfx.closePath();
+    boxGfx.fillPath();
+    boxGfx.lineStyle(1.2, 0x7c5832, 0.8);
+    boxGfx.strokePath();
+
+    // Left Flap (folded left)
+    boxGfx.fillStyle(0xcda171, 1);
+    boxGfx.beginPath();
+    boxGfx.moveTo(-24, -14);
+    boxGfx.lineTo(-37, -10);
+    boxGfx.lineTo(-37, 10);
+    boxGfx.lineTo(-24, 8);
+    boxGfx.closePath();
+    boxGfx.fillPath();
+    boxGfx.lineStyle(1.2, 0x7c5832, 0.8);
+    boxGfx.strokePath();
+
+    // Right Flap (folded right)
+    boxGfx.fillStyle(0xb88b5b, 1);
+    boxGfx.beginPath();
+    boxGfx.moveTo(24, -14);
+    boxGfx.lineTo(37, -10);
+    boxGfx.lineTo(37, 10);
+    boxGfx.lineTo(24, 8);
+    boxGfx.closePath();
+    boxGfx.fillPath();
+    boxGfx.lineStyle(1.2, 0x7c5832, 0.8);
+    boxGfx.strokePath();
+
+    // Box Interior Recess (dark warm cavity)
+    boxGfx.fillStyle(0x825c36, 1);
+    boxGfx.fillRoundedRect(-24, -14, 48, 24, 3);
+    boxGfx.lineStyle(1.5, 0x5a3e20, 0.9);
+    boxGfx.strokeRoundedRect(-24, -14, 48, 24, 3);
+
+    // Cozy Blanket inside box for cat
+    boxGfx.fillStyle(0xfde68a, 0.95);
+    boxGfx.fillRoundedRect(-18, -10, 36, 18, 5);
+    boxGfx.fillStyle(0xfef08a, 1);
+    boxGfx.fillRoundedRect(-16, -8, 32, 14, 4);
+
+    // Front Wall of Box
+    boxGfx.fillStyle(0xdcb080, 1);
+    boxGfx.beginPath();
+    boxGfx.moveTo(-25, 6);
+    boxGfx.lineTo(25, 6);
+    boxGfx.lineTo(25, 22);
+    boxGfx.lineTo(-25, 22);
+    boxGfx.closePath();
+    boxGfx.fillPath();
+    boxGfx.lineStyle(1.5, 0x8c6239, 0.9);
+    boxGfx.strokePath();
+
+    // Bottom Flap (folded down in front)
+    boxGfx.fillStyle(0xe5bc8c, 1);
+    boxGfx.beginPath();
+    boxGfx.moveTo(-24, 22);
+    boxGfx.lineTo(24, 22);
+    boxGfx.lineTo(18, 30);
+    boxGfx.lineTo(-18, 30);
+    boxGfx.closePath();
+    boxGfx.fillPath();
+    boxGfx.lineStyle(1.2, 0x8c6239, 0.85);
+    boxGfx.strokePath();
+
+    // Tape / Corrugated seam detail
+    boxGfx.lineStyle(1, 0xb48455, 0.6);
+    boxGfx.lineBetween(-20, 14, 20, 14);
+
+    container.add(boxGfx);
+
+    // Interactive click / tap
+    const hitZone = this.add.zone(0, 4, 76, 56).setInteractive({ cursor: 'pointer' });
+    hitZone.on('pointerdown', () => {
+      sound.playTap();
+      EventBus.emit('toast', {
+        message: '🏡 Drag any cat into the box to find their loving forever home! (+💗 Care Points)',
+      });
+      this.tweens.add({
+        targets: container,
+        scaleX: 1.14,
+        scaleY: 1.14,
+        duration: 100,
+        yoyo: true,
+        ease: 'Quad.easeOut',
+      });
+    });
+    container.add(hitZone);
+
+    this.adoptionBoxContainer = container;
   }
 
   // =========================================================================
@@ -1311,9 +1745,25 @@ export class SanctuaryScene extends Phaser.Scene {
   }
 
   private spawnCatSprite(cat: Cat, bounds: Phaser.Geom.Rectangle): void {
-    const x = Phaser.Math.Between(bounds.left + 30, bounds.right - 30);
-    const y = Phaser.Math.Between(bounds.top + 30, bounds.bottom - 30);
-    const sprite = new CatSprite(this, cat, x, y, bounds);
+    const partitions = this.getPartitionBounds(this.state.fenceLayout || 'none');
+    let x = 0;
+    let y = 0;
+
+    if (typeof cat.xPercent === 'number' && typeof cat.yPercent === 'number') {
+      x = bounds.left + cat.xPercent * bounds.width;
+      y = bounds.top + cat.yPercent * bounds.height;
+    } else {
+      x = Phaser.Math.Between(bounds.left + 30, bounds.right - 30);
+      y = Phaser.Math.Between(bounds.top + 30, bounds.bottom - 30);
+      cat.xPercent = (x - bounds.left) / bounds.width;
+      cat.yPercent = (y - bounds.top) / bounds.height;
+    }
+
+    const catSubBounds = this.findPartitionForPoint(x, y, partitions);
+    x = Phaser.Math.Clamp(x, catSubBounds.left + 20, catSubBounds.right - 20);
+    y = Phaser.Math.Clamp(y, catSubBounds.top + 20, catSubBounds.bottom - 20);
+
+    const sprite = new CatSprite(this, cat, x, y, catSubBounds);
     sprite.setSelectedTool(this.selectedTool);
 
     // Provide machines in current area to cat AI
@@ -1912,6 +2362,14 @@ export class SanctuaryScene extends Phaser.Scene {
         sprite.setPerfumeTargetHighlight(false);
       }
     });
+
+    EventBus.on('fence-layout-changed', ({ layout }: { layout: FenceLayout }) => {
+      this.state.fenceLayout = layout;
+      this.saveManager.save(this.state);
+      this.drawCurrentArea();
+      this.notifyUiState();
+      sound.playPop();
+    });
   }
 
   getAdultCatsInArea(area: CatArea): CatSprite[] {
@@ -1949,8 +2407,19 @@ export class SanctuaryScene extends Phaser.Scene {
 
   private switchArea(area: CatArea): void {
     if (!this.state.areas[area]?.unlocked) return;
+    if (this.currentArea === area) return;
     this.currentArea = area;
     sound.playTap();
+
+    // Clear any active drag & drop interaction state
+    if (this.dragCandidate) {
+      this.dragCandidate.sprite.setDragged(false);
+      this.dragCandidate = null;
+    }
+    this.isDraggingCat = false;
+    this.currentDropTarget = null;
+    this.isHoveringAdoptionBox = false;
+    this.clearAllBreedingPartners();
 
     if (this.toyBall) {
       const bounds = this.walkableBounds(area);
@@ -2255,6 +2724,38 @@ export class SanctuaryScene extends Phaser.Scene {
       const newY = Phaser.Math.Clamp(pointer.worldY - this.dragCandidate.offsetY, bounds.top + 20, bounds.bottom - 20);
       this.dragCandidate.sprite.setPosition(newX, newY);
 
+      // Check hover over Adoption Box
+      if (this.adoptionBoxContainer) {
+        const boxX = this.adoptionBoxContainer.x;
+        const boxY = this.adoptionBoxContainer.y;
+        const distToBox = Phaser.Math.Distance.Between(newX, newY, boxX, boxY);
+        const isNearBox = distToBox < 58;
+
+        if (isNearBox !== this.isHoveringAdoptionBox) {
+          this.isHoveringAdoptionBox = isNearBox;
+          if (isNearBox) {
+            this.adoptionBoxGlow?.setAlpha(1);
+            this.tweens.add({
+              targets: this.adoptionBoxContainer,
+              scaleX: 1.16,
+              scaleY: 1.16,
+              duration: 140,
+              ease: 'Back.easeOut',
+            });
+            this.dragCandidate.sprite.showEmote('🏡');
+          } else {
+            this.adoptionBoxGlow?.setAlpha(0);
+            this.tweens.add({
+              targets: this.adoptionBoxContainer,
+              scaleX: 1.0,
+              scaleY: 1.0,
+              duration: 140,
+              ease: 'Quad.easeOut',
+            });
+          }
+        }
+      }
+
       let closestTarget: CatSprite | null = null;
       let closestDist = 65;
 
@@ -2351,9 +2852,43 @@ export class SanctuaryScene extends Phaser.Scene {
     if (this.isDraggingCat) {
       sprite.setDragged(false);
 
-      if (target) {
+      if (this.isHoveringAdoptionBox) {
+        this.isHoveringAdoptionBox = false;
+        this.adoptionBoxGlow?.setAlpha(0);
+        if (this.adoptionBoxContainer) {
+          this.tweens.add({
+            targets: this.adoptionBoxContainer,
+            scaleX: 1.0,
+            scaleY: 1.0,
+            duration: 140,
+            ease: 'Quad.easeOut',
+          });
+        }
+        sound.playPop();
+        EventBus.emit('prompt-rehome-modal', { cat });
+      } else if (target) {
         this.handleCatPairDrop(sprite, target);
+        const areaWalkable = this.walkableBounds();
+        const partitions = this.getPartitionBounds(this.state.fenceLayout || 'none');
+        const part = this.findPartitionForPoint(sprite.x, sprite.y, partitions);
+        sprite.setAreaBounds(part);
+        cat.xPercent = Phaser.Math.Clamp((sprite.x - areaWalkable.left) / areaWalkable.width, 0, 1);
+        cat.yPercent = Phaser.Math.Clamp((sprite.y - areaWalkable.top) / areaWalkable.height, 0, 1);
+        this.saveManager.save(this.state);
       } else {
+        const areaWalkable = this.walkableBounds();
+        const partitions = this.getPartitionBounds(this.state.fenceLayout || 'none');
+        const targetPartition = this.findPartitionForPoint(sprite.x, sprite.y, partitions);
+        sprite.setAreaBounds(targetPartition);
+
+        // Clamp to partition
+        sprite.x = Phaser.Math.Clamp(sprite.x, targetPartition.left + 20, targetPartition.right - 20);
+        sprite.y = Phaser.Math.Clamp(sprite.y, targetPartition.top + 20, targetPartition.bottom - 20);
+
+        cat.xPercent = Phaser.Math.Clamp((sprite.x - areaWalkable.left) / areaWalkable.width, 0, 1);
+        cat.yPercent = Phaser.Math.Clamp((sprite.y - areaWalkable.top) / areaWalkable.height, 0, 1);
+        this.saveManager.save(this.state);
+
         this.tweens.add({
           targets: sprite,
           y: sprite.y + 4,
@@ -2733,6 +3268,10 @@ export class SanctuaryScene extends Phaser.Scene {
         piece.updateNoHungry(deltaSeconds, anyCatHungry);
       }
 
+      this.kibbleSearchTimer += deltaSeconds;
+      const shouldRecalculateTarget = this.kibbleSearchTimer >= 0.12;
+      if (shouldRecalculateTarget) this.kibbleSearchTimer = 0;
+
       for (const sprite of this.catSprites.values()) {
         if (sprite.cat.animationState === 'sleep' || sprite.isCurrentlyDragged() || sprite.isPerfumeFrenzied()) {
           continue;
@@ -2743,6 +3282,7 @@ export class SanctuaryScene extends Phaser.Scene {
           let nearestPiece: KibblePiece | null = null;
           let minDist = 999999;
 
+          // Only scan all pieces on throttled ticks or when close to eating
           for (const piece of this.kibblePieces) {
             if (!piece.active || piece.isEaten) continue;
             const dist = Phaser.Math.Distance.Between(sprite.x, sprite.y, piece.x, piece.y);
@@ -2799,7 +3339,7 @@ export class SanctuaryScene extends Phaser.Scene {
                   this.notifyUiState();
                 }
               });
-            } else if (minDist < 650 && !sprite.isPounceActive()) {
+            } else if (shouldRecalculateTarget && minDist < 650 && !sprite.isPounceActive()) {
               sprite.setChaseTarget(nearestPiece.x, nearestPiece.y);
             }
           }
@@ -2946,82 +3486,171 @@ export class SanctuaryScene extends Phaser.Scene {
       });
     }
 
-    // Render & Update Atmosphere
-    for (let i = this.ambientEffects.length - 1; i >= 0; i--) {
-      const e = this.ambientEffects[i];
-      e.life += deltaSeconds;
-      if (e.life >= e.maxLife) {
-        this.ambientEffects.splice(i, 1);
-        continue;
+    // Render & Update Atmosphere (only clear and draw when particles exist)
+    if (this.ambientEffects.length > 0) {
+      this.dynamicEffectsActive = true;
+      this.dynamicEffectsGfx.clear();
+      for (let i = this.ambientEffects.length - 1; i >= 0; i--) {
+        const e = this.ambientEffects[i];
+        e.life += deltaSeconds;
+        if (e.life >= e.maxLife) {
+          this.ambientEffects.splice(i, 1);
+          continue;
+        }
+
+        e.x += e.speedX * deltaSeconds;
+        e.y += e.speedY * deltaSeconds;
+        const progress = e.life / e.maxLife;
+        const currentAlpha = e.alpha * (1 - progress);
+
+        this.dynamicEffectsGfx.fillStyle(e.color, currentAlpha);
+        this.dynamicEffectsGfx.fillCircle(e.x, e.y, e.size * (e.type === 'steam' ? 1 + progress : 1));
       }
-
-      e.x += e.speedX * deltaSeconds;
-      e.y += e.speedY * deltaSeconds;
-      const progress = e.life / e.maxLife;
-      const currentAlpha = e.alpha * (1 - progress);
-
-      this.dynamicEffectsGfx.fillStyle(e.color, currentAlpha);
-      this.dynamicEffectsGfx.fillCircle(e.x, e.y, e.size * (e.type === 'steam' ? 1 + progress : 1));
+    } else if (this.dynamicEffectsActive) {
+      this.dynamicEffectsActive = false;
+      this.dynamicEffectsGfx.clear();
     }
   }
 
   private updateWeatherAndLighting(deltaSeconds: number): void {
     const bounds = this.areaBounds();
+    const boundsKey = `${bounds.x},${bounds.y},${bounds.width},${bounds.height}`;
 
-    // 1. Ambient Lighting (Day / Morning / Sunset / Night)
-    this.ambientLightingGfx.clear();
+    // 1. Ambient Lighting (Day / Morning / Sunset / Night) - Cached, redraw only when changed
     const ambient = this.weather.getAmbientOverlayColor();
-    if (ambient.alpha > 0) {
-      this.ambientLightingGfx.fillStyle(ambient.color, ambient.alpha);
-      this.ambientLightingGfx.fillRoundedRect(bounds.x, bounds.y, bounds.width, bounds.height, 22);
+    const timeOfDay = this.weather.timeOfDay;
+    const needsAmbientRedraw =
+      ambient.color !== this.lastAmbientColor ||
+      Math.abs(ambient.alpha - this.lastAmbientAlpha) > 0.005 ||
+      timeOfDay !== this.lastAmbientTimeOfDay ||
+      boundsKey !== this.lastAmbientBoundsKey;
 
-      // If Night, draw little twinkling moon stars
-      if (this.weather.timeOfDay === 'night') {
-        this.ambientLightingGfx.fillStyle(0xffffff, 0.7);
-        const starSeeds = [
-          [bounds.left + 40, bounds.top + 30],
-          [bounds.left + 120, bounds.top + 50],
-          [bounds.right - 80, bounds.top + 35],
-          [bounds.right - 140, bounds.top + 65],
-          [bounds.left + bounds.width * 0.5, bounds.top + 25],
-        ];
-        starSeeds.forEach(([sx, sy]) => {
-          this.ambientLightingGfx.fillCircle(sx, sy, 1.5);
-        });
+    if (needsAmbientRedraw) {
+      this.lastAmbientColor = ambient.color;
+      this.lastAmbientAlpha = ambient.alpha;
+      this.lastAmbientTimeOfDay = timeOfDay;
+      this.lastAmbientBoundsKey = boundsKey;
+
+      this.ambientLightingGfx.clear();
+      if (ambient.alpha > 0) {
+        this.ambientLightingGfx.fillStyle(ambient.color, ambient.alpha);
+        this.ambientLightingGfx.fillRoundedRect(bounds.x, bounds.y, bounds.width, bounds.height, 22);
+
+        // If Night, draw little twinkling moon stars
+        if (timeOfDay === 'night') {
+          this.ambientLightingGfx.fillStyle(0xffffff, 0.7);
+          const starSeeds = [
+            [bounds.left + 40, bounds.top + 30],
+            [bounds.left + 120, bounds.top + 50],
+            [bounds.right - 80, bounds.top + 35],
+            [bounds.right - 140, bounds.top + 65],
+            [bounds.left + bounds.width * 0.5, bounds.top + 25],
+          ];
+          starSeeds.forEach(([sx, sy]) => {
+            this.ambientLightingGfx.fillCircle(sx, sy, 1.5);
+          });
+        }
       }
     }
 
     // 2. Weather Particles (Rain / Snow only outdoors or in Sunroom glass)
-    this.weatherParticlesGfx.clear();
-    if (this.weather.weather === 'rain') {
-      this.weatherParticlesGfx.lineStyle(1.5, 0x90caf9, 0.7);
-      for (const p of this.particles) {
-        p.y += p.speedY * deltaSeconds;
-        p.x += p.speedX * deltaSeconds;
+    const isRaining = this.weather.weather === 'rain';
+    const isSnowing = this.weather.weather === 'snow';
 
-        if (p.y > bounds.bottom - 10) {
-          p.y = bounds.top + 10;
-          p.x = Phaser.Math.Between(bounds.left + 10, bounds.right - 10);
+    if (isRaining || isSnowing) {
+      this.weatherParticlesActive = true;
+      this.weatherParticlesGfx.clear();
+      if (isRaining) {
+        this.weatherParticlesGfx.lineStyle(1.5, 0x90caf9, 0.7);
+        for (const p of this.particles) {
+          p.y += p.speedY * deltaSeconds;
+          p.x += p.speedX * deltaSeconds;
+
+          if (p.y > bounds.bottom - 10) {
+            p.y = bounds.top + 10;
+            p.x = Phaser.Math.Between(bounds.left + 10, bounds.right - 10);
+          }
+
+          this.weatherParticlesGfx.beginPath();
+          this.weatherParticlesGfx.moveTo(p.x, p.y);
+          this.weatherParticlesGfx.lineTo(p.x - 3, p.y + p.size);
+          this.weatherParticlesGfx.strokePath();
         }
+      } else if (isSnowing) {
+        for (const p of this.particles) {
+          p.y += p.speedY * deltaSeconds;
+          const sway = Math.sin(this.animTimer * (p.swaySpeed || 1.5) + (p.swayPhase || 0)) * (p.swayAmp || 16);
+          p.x += (p.speedX + sway) * deltaSeconds;
+          if (p.spinSpeed) {
+            p.angle = (p.angle || 0) + p.spinSpeed * deltaSeconds;
+          }
 
-        this.weatherParticlesGfx.beginPath();
-        this.weatherParticlesGfx.moveTo(p.x, p.y);
-        this.weatherParticlesGfx.lineTo(p.x - 3, p.y + p.size);
-        this.weatherParticlesGfx.strokePath();
-      }
-    } else if (this.weather.weather === 'snow') {
-      this.weatherParticlesGfx.fillStyle(0xffffff, 0.85);
-      for (const p of this.particles) {
-        p.y += p.speedY * deltaSeconds;
-        p.x += Math.sin(p.y * 0.05) * 12 * deltaSeconds + p.speedX * deltaSeconds;
+          if (p.y > bounds.bottom + 12) {
+            p.y = bounds.top - 8;
+            p.x = Phaser.Math.Between(bounds.left - 10, bounds.right + 10);
+          }
+          if (p.x < bounds.left - 20) p.x = bounds.right + 10;
+          else if (p.x > bounds.right + 20) p.x = bounds.left - 10;
 
-        if (p.y > bounds.bottom - 10) {
-          p.y = bounds.top + 10;
-          p.x = Phaser.Math.Between(bounds.left + 10, bounds.right - 10);
+          const flakeType = p.flakeType || 'fluff';
+          if (flakeType === 'crystal') {
+            // Delicate 6-armed geometric snowflake crystal
+            const r = p.size;
+            const ang = p.angle || 0;
+            this.weatherParticlesGfx.lineStyle(1.2, 0xffffff, p.alpha);
+            for (let arm = 0; arm < 3; arm++) {
+              const theta = ang + (arm * Math.PI) / 3;
+              const cos = Math.cos(theta);
+              const sin = Math.sin(theta);
+              this.weatherParticlesGfx.lineBetween(
+                p.x - cos * r,
+                p.y - sin * r,
+                p.x + cos * r,
+                p.y + sin * r
+              );
+              // Small side barb
+              const barbR = r * 0.45;
+              const barbTheta = theta + Math.PI / 6;
+              const bCos = Math.cos(barbTheta) * barbR;
+              const bSin = Math.sin(barbTheta) * barbR;
+              this.weatherParticlesGfx.lineBetween(
+                p.x + cos * r * 0.5 - bCos,
+                p.y + sin * r * 0.5 - bSin,
+                p.x + cos * r * 0.5 + bCos,
+                p.y + sin * r * 0.5 + bSin
+              );
+            }
+          } else if (flakeType === 'sparkle') {
+            // 4-point diamond diamond star
+            const s = p.size;
+            this.weatherParticlesGfx.fillStyle(0xf0fdf4, p.alpha);
+            this.weatherParticlesGfx.beginPath();
+            this.weatherParticlesGfx.moveTo(p.x, p.y - s);
+            this.weatherParticlesGfx.lineTo(p.x + s * 0.28, p.y - s * 0.28);
+            this.weatherParticlesGfx.lineTo(p.x + s, p.y);
+            this.weatherParticlesGfx.lineTo(p.x + s * 0.28, p.y + s * 0.28);
+            this.weatherParticlesGfx.lineTo(p.x, p.y + s);
+            this.weatherParticlesGfx.lineTo(p.x - s * 0.28, p.y + s * 0.28);
+            this.weatherParticlesGfx.lineTo(p.x - s, p.y);
+            this.weatherParticlesGfx.lineTo(p.x - s * 0.28, p.y - s * 0.28);
+            this.weatherParticlesGfx.closePath();
+            this.weatherParticlesGfx.fillPath();
+          } else if (flakeType === 'fluff') {
+            // Soft fluffy snowflake with subtle soft glow edge
+            this.weatherParticlesGfx.fillStyle(0xe0f2fe, p.alpha * 0.35);
+            this.weatherParticlesGfx.fillCircle(p.x, p.y, p.size * 1.35);
+            this.weatherParticlesGfx.fillStyle(0xffffff, p.alpha);
+            this.weatherParticlesGfx.fillCircle(p.x, p.y, p.size * 0.85);
+          } else {
+            // Tiny background crystalline dust
+            this.weatherParticlesGfx.fillStyle(0xffffff, p.alpha);
+            this.weatherParticlesGfx.fillCircle(p.x, p.y, p.size);
+          }
         }
-
-        this.weatherParticlesGfx.fillCircle(p.x, p.y, p.size);
       }
+    } else if (this.weatherParticlesActive) {
+      this.weatherParticlesActive = false;
+      this.weatherParticlesGfx.clear();
     }
   }
 

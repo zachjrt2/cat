@@ -103,11 +103,17 @@ export interface Cat {
   ageDays: number;
   lastPerfumeTimestamp?: number; // timestamp of last perfume frenzy activation (10m cooldown)
 
+  // Persistent coordinates (normalized 0.0..1.0 within area bounds)
+  xPercent?: number;
+  yPercent?: number;
+
   journal: CatJournal;
 
   // runtime/behavioral state, not persisted needs-wise but saved for continuity
   animationState: CatAnimationState;
 }
+
+export type FenceLayout = 'none' | 'horizontal' | 'vertical' | 'both';
 
 export interface SanctuaryArea {
   id: CatArea;
@@ -165,6 +171,7 @@ export interface GameState {
   milestoneClaimedIds: string[];
   offlineStarLevel?: number; // 1..5: Passive Star rate per hour when offline (1=1/hr, 2=2/hr, 3=3/hr, 4=4/hr, 5=5/hr)
   catPerfumeCount?: number; // Number of consumable Cat Perfumes owned
+  fenceLayout?: FenceLayout; // Customizable area divider fence layout
   totalPetsGiven: number;
   totalLoveEarned: number;
   totalRehomedCats: number;
