@@ -395,13 +395,17 @@ export const AUTOMATION_CATALOG: import('./types').AutomationMachineDef[] = [
 ];
 
 /**
- * Calculates the generous Care Points (Love) awarded when giving a cat away
- * to a Loving Home. Formula scales strongly with stage, time in sanctuary,
- * happiness, and rarity.
+ * Calculates the generous Care Points (Love) and Star Tokens awarded when
+ * rehoming a cat to a Loving Forever Home. Base stars: 1 (kitten), 5 (teen), 20 (adult),
+ * with bonuses scaling off time in sanctuary, affection, happiness, mutations, and rarity.
  */
 export function calculateRehomeLove(cat: import('./types').Cat): {
   total: number;
   base: number;
+  stars: number;
+  baseStars: number;
+  starDevotionBonus: number;
+  starRarityBonus: number;
   ageBonus: number;
   happinessBonus: number;
   rarityMultiplier: number;
@@ -412,7 +416,15 @@ export function calculateRehomeLove(cat: import('./types').Cat): {
     adult: 180,
   };
 
+  const baseStarsByStage = {
+    kitten: 1,
+    teen: 5,
+    adult: 20,
+  };
+
   const base = baseByStage[cat.stage] || 100;
+  const baseStars = baseStarsByStage[cat.stage] || 1;
+
   const ageBonus = Math.round((cat.ageDays || 0) * 15 + (cat.journal?.totalPetsReceived || 0) * 1.5);
   const happinessMultiplier = 0.5 + (cat.happiness / 100) * 0.75; // 0.5x to 1.25x
   const happinessBonus = Math.round(base * (happinessMultiplier - 1));
@@ -421,13 +433,40 @@ export function calculateRehomeLove(cat: import('./types').Cat): {
   if (cat.isRare) {
     rarityMultiplier = cat.rareType ? 3.5 : 2.5;
   }
+  if (cat.mutation) {
+    rarityMultiplier *= 1.2;
+  }
 
   const subtotal = Math.max(30, base + ageBonus + happinessBonus);
   const total = Math.round(subtotal * rarityMultiplier);
 
+  // ── Star Tokens Calculation ──
+  // Devotion: time in sanctuary (ageDays), pets received, high affection
+  const devotionPoints = (cat.ageDays || 0) * 1.2 + (cat.journal?.totalPetsReceived || 0) * 0.15 + (cat.affection >= 90 ? 2 : 0);
+  const stageDevotionFactor = cat.stage === 'adult' ? 0.35 : cat.stage === 'teen' ? 0.2 : 0.1;
+  const starDevotionBonus = Math.floor(devotionPoints * stageDevotionFactor);
+
+  // Star Rarity & Mutation Multiplier
+  let starRarityMult = 1.0;
+  if (cat.isRare) {
+    starRarityMult = cat.rareType ? 2.5 : 1.75;
+  }
+  if (cat.mutation) {
+    starRarityMult *= 1.25;
+  }
+
+  const happinessStarFactor = 0.85 + (cat.happiness / 100) * 0.35; // 0.85x to 1.2x
+  const totalStarsWithMult = Math.round((baseStars + starDevotionBonus) * happinessStarFactor * starRarityMult);
+  const starRarityBonus = Math.max(0, totalStarsWithMult - (baseStars + starDevotionBonus));
+  const stars = Math.max(baseStars, totalStarsWithMult);
+
   return {
     total,
     base,
+    stars,
+    baseStars,
+    starDevotionBonus,
+    starRarityBonus,
     ageBonus,
     happinessBonus,
     rarityMultiplier,

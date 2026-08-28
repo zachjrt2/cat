@@ -22,7 +22,6 @@ export class UIManager {
   private root: HTMLElement;
   private loveEl!: HTMLElement;
   private tokensEl!: HTMLElement;
-  private timeWeatherBtn!: HTMLButtonElement;
   private rosterBtn!: HTMLButtonElement;
   private perfumeBtn!: HTMLButtonElement;
   private toastStack!: HTMLElement;
@@ -34,6 +33,8 @@ export class UIManager {
   private currentCatCount = 0;
   private currentTimeOfDay: TimeOfDay = 'day';
   private currentWeather: WeatherType = 'sunny';
+  private previousTimeOfDay: TimeOfDay | null = null;
+  private previousWeather: WeatherType | null = null;
   private currentArea: CatArea = 'yard';
   private areasState: Record<CatArea, SanctuaryArea> = {
     yard: { id: 'yard', unlocked: true, unlockThreshold: 0, capacity: 5 },
@@ -83,17 +84,7 @@ export class UIManager {
         </div>
       </div>
 
-      <div class="hud-center-group">
-        <button class="hud-weather-btn" id="time-weather-btn" title="Click to cycle Time / Weather">
-          <span class="hud-weather-icons" id="time-weather-icon">${SVG_ICONS.day}</span>
-          <span id="time-weather-text">Day</span>
-        </button>
-      </div>
-
       <div class="hud-actions">
-        <button class="icon-btn" id="fullscreen-btn" title="Toggle Fullscreen">
-          ${SVG_ICONS.fullscreen}
-        </button>
         <button class="icon-btn plinko-btn" id="plinko-btn" title="⭐ Cat Plinko (Wager Stars to Discover Cats!)">
           ${SVG_ICONS.sparkle}
         </button>
@@ -108,14 +99,6 @@ export class UIManager {
     parent.appendChild(hud);
     this.loveEl = hud.querySelector('#love-value')!;
     this.tokensEl = hud.querySelector('#tokens-value')!;
-    this.timeWeatherBtn = hud.querySelector('#time-weather-btn')!;
-
-    const fullscreenBtn = hud.querySelector('#fullscreen-btn') as HTMLButtonElement;
-    const updateFullscreenIcon = () => {
-      const isFull = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
-      fullscreenBtn.innerHTML = isFull ? SVG_ICONS.exitFullscreen : SVG_ICONS.fullscreen;
-      fullscreenBtn.title = isFull ? 'Exit Fullscreen' : 'Enter Fullscreen';
-    };
 
     const toggleFullscreen = async () => {
       sound.playTap();
@@ -136,14 +119,9 @@ export class UIManager {
       } catch (err) {
         console.warn('Fullscreen request:', err);
       }
-      updateFullscreenIcon();
     };
 
-    fullscreenBtn.addEventListener('click', toggleFullscreen);
-    document.addEventListener('fullscreenchange', updateFullscreenIcon);
-    document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
-
-    // Show 1-tap mobile fullscreen prompt banner if on mobile touch device
+    // Show 1-tap mobile fullscreen prompt modal if on mobile touch device
     this.showMobileFullscreenPrompt(toggleFullscreen);
 
     hud.querySelector('#plinko-btn')!.addEventListener('click', () => {
@@ -158,11 +136,6 @@ export class UIManager {
     };
     document.addEventListener('pointerdown', startMusicOnce, { once: true });
 
-    this.timeWeatherBtn.addEventListener('click', () => {
-      sound.playTap();
-      EventBus.emit('toggle-time', {});
-    });
-
     hud.querySelector('#shop-btn')!.addEventListener('click', () => {
       sound.playTap();
       this.openShopModal();
@@ -176,29 +149,36 @@ export class UIManager {
     const isAlreadyFullscreen = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
     if (!isMobile || isAlreadyFullscreen) return;
 
-    const banner = document.createElement('div');
-    banner.className = 'mobile-fullscreen-banner';
-    banner.innerHTML = `
-      <span>📱 Tap here to play Fullscreen!</span>
-      <button class="banner-close-btn" title="Dismiss">✕</button>
+    if (sessionStorage.getItem('cat_sanctuary_fs_prompt_seen') === 'true') return;
+    sessionStorage.setItem('cat_sanctuary_fs_prompt_seen', 'true');
+
+    const backdrop = this.createBackdrop();
+    const modal = document.createElement('div');
+    modal.className = 'modal welcome-fullscreen-modal';
+    modal.innerHTML = `
+      <h2>🏡 Welcome to Cozy Sanctuary!</h2>
+      <div class="subtitle" style="margin-bottom:10px;">For the best relaxing experience on mobile:</div>
+      <div class="welcome-fs-card">
+        <div class="welcome-fs-icon">📱 ✨ 🐾</div>
+        <p>Would you like to play in <b>Fullscreen Mode</b> for wider views and seamless touch interactions?</p>
+      </div>
+      <button class="modal-close" id="fs-enter-btn" style="margin-top:16px;">✨ Play in Fullscreen</button>
+      <button class="modal-action-btn" id="fs-skip-btn" style="margin-top:8px;">Continue in Window</button>
     `;
 
-    banner.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).classList.contains('banner-close-btn')) {
-        e.stopPropagation();
-        banner.remove();
-        return;
-      }
+    modal.querySelector('#fs-enter-btn')?.addEventListener('click', () => {
+      sound.playTap();
       onEnterFullscreen();
-      banner.remove();
+      backdrop.remove();
     });
 
-    document.body.appendChild(banner);
+    modal.querySelector('#fs-skip-btn')?.addEventListener('click', () => {
+      sound.playTap();
+      backdrop.remove();
+    });
 
-    // Auto dismiss after 10 seconds or on first touch elsewhere
-    setTimeout(() => {
-      if (document.body.contains(banner)) banner.remove();
-    }, 10000);
+    backdrop.appendChild(modal);
+    this.root.appendChild(backdrop);
   }
 
   private buildAreaNav(parent: HTMLElement): void {
@@ -221,13 +201,25 @@ export class UIManager {
       btn.className = `area-nav-btn ${this.currentArea === key ? 'active' : ''} ${!areaState?.unlocked ? 'locked' : ''}`;
 
       if (areaState?.unlocked) {
-        btn.innerHTML = `<span class="area-svg-icon">${areaSvg}</span><span>${info.label}</span><span class="area-count">${count}/${areaState.capacity}</span>`;
+        btn.innerHTML = `
+          <div class="area-nav-top">
+            <span class="area-svg-icon">${areaSvg}</span>
+            <span class="area-count">${count}/${areaState.capacity}</span>
+          </div>
+          <span class="area-label">${info.label}</span>
+        `;
         btn.addEventListener('click', () => {
           if (this.currentArea === key) return;
           EventBus.emit('switch-area', { area: key });
         });
       } else {
-        btn.innerHTML = `<span class="area-svg-icon">${areaSvg}</span><span>${info.label}</span><span class="lock-badge">${SVG_ICONS.lock}</span>`;
+        btn.innerHTML = `
+          <div class="area-nav-top">
+            <span class="area-svg-icon">${areaSvg}</span>
+            <span class="lock-badge">${SVG_ICONS.lock}</span>
+          </div>
+          <span class="area-label">${info.label}</span>
+        `;
         btn.addEventListener('click', () => {
           sound.playTap();
           this.openShopModal('areas');
@@ -343,6 +335,13 @@ export class UIManager {
   }
 
   private activeToasts: { el: HTMLElement; timerId: number }[] = [];
+  private pendingToastQueue: string[] = [];
+  private flushToastTimerId: number | null = null;
+  private modalObserver: MutationObserver | null = null;
+
+  private isModalOpen(): boolean {
+    return Boolean(document.querySelector('.modal-backdrop, .modal, .plinko-modal-backdrop, .glossary-modal-backdrop'));
+  }
 
   private buildToastStack(): void {
     const stack = document.createElement('div');
@@ -350,9 +349,49 @@ export class UIManager {
     stack.className = 'toast-stack';
     this.root.appendChild(stack);
     this.toastStack = stack;
+
+    // Observe DOM changes to detect when modals are closed and release queued notifications
+    this.modalObserver = new MutationObserver(() => {
+      if (!this.isModalOpen() && this.pendingToastQueue.length > 0) {
+        this.flushToastQueue();
+      }
+    });
+    this.modalObserver.observe(document.body, { childList: true, subtree: true });
   }
 
   showToast(message: string): void {
+    if (this.isModalOpen()) {
+      // Prevent duplicates in queue
+      if (this.pendingToastQueue.length === 0 || this.pendingToastQueue[this.pendingToastQueue.length - 1] !== message) {
+        this.pendingToastQueue.push(message);
+      }
+      return;
+    }
+    this.displayToast(message);
+  }
+
+  private flushToastQueue(): void {
+    if (this.flushToastTimerId !== null) return;
+    if (this.isModalOpen() || this.pendingToastQueue.length === 0) return;
+
+    // Rapidly release queued toasts one by one
+    this.flushToastTimerId = window.setInterval(() => {
+      if (this.isModalOpen() || this.pendingToastQueue.length === 0) {
+        if (this.flushToastTimerId !== null) {
+          clearInterval(this.flushToastTimerId);
+          this.flushToastTimerId = null;
+        }
+        return;
+      }
+
+      const nextMsg = this.pendingToastQueue.shift();
+      if (nextMsg) {
+        this.displayToast(nextMsg);
+      }
+    }, 150);
+  }
+
+  private displayToast(message: string): void {
     const el = document.createElement('div');
     el.className = 'toast';
     el.innerHTML = message;
@@ -442,13 +481,30 @@ export class UIManager {
     });
 
     EventBus.on('time-changed', ({ timeOfDay }: { timeOfDay: TimeOfDay }) => {
+      if (this.previousTimeOfDay && this.previousTimeOfDay !== timeOfDay) {
+        const timeMessages: Record<TimeOfDay, string> = {
+          morning: '🌅 The morning sun rises with a warm golden glow across the sanctuary.',
+          day: '☀️ Midday sun shines bright and warm over the cats.',
+          sunset: '🌇 Sunset arrives — soft twilight amber settles over the sanctuary.',
+          night: '🌙 Night falls — peaceful stars twinkle above the sleeping cats.',
+        };
+        EventBus.emit('toast', { message: timeMessages[timeOfDay] || `🕒 Time shifted to ${timeOfDay}.` });
+      }
       this.currentTimeOfDay = timeOfDay;
-      this.updateWeatherButtonText();
+      this.previousTimeOfDay = timeOfDay;
     });
 
     EventBus.on('weather-changed', ({ weather }: { weather: WeatherType }) => {
+      if (this.previousWeather && this.previousWeather !== weather) {
+        const weatherMessages: Record<WeatherType, string> = {
+          sunny: '☀️ The skies cleared up into a bright, warm sunny day!',
+          rain: '🌧️ Gentle raindrops begin falling — cozy patter fills the air.',
+          snow: '❄️ Magical snowflakes begin drifting softly through the air.',
+        };
+        EventBus.emit('toast', { message: weatherMessages[weather] || `🌦️ Weather changed to ${weather}.` });
+      }
       this.currentWeather = weather;
-      this.updateWeatherButtonText();
+      this.previousWeather = weather;
     });
 
     EventBus.on(
@@ -497,20 +553,6 @@ export class UIManager {
     EventBus.on('offline-summary', (summary: { minutesAway: number; loveEarned: number; starsEarned?: number; headlines: string[] }) => {
       this.showOfflineSummary(summary);
     });
-  }
-
-  private updateWeatherButtonText(): void {
-    const timeLabels: Record<TimeOfDay, string> = {
-      morning: 'Morning',
-      day: 'Day',
-      sunset: 'Sunset',
-      night: 'Night',
-    };
-    const timeSvg = SVG_ICONS[this.currentTimeOfDay] || SVG_ICONS.day;
-    const weatherSvg = SVG_ICONS[this.currentWeather] ? SVG_ICONS[this.currentWeather] : '';
-
-    this.timeWeatherBtn.querySelector('#time-weather-icon')!.innerHTML = `${weatherSvg || timeSvg}`;
-    this.timeWeatherBtn.querySelector('#time-weather-text')!.textContent = `${timeLabels[this.currentTimeOfDay]}`;
   }
 
   private openJournal(cat: Cat): void {
@@ -796,8 +838,8 @@ export class UIManager {
             <span class="svg-inline">${SVG_ICONS.lovingHome}</span>
             <span class="rehome-compact-text">Find a Loving Forever Home</span>
           </div>
-          <button class="rehome-compact-btn" id="rehome-cat-btn" title="Adopt out ${escapeHtml(cat.name)} for +${rehomeVal.total.toLocaleString()} Care Points">
-            <span>+${rehomeVal.total.toLocaleString()} 💗</span>
+          <button class="rehome-compact-btn" id="rehome-cat-btn" title="Adopt out ${escapeHtml(cat.name)} for +${rehomeVal.total.toLocaleString()} Love and +${rehomeVal.stars} Stars">
+            <span>+${rehomeVal.total.toLocaleString()} 💗 · +${rehomeVal.stars} ⭐</span>
           </button>
         </div>
 
@@ -1125,14 +1167,14 @@ export class UIManager {
 
   private openRehomeConfirmModal(
     cat: Cat,
-    reward: { total: number; base: number; ageBonus: number; happinessBonus: number; rarityMultiplier: number },
+    reward: ReturnType<typeof calculateRehomeLove>,
     onComplete: () => void,
   ): void {
     const backdrop = this.createBackdrop();
     const modal = document.createElement('div');
     modal.className = 'modal rehome-confirm-modal';
 
-    const rarityBadge = cat.isRare ? ` · <span class="rehome-highlight">${reward.rarityMultiplier}x Rarity Boost</span>` : '';
+    const rarityBadge = cat.isRare ? ` · <span class="rehome-highlight">${reward.rarityMultiplier.toFixed(1)}x Rarity Boost</span>` : '';
 
     modal.innerHTML = `
       <div class="rehome-confirm-header">
@@ -1145,19 +1187,19 @@ export class UIManager {
       </p>
 
       <div class="rehome-breakdown-card">
-        <div class="rehome-breakdown-row"><span>Base Care Points:</span> <b>+${reward.base} 💗</b></div>
-        <div class="rehome-breakdown-row"><span>Sanctuary Care Bonus:</span> <b>+${reward.ageBonus} 💗</b></div>
-        <div class="rehome-breakdown-row"><span>Happiness Bonus:</span> <b>+${reward.happinessBonus} 💗</b></div>
-        ${cat.isRare ? `<div class="rehome-breakdown-row"><span>Rarity Multiplier:</span> <b>${reward.rarityMultiplier}x</b></div>` : ''}
+        <div class="rehome-breakdown-row"><span>Base Reward:</span> <b>+${reward.base} 💗 · +${reward.baseStars} ⭐</b></div>
+        ${reward.ageBonus > 0 || reward.starDevotionBonus > 0 ? `<div class="rehome-breakdown-row"><span>Sanctuary Devotion & Care:</span> <b>+${reward.ageBonus} 💗 · +${reward.starDevotionBonus} ⭐</b></div>` : ''}
+        ${reward.happinessBonus !== 0 ? `<div class="rehome-breakdown-row"><span>Happiness Factor:</span> <b>${reward.happinessBonus >= 0 ? '+' : ''}${reward.happinessBonus} 💗</b></div>` : ''}
+        ${cat.isRare || cat.mutation ? `<div class="rehome-breakdown-row"><span>Rarity & Mutation Boost:</span> <b>${reward.rarityMultiplier.toFixed(1)}x (${reward.starRarityBonus > 0 ? `+${reward.starRarityBonus} ⭐` : ''})</b></div>` : ''}
         <div class="rehome-breakdown-total">
-          <span>Total Care Points Granted:</span>
-          <b>+${reward.total.toLocaleString()} 💗 Love</b>
+          <span>Total Sanctuary Grant:</span>
+          <b>+${reward.total.toLocaleString()} 💗 · +${reward.stars} ⭐ Stars</b>
         </div>
       </div>
 
       <div class="rehome-dialog-actions">
         <button class="rehome-confirm-btn" id="confirm-rehome-btn">
-          Yes, Find Forever Home (+${reward.total.toLocaleString()} 💗)
+          Yes, Find Forever Home (+${reward.total.toLocaleString()} 💗, +${reward.stars} ⭐)
         </button>
         <button class="rehome-cancel-btn" id="cancel-rehome-btn">
           Keep in Sanctuary
@@ -1192,19 +1234,25 @@ export class UIManager {
 
       modal.innerHTML = `
         <div class="shop-header">
-          <h2>Sanctuary Emporium</h2>
+          <h2 class="shop-title">Sanctuary Emporium</h2>
           <div class="shop-balances">
-            <span class="shop-love-balance" title="Care Points (CP)"><span class="svg-inline">${SVG_ICONS.heart}</span> <b>${this.currentLove.toLocaleString()} CP</b></span>
-            <span class="shop-tokens-balance" title="Stars (Plinko currency)"><span class="svg-inline">${SVG_ICONS.star}</span> <b>${this.currentTokens} ⭐</b></span>
+            <div class="shop-balance-pill shop-love-pill" title="Care Points (CP)">
+              <span class="svg-inline">${SVG_ICONS.heart}</span>
+              <span class="shop-bal-val">${this.currentLove.toLocaleString()} CP</span>
+            </div>
+            <div class="shop-balance-pill shop-stars-pill" title="Stars (Plinko)">
+              <span class="svg-inline">${SVG_ICONS.star}</span>
+              <span class="shop-bal-val">${this.currentTokens}</span>
+            </div>
           </div>
         </div>
 
         <div class="shop-tabs">
-          <button class="shop-tab-btn ${activeTab === 'areas' ? 'active' : ''}" id="tab-areas-btn"><span class="svg-inline">${SVG_ICONS.yard}</span> Areas</button>
-          <button class="shop-tab-btn ${activeTab === 'machines' ? 'active' : ''}" id="tab-machines-btn"><span class="svg-inline">${SVG_ICONS.machine}</span> Automation</button>
-          <button class="shop-tab-btn ${activeTab === 'furniture' ? 'active' : ''}" id="tab-furniture-btn"><span class="svg-inline">${SVG_ICONS.shop}</span> Decor</button>
-          <button class="shop-tab-btn ${activeTab === 'milestones' ? 'active' : ''}" id="tab-milestones-btn"><span class="svg-inline">${SVG_ICONS.star}</span> Goals</button>
-          <button class="shop-tab-btn ${activeTab === 'upgrades' ? 'active' : ''}" id="tab-upgrades-btn"><span class="svg-inline">${SVG_ICONS.sparkle}</span> Upgrades</button>
+          <button class="shop-tab-btn ${activeTab === 'areas' ? 'active' : ''}" id="tab-areas-btn" title="Sanctuary Areas & Expansion"><span class="shop-tab-icon">${SVG_ICONS.yard}</span></button>
+          <button class="shop-tab-btn ${activeTab === 'machines' ? 'active' : ''}" id="tab-machines-btn" title="Automation Care Stations"><span class="shop-tab-icon">${SVG_ICONS.machine}</span></button>
+          <button class="shop-tab-btn ${activeTab === 'furniture' ? 'active' : ''}" id="tab-furniture-btn" title="Furniture & Decor"><span class="shop-tab-icon">${SVG_ICONS.shop}</span></button>
+          <button class="shop-tab-btn ${activeTab === 'milestones' ? 'active' : ''}" id="tab-milestones-btn" title="Sanctuary Milestone Goals"><span class="shop-tab-icon">${SVG_ICONS.star}</span></button>
+          <button class="shop-tab-btn ${activeTab === 'upgrades' ? 'active' : ''}" id="tab-upgrades-btn" title="Upgrades & Sorting Fences"><span class="shop-tab-icon">${SVG_ICONS.sparkle}</span></button>
         </div>
 
         <div class="shop-content">
@@ -1904,6 +1952,32 @@ export class UIManager {
         </div>
       </div>
 
+      <!-- Display & Screen Section -->
+      <div class="options-section" style="margin-top: 14px;">
+        <h3>📱 Display & Screen</h3>
+        <div class="sound-control-row" style="align-items:center;">
+          <label class="sound-toggle-label">
+            <input type="checkbox" id="options-fs-toggle" ${Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement) ? 'checked' : ''}>
+            <b>Fullscreen Mode</b>
+          </label>
+          <button class="options-fullscreen-btn" id="options-fs-btn" type="button">
+            <span class="svg-inline">${Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement) ? SVG_ICONS.exitFullscreen : SVG_ICONS.fullscreen}</span>
+            <span>${Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement) ? 'Exit' : 'Enter'}</span>
+          </button>
+      <!-- Ambience & Environment Section -->
+      <div class="options-section" style="margin-top: 14px;">
+        <h3>🌤️ Sanctuary Ambience</h3>
+        <p style="font-size:12px;color:var(--brown-light);margin:2px 0 10px;">Time of day and weather cycle naturally, but you can also test or shift them manually here.</p>
+        <div style="display:flex;gap:8px;">
+          <button class="modal-action-btn" id="cycle-time-btn" style="flex:1;margin-bottom:0;" type="button">
+            🕒 Shift Time
+          </button>
+          <button class="modal-action-btn" id="cycle-weather-btn" style="flex:1;margin-bottom:0;" type="button">
+            🌦️ Shift Weather
+          </button>
+        </div>
+      </div>
+
       <!-- Save & Backup Section -->
       <div class="options-section" style="margin-top: 14px;">
         <h3>💾 Save File & Backup</h3>
@@ -1929,6 +2003,41 @@ export class UIManager {
     const musicSlider = modal.querySelector('#music-volume') as HTMLInputElement;
     const musicLabel = modal.querySelector('#music-vol-label') as HTMLElement;
 
+    const optionsFsToggle = modal.querySelector('#options-fs-toggle') as HTMLInputElement | null;
+    const optionsFsBtn = modal.querySelector('#options-fs-btn') as HTMLButtonElement | null;
+
+    const handleFullscreenToggle = async () => {
+      sound.playTap();
+      try {
+        if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+          if (document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+          } else if ((document.documentElement as any).webkitRequestFullscreen) {
+            await (document.documentElement as any).webkitRequestFullscreen();
+          }
+        } else {
+          if (document.exitFullscreen) {
+            await document.exitFullscreen();
+          } else if ((document as any).webkitExitFullscreen) {
+            await (document as any).webkitExitFullscreen();
+          }
+        }
+      } catch (err) {
+        console.warn('Fullscreen toggle:', err);
+      }
+      const isFull = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      if (optionsFsToggle) optionsFsToggle.checked = isFull;
+      if (optionsFsBtn) {
+        optionsFsBtn.innerHTML = `
+          <span class="svg-inline">${isFull ? SVG_ICONS.exitFullscreen : SVG_ICONS.fullscreen}</span>
+          <span>${isFull ? 'Exit' : 'Enter'}</span>
+        `;
+      }
+    };
+
+    optionsFsToggle?.addEventListener('change', handleFullscreenToggle);
+    optionsFsBtn?.addEventListener('click', handleFullscreenToggle);
+
     sfxToggle.addEventListener('change', () => {
       sound.setSfxEnabled(sfxToggle.checked);
     });
@@ -1945,6 +2054,15 @@ export class UIManager {
       const v = parseInt(musicSlider.value) / 100;
       sound.setMusicVolume(v);
       musicLabel.textContent = `${musicSlider.value}%`;
+    });
+
+    modal.querySelector('#cycle-time-btn')?.addEventListener('click', () => {
+      sound.playTap();
+      EventBus.emit('toggle-time', {});
+    });
+    modal.querySelector('#cycle-weather-btn')?.addEventListener('click', () => {
+      sound.playTap();
+      EventBus.emit('toggle-weather', {});
     });
 
     modal.querySelector('#export-btn')!.addEventListener('click', () => {

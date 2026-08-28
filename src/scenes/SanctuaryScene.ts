@@ -110,6 +110,9 @@ export class SanctuaryScene extends Phaser.Scene {
   private adoptionBoxContainer: Phaser.GameObjects.Container | null = null;
   private adoptionBoxGlow: Phaser.GameObjects.Graphics | null = null;
   private isHoveringAdoptionBox = false;
+  private catInspectContainer: Phaser.GameObjects.Container | null = null;
+  private catInspectGlow: Phaser.GameObjects.Graphics | null = null;
+  private isHoveringCatInspect = false;
 
   constructor() {
     super('Sanctuary');
@@ -402,6 +405,9 @@ export class SanctuaryScene extends Phaser.Scene {
 
     // Render Adoption Box in the top-left
     this.createAdoptionBox();
+
+    // Render Cat Inspect Magnifying Glass in the top-right
+    this.createInspectTarget();
 
     // Render Themed Fence Dividers (if active)
     this.drawFenceDividers();
@@ -772,6 +778,106 @@ export class SanctuaryScene extends Phaser.Scene {
     container.add(hitZone);
 
     this.adoptionBoxContainer = container;
+  }
+
+  private createInspectTarget(): void {
+    if (this.catInspectContainer) {
+      this.catInspectContainer.destroy();
+      this.catInspectContainer = null;
+    }
+
+    const bounds = this.areaBounds();
+    const inspectX = bounds.right - 54;
+    const inspectY = bounds.top + 44;
+
+    const container = this.add.container(inspectX, inspectY);
+    container.name = 'area-bg';
+    container.setDepth(750);
+
+    // 1. Glow layer (for drag hover highlight)
+    const glow = this.add.graphics();
+    glow.fillStyle(0x38bdf8, 0.35);
+    glow.fillCircle(0, 0, 36);
+    glow.lineStyle(2.5, 0x0284c7, 0.9);
+    glow.strokeCircle(0, 0, 36);
+    glow.setAlpha(0);
+    container.add(glow);
+    this.catInspectGlow = glow;
+
+    // 2. Ground Shadow
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.18);
+    shadow.fillEllipse(0, 18, 56, 18);
+    container.add(shadow);
+
+    // 3. Cozy Circular Pedestal Badge
+    const padGfx = this.add.graphics();
+    padGfx.fillStyle(0xfaf5eb, 0.95);
+    padGfx.fillCircle(0, 0, 26);
+    padGfx.lineStyle(2, 0xd4a373, 0.9);
+    padGfx.strokeCircle(0, 0, 26);
+
+    // Subtle inner warm gradient ring
+    padGfx.lineStyle(1, 0xffedd5, 0.9);
+    padGfx.strokeCircle(0, 0, 23);
+    container.add(padGfx);
+
+    // 4. Magnifying Glass Icon Graphic
+    const glassGfx = this.add.graphics();
+
+    // Handle (angled down-right)
+    glassGfx.lineStyle(5.5, 0x78350f, 1);
+    glassGfx.lineBetween(7, 7, 19, 19);
+    glassGfx.lineStyle(3.5, 0xd97706, 1);
+    glassGfx.lineBetween(7, 7, 18, 18);
+
+    // Lens Outer Gold Rim
+    glassGfx.fillStyle(0xf59e0b, 1);
+    glassGfx.fillCircle(-4, -4, 15);
+    glassGfx.lineStyle(2, 0xb45309, 1);
+    glassGfx.strokeCircle(-4, -4, 15);
+
+    // Glass Interior (translucent sky blue)
+    glassGfx.fillStyle(0xe0f2fe, 0.85);
+    glassGfx.fillCircle(-4, -4, 12);
+
+    // Glass Lens Reflection Highlight Arc
+    glassGfx.lineStyle(1.8, 0xffffff, 0.95);
+    glassGfx.beginPath();
+    glassGfx.arc(-4, -4, 9.5, Phaser.Math.DegToRad(190), Phaser.Math.DegToRad(290));
+    glassGfx.strokePath();
+
+    container.add(glassGfx);
+
+    // 5. Cute Paw Print inside the Lens
+    const pawText = this.add.text(-4, -3, '🐾', {
+      fontSize: '13px',
+    }).setOrigin(0.5);
+    container.add(pawText);
+
+    // Interactive Click / Tap
+    const hitZone = this.add.zone(0, 0, 60, 60).setInteractive({ cursor: 'pointer' });
+    hitZone.on('pointerdown', () => {
+      sound.playTap();
+      if (this.state.cats.length > 0) {
+        EventBus.emit('cat-info', { cat: this.state.cats[0] });
+      } else {
+        EventBus.emit('toast', {
+          message: '🔍 Drag any cat here to open their details and care journal!',
+        });
+      }
+      this.tweens.add({
+        targets: container,
+        scaleX: 1.15,
+        scaleY: 1.15,
+        duration: 100,
+        yoyo: true,
+        ease: 'Quad.easeOut',
+      });
+    });
+    container.add(hitZone);
+
+    this.catInspectContainer = container;
   }
 
   // =========================================================================
@@ -1988,10 +2094,10 @@ export class SanctuaryScene extends Phaser.Scene {
       const catIndex = this.state.cats.findIndex((c) => c.id === catId);
       if (catIndex === -1) return;
       const cat = this.state.cats[catIndex];
-
       const reward = calculateRehomeLove(cat);
       this.love.add(reward.total);
       this.state.totalLoveEarned += reward.total;
+      this.milestones.addTokens(reward.stars);
       this.state.totalRehomedCats = (this.state.totalRehomedCats || 0) + 1;
       this.state.totalRehomeLoveEarned = (this.state.totalRehomeLoveEarned || 0) + reward.total;
 
@@ -2004,7 +2110,7 @@ export class SanctuaryScene extends Phaser.Scene {
 
       sound.playAdoptFanfare();
       EventBus.emit('toast', {
-        message: `🏡 ${cat.name} found a loving forever home! (+${reward.total.toLocaleString()} 💗 Love)`,
+        message: `🏡 ${cat.name} found a loving forever home! (+${reward.total.toLocaleString()} 💗 Love, +${reward.stars} ⭐ Stars)`,
       });
 
       // If ALL cats are gone: immediately take half love and give two new adults
@@ -2419,6 +2525,7 @@ export class SanctuaryScene extends Phaser.Scene {
     this.isDraggingCat = false;
     this.currentDropTarget = null;
     this.isHoveringAdoptionBox = false;
+    this.isHoveringCatInspect = false;
     this.clearAllBreedingPartners();
 
     if (this.toyBall) {
@@ -2756,6 +2863,38 @@ export class SanctuaryScene extends Phaser.Scene {
         }
       }
 
+      // Check hover over Cat Inspect Magnifying Glass
+      if (this.catInspectContainer) {
+        const insX = this.catInspectContainer.x;
+        const insY = this.catInspectContainer.y;
+        const distToIns = Phaser.Math.Distance.Between(newX, newY, insX, insY);
+        const isNearIns = distToIns < 58;
+
+        if (isNearIns !== this.isHoveringCatInspect) {
+          this.isHoveringCatInspect = isNearIns;
+          if (isNearIns) {
+            this.catInspectGlow?.setAlpha(1);
+            this.tweens.add({
+              targets: this.catInspectContainer,
+              scaleX: 1.18,
+              scaleY: 1.18,
+              duration: 140,
+              ease: 'Back.easeOut',
+            });
+            this.dragCandidate.sprite.showEmote('🔍');
+          } else {
+            this.catInspectGlow?.setAlpha(0);
+            this.tweens.add({
+              targets: this.catInspectContainer,
+              scaleX: 1.0,
+              scaleY: 1.0,
+              duration: 140,
+              ease: 'Quad.easeOut',
+            });
+          }
+        }
+      }
+
       let closestTarget: CatSprite | null = null;
       let closestDist = 65;
 
@@ -2852,7 +2991,31 @@ export class SanctuaryScene extends Phaser.Scene {
     if (this.isDraggingCat) {
       sprite.setDragged(false);
 
-      if (this.isHoveringAdoptionBox) {
+      if (this.isHoveringCatInspect) {
+        this.isHoveringCatInspect = false;
+        this.catInspectGlow?.setAlpha(0);
+        if (this.catInspectContainer) {
+          this.tweens.add({
+            targets: this.catInspectContainer,
+            scaleX: 1.0,
+            scaleY: 1.0,
+            duration: 140,
+            ease: 'Quad.easeOut',
+          });
+        }
+        sound.playSparkle();
+        EventBus.emit('cat-info', { cat });
+
+        const areaWalkable = this.walkableBounds();
+        const partitions = this.getPartitionBounds(this.state.fenceLayout || 'none');
+        const targetPartition = this.findPartitionForPoint(sprite.x, sprite.y, partitions);
+        sprite.setAreaBounds(targetPartition);
+        sprite.x = Phaser.Math.Clamp(sprite.x, targetPartition.left + 20, targetPartition.right - 20);
+        sprite.y = Phaser.Math.Clamp(sprite.y, targetPartition.top + 20, targetPartition.bottom - 20);
+        cat.xPercent = Phaser.Math.Clamp((sprite.x - areaWalkable.left) / areaWalkable.width, 0, 1);
+        cat.yPercent = Phaser.Math.Clamp((sprite.y - areaWalkable.top) / areaWalkable.height, 0, 1);
+        this.saveManager.save(this.state);
+      } else if (this.isHoveringAdoptionBox) {
         this.isHoveringAdoptionBox = false;
         this.adoptionBoxGlow?.setAlpha(0);
         if (this.adoptionBoxContainer) {
