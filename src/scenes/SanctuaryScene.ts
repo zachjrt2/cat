@@ -333,6 +333,7 @@ export class SanctuaryScene extends Phaser.Scene {
     const furniture = this.getAvailableFurnitureForCurrentArea(bounds);
     sprite.setAvailableFurniture(furniture);
     sprite.setOtherSpritesProvider(() => Array.from(this.catSprites.values()));
+    sprite.setToyBallProvider(() => this.toolController.getToyBall());
     sprite.setMachineUseCallback((c, machineId) => {
       const res = this.automation.useMachine(c, machineId);
       if (res) {

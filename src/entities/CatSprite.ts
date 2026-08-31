@@ -5,6 +5,7 @@ import { sound } from '../systems/SoundManager';
 import { MUTATION_CATALOG } from '../data/mutations';
 import { ensureSpriteAnimations } from '../scenes/BootScene';
 import { isAnyModalOpen } from '../ui/EventBus';
+import type { ToyBall } from './ToyBall';
 
 const BASE_SPRITE_SCALE = 2.2;
 
@@ -198,6 +199,16 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private otherSpritesProvider: (() => CatSprite[]) | null = null;
   private machineUseCallback: ((cat: Cat, machineId: string) => void) | null = null;
   private chaseTarget: { x: number; y: number } | null = null;
+
+  // Distinct Behaviors: Cat Soccer, Peek-a-boo Ambush, Zoomie Tornado
+  private toyBallProvider: (() => ToyBall | null) | null = null;
+  private isAmbushing = false;
+  private ambushTargetSprite: CatSprite | null = null;
+  private ambushWaitTimer = 0;
+  private isZoomieTornado = false;
+  private zoomieWaypoints: Phaser.Math.Vector2[] = [];
+  private zoomieWaypointIndex = 0;
+  private zoomieDustTimer = 0;
 
   constructor(scene: Phaser.Scene, cat: Cat, x: number, y: number, bounds: Phaser.Geom.Rectangle) {
     super(scene, x, y);
@@ -750,6 +761,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   setAvailableFurniture(furniture: AvailableFurnitureInfo[]): void { this.availableFurniture = furniture; }
   setOtherSpritesProvider(provider: () => CatSprite[]): void { this.otherSpritesProvider = provider; }
   setMachineUseCallback(cb: (cat: Cat, machineId: string) => void): void { this.machineUseCallback = cb; }
+  setToyBallProvider(provider: () => ToyBall | null): void { this.toyBallProvider = provider; }
 
   isFollowingLeader(): boolean {
     return this.followingAdultSprite !== null;
@@ -768,6 +780,41 @@ export class CatSprite extends Phaser.GameObjects.Container {
       depth++;
     }
     return false;
+  }
+
+  triggerZoomieTornado(): void {
+    if (this.isDragged || this.cat.animationState === 'sleep' || this.isPouncing || this.isZoomieTornado) return;
+
+    this.isZoomieTornado = true;
+    this.followingAdultSprite = null;
+    this.chaseTarget = null;
+    this.wanderTarget = null;
+    this.targetFurnitureId = null;
+    this.targetMachineId = null;
+
+    const pad = 35;
+    const minX = this.bounds.left + pad;
+    const maxX = this.bounds.right - pad;
+    const minY = this.bounds.top + pad;
+    const maxY = this.bounds.bottom - pad;
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const rx = (maxX - minX) * 0.36;
+    const ry = (maxY - minY) * 0.30;
+
+    // Create rapid figure-8 waypoint trajectory
+    this.zoomieWaypoints = [
+      new Phaser.Math.Vector2(cx - rx, cy - ry),
+      new Phaser.Math.Vector2(cx + rx, cy + ry),
+      new Phaser.Math.Vector2(cx + rx, cy - ry),
+      new Phaser.Math.Vector2(cx - rx, cy + ry),
+      new Phaser.Math.Vector2(cx, cy),
+    ];
+    this.zoomieWaypointIndex = 0;
+    this.cat.animationState = 'run';
+    this.wanderTimer = 7.0;
+    this.showEmote('⚡');
+    sound.playPop();
   }
 
   /** Called by SanctuaryScene whenever the breed cooldown state changes for this cat. */
@@ -1478,6 +1525,115 @@ export class CatSprite extends Phaser.GameObjects.Container {
       }
     }
 
+    // ── Zoomie Tornado High-Speed Laps ────────────────────────────────────
+    if (this.isZoomieTornado) {
+      if (this.zoomieWaypointIndex >= this.zoomieWaypoints.length || this.wanderTimer <= 0) {
+        this.isZoomieTornado = false;
+        this.zoomieWaypoints = [];
+        this.cat.animationState = 'look';
+        this.wanderTimer = 3.5;
+        this.cat.fun = Math.min(100, this.cat.fun + 25);
+        this.cat.energy = Math.max(10, this.cat.energy - 8);
+        this.playCurrentAnimation();
+        this.spawnPounceDust();
+        this.showEmote('💨');
+        return;
+      }
+
+      this.zoomieDustTimer -= dt;
+      if (this.zoomieDustTimer <= 0) {
+        this.zoomieDustTimer = 0.10;
+        this.spawnPounceDust();
+      }
+
+      const target = this.zoomieWaypoints[this.zoomieWaypointIndex];
+      const dist = Math.hypot(target.x - this.x, target.y - this.y);
+      if (dist < 22) {
+        this.zoomieWaypointIndex++;
+      } else {
+        const speed = 195 * dt;
+        this.x += ((target.x - this.x) / dist) * speed;
+        this.y += ((target.y - this.y) / dist) * speed;
+        this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
+        this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
+        this.currentDirection = vectorToDirection(target.x - this.x, target.y - this.y);
+        this.cat.animationState = 'run';
+        this.playCurrentAnimation();
+        this.setDepth(this.y);
+        return;
+      }
+    }
+
+    // ── Active Peek-a-Boo Ambush Stance ────────────────────────────────────
+    if (this.isAmbushing) {
+      if (!this.ambushTargetSprite || !this.ambushTargetSprite.active || this.ambushTargetSprite.isCurrentlyDragged() || this.ambushWaitTimer <= 0) {
+        this.isAmbushing = false;
+        this.ambushTargetSprite = null;
+        this.cat.animationState = 'sit';
+        this.wanderTimer = 4.0;
+        this.playCurrentAnimation();
+      } else {
+        this.ambushWaitTimer -= dt;
+        const distToTarget = Math.hypot(this.ambushTargetSprite.x - this.x, this.ambushTargetSprite.y - this.y);
+        this.currentDirection = vectorToDirection(this.ambushTargetSprite.x - this.x, this.ambushTargetSprite.y - this.y);
+        this.playSpecificAnimation('pounce_prep');
+
+        if (distToTarget <= 75 && !this.isPouncing) {
+          const victim = this.ambushTargetSprite;
+          this.isAmbushing = false;
+          this.ambushTargetSprite = null;
+          this.executePounce(victim.x, victim.y, () => {
+            victim.showEmote('🙀');
+            this.showEmote('🎉');
+            sound.playPop();
+            this.cat.fun = Math.min(100, this.cat.fun + 15);
+            victim.cat.fun = Math.min(100, victim.cat.fun + 10);
+            this.startChasingCat(victim);
+            victim.startFleeingFrom(this);
+          });
+          return;
+        }
+        this.setDepth(this.y);
+        return;
+      }
+    }
+
+    // ── Cat Soccer / Autonomous Toy Ball Swatting ───────────────────────────
+    if (this.toyBallProvider && !this.isPouncing && !this.isDragged) {
+      const ball = this.toyBallProvider();
+      if (ball && ball.active && this.bounds.contains(ball.x, ball.y)) {
+        const distToBall = Math.hypot(ball.x - this.x, ball.y - this.y);
+
+        if (distToBall < 36 && ball.canBeBatted) {
+          let kickAngle = Math.atan2(ball.y - this.y, ball.x - this.x);
+          if (this.otherSpritesProvider) {
+            const teammates = this.otherSpritesProvider().filter(
+              (s) => s !== this && s.cat.animationState !== 'sleep' && !s.isCurrentlyDragged() && this.bounds.contains(s.x, s.y)
+            );
+            if (teammates.length > 0 && Math.random() < 0.65) {
+              const passTarget = Phaser.Math.RND.pick(teammates);
+              kickAngle = Math.atan2(passTarget.y - ball.y, passTarget.x - ball.x);
+            }
+          }
+
+          const power = Phaser.Math.Between(280, 520);
+          ball.kick(Math.cos(kickAngle) * power, Math.sin(kickAngle) * power);
+          sound.playPop();
+
+          this.triggerPlayState(1.2);
+          this.showEmote(Math.random() < 0.5 ? '⚽' : '🧶');
+        } else if (distToBall < 180 && !this.wanderTarget && !this.followingAdultSprite && !this.isAmbushing) {
+          // ANY cat regardless of fun level will excitedly chase and kick the toy ball!
+          if (Math.random() < 0.60) {
+            this.wanderTarget = new Phaser.Math.Vector2(ball.x, ball.y);
+            this.cat.animationState = 'run';
+            this.wanderTimer = 3.5;
+            this.playCurrentAnimation();
+          }
+        }
+      }
+    }
+
     // ── Active Chasing Another Cat (Playful Tag) ──────────────────────────
     if (this.chasingCatSprite) {
       if (!this.chasingCatSprite.active || this.chasingCatSprite.isCurrentlyDragged() || this.catChaseDurationTimer <= 0) {
@@ -1841,25 +1997,84 @@ export class CatSprite extends Phaser.GameObjects.Container {
       return;
     }
 
-    // ── Spontaneous Ambient Pounce (leaves, bugs, motes) ───────────────────
-    const isHunter = this.cat.majorTrait === 'hunter' || this.cat.minorTrait === 'hunter';
-    const isMischief = this.cat.majorTrait === 'mischievous' || this.cat.majorTrait === 'zoomie';
-    const isKittenOrTeen = isKitten || this.cat.stage === 'teen';
-    const pounceChance = (isHunter ? 0.28 : 0) + (isMischief ? 0.22 : 0) + (isKittenOrTeen ? 0.16 : 0.06);
+    // ── Active Toy Ball Attraction in Wander AI ────────────────────────────
+    if (this.toyBallProvider && !this.isPouncing && !this.isAmbushing && !this.isZoomieTornado) {
+      const ball = this.toyBallProvider();
+      if (ball && ball.active && this.bounds.contains(ball.x, ball.y)) {
+        if (Math.random() < 0.55) {
+          this.wanderTarget = new Phaser.Math.Vector2(ball.x, ball.y);
+          this.cat.animationState = 'run';
+          this.wanderTimer = 4.0;
+          this.playCurrentAnimation();
+          return;
+        }
+      }
+    }
 
-    if (Math.random() < pounceChance && !this.isPouncing) {
-      const pounceDist = Phaser.Math.Between(45, 95);
-      const angle = Math.random() * Math.PI * 2;
-      const targetX = Phaser.Math.Clamp(this.x + Math.cos(angle) * pounceDist, this.bounds.left + 24, this.bounds.right - 24);
-      const targetY = Phaser.Math.Clamp(this.y + Math.sin(angle) * pounceDist, this.bounds.top + 24, this.bounds.bottom - 24);
-
-      this.executePounce(targetX, targetY, () => {
-        this.cat.fun = Math.min(100, this.cat.fun + 12);
-        this.cat.happiness = Math.min(100, this.cat.happiness + 5);
-        this.showEmote(Math.random() < 0.5 ? '✨' : '🐾');
-        this.triggerPlayState(1.5);
-      });
+    // ── Zoomie Tornado Trigger ─────────────────────────────────────────────
+    const isZoomie = this.cat.majorTrait === 'zoomie' || this.cat.minorTrait === 'zoomie';
+    const isPlayfulKitten = isKitten && this.cat.energy > 50;
+    const zoomieChance = isZoomie ? 0.35 : (isPlayfulKitten ? 0.20 : 0.05);
+    if (Math.random() < zoomieChance && !this.isZoomieTornado && !this.isPouncing && !this.isAmbushing) {
+      this.triggerZoomieTornado();
       return;
+    }
+
+    // ── Peek-a-Boo Ambush Trigger ──────────────────────────────────────────
+    const isMischiefOrHunter = this.cat.majorTrait === 'mischievous' || this.cat.majorTrait === 'hunter' || this.cat.minorTrait === 'mischievous';
+    const ambushChance = isMischiefOrHunter ? 0.35 : (isKitten ? 0.20 : 0.10);
+    if (this.otherSpritesProvider && Math.random() < ambushChance && !this.isPouncing && !this.isAmbushing && !this.isZoomieTornado) {
+      const others = this.otherSpritesProvider().filter(
+        (s) => s !== this && s.cat.animationState !== 'sleep' && !s.isCurrentlyDragged() && this.bounds.contains(s.x, s.y)
+      );
+      const walkingTargets = others.filter((s) => {
+        const d = Math.hypot(s.x - this.x, s.y - this.y);
+        return d >= 50 && d <= 130 && (s.cat.animationState === 'walk' || s.cat.animationState === 'run');
+      });
+
+      if (walkingTargets.length > 0) {
+        this.isAmbushing = true;
+        this.ambushTargetSprite = Phaser.Math.RND.pick(walkingTargets);
+        this.ambushWaitTimer = 2.5 + Math.random() * 2.0;
+        this.cat.animationState = 'pounce';
+        this.wanderTarget = null;
+        this.showEmote('👀');
+        return;
+      }
+    }
+
+    // ── Nap Clumping / Cuddle Puddle AI ────────────────────────────────────
+    const isTired = this.cat.energy < 40 || shouldFallAsleep(this.cat);
+    if ((isTired || Math.random() < 0.32) && this.otherSpritesProvider) {
+      const sleepingFriends = this.otherSpritesProvider().filter(
+        (s) => s !== this && (s.cat.animationState === 'sleep' || s.cat.animationState === 'lay') && !s.isCurrentlyDragged() && this.bounds.contains(s.x, s.y)
+      );
+
+      if (sleepingFriends.length > 0 && Math.random() < 0.70) {
+        const cuddleBuddy = Phaser.Math.RND.pick(sleepingFriends);
+        const angle = Math.random() * Math.PI * 2;
+        const offsetDist = Phaser.Math.Between(20, 28);
+        const cuddleX = Phaser.Math.Clamp(cuddleBuddy.x + Math.cos(angle) * offsetDist, this.bounds.left + 24, this.bounds.right - 24);
+        const cuddleY = Phaser.Math.Clamp(cuddleBuddy.y + Math.sin(angle) * offsetDist, this.bounds.top + 24, this.bounds.bottom - 24);
+
+        this.wanderTarget = new Phaser.Math.Vector2(cuddleX, cuddleY);
+        this.cat.animationState = 'walk';
+        this.wanderTimer = 6.0;
+        this.playCurrentAnimation();
+
+        this.scene.time.delayedCall(4500, () => {
+          if (this.active && Math.hypot(cuddleBuddy.x - this.x, cuddleBuddy.y - this.y) < 36) {
+            this.cat.animationState = 'sleep';
+            this.wanderTimer = 22.0 + Math.random() * 18.0;
+            this.cat.energy = Math.min(100, this.cat.energy + 15);
+            cuddleBuddy.cat.energy = Math.min(100, cuddleBuddy.cat.energy + 10);
+            this.showEmote('💕');
+            cuddleBuddy.showEmote('💤');
+            this.playCurrentAnimation();
+          }
+        });
+        return;
+      }
     }
 
     // ── Kitten & Teen Follow-the-Leader Parade AI ─────────────────────────
