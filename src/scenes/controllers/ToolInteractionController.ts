@@ -27,6 +27,10 @@ export class ToolInteractionController {
   private lastWashLoveTime = 0;
   private lastBubbleSpawnTime = 0;
   private kibbleSearchTimer = 0;
+  private lastPointerX = 0;
+  private lastPointerY = 0;
+  private isPointerDown = false;
+  private uiNotifyCooldown = 0;
 
   constructor(
     private scene: Phaser.Scene,
@@ -114,45 +118,101 @@ export class ToolInteractionController {
       }
     }
 
-    if (this.selectedTool === 'wash') {
+     if (this.selectedTool === 'wash') {
       if (!this.washBrushFollower) {
         const container = this.scene.add.container(400, 300);
         container.setDepth(99999);
 
         const gfx = this.scene.add.graphics();
-        gfx.fillStyle(0xd4a373, 1);
-        gfx.fillRoundedRect(-6, -28, 12, 22, 4);
-        gfx.fillStyle(0xbc6c25, 1);
-        gfx.fillCircle(0, -22, 3);
 
-        gfx.fillStyle(0x48cae4, 0.95);
-        gfx.fillRoundedRect(-16, -6, 32, 20, 7);
-        gfx.fillStyle(0x90e0ef, 1);
-        gfx.fillRoundedRect(-14, -4, 28, 16, 5);
+        // 1. Natural Hardwood Base Block (Horizontal)
+        gfx.fillStyle(0x7f4f24, 1); // Drop shadow base
+        gfx.fillRoundedRect(-24, -8, 48, 14, 4);
 
+        gfx.fillStyle(0xbc6c25, 1); // Warm hardwood block
+        gfx.fillRoundedRect(-24, -11, 48, 13, 4);
+
+        gfx.fillStyle(0xdda15e, 1); // Top highlight bevel
+        gfx.fillRoundedRect(-22, -11, 44, 3.5, 2);
+
+        // 2. Curved Ergonomic Grip Handle on top
+        gfx.fillStyle(0x583110, 1); // Grip shadow
+        gfx.fillRoundedRect(-15, -19, 30, 9, 4);
+        gfx.fillStyle(0xd4a373, 1); // Grip bar
+        gfx.fillRoundedRect(-14, -19, 28, 7, 3);
+        gfx.fillStyle(0xfaedcd, 1); // Grip highlight
+        gfx.fillRoundedRect(-12, -19, 24, 2.5, 1);
+
+        // 3. Dense Vertical Scrub Bristles
+        gfx.fillStyle(0xfaedcd, 1); // Bristle bed
+        gfx.fillRect(-22, 2, 44, 9);
+
+        gfx.fillStyle(0xd4a373, 0.95);
+        for (let bx = -21; bx <= 21; bx += 3) {
+          gfx.fillRect(bx, 2, 1.5, 9);
+        }
+
+        // 4. Frothy Soap Bubbles & Suds on bristles
         gfx.fillStyle(0xffffff, 0.95);
-        gfx.fillCircle(-10, 14, 5);
-        gfx.fillCircle(-4, 15, 6);
-        gfx.fillCircle(4, 15, 6);
-        gfx.fillCircle(10, 14, 5);
+        gfx.fillCircle(-18, 11, 4);
+        gfx.fillCircle(-10, 12, 5);
+        gfx.fillCircle(-2, 11.5, 4.5);
+        gfx.fillCircle(6, 12, 5);
+        gfx.fillCircle(14, 11, 4);
+        gfx.fillCircle(20, 10, 3);
 
-        gfx.fillStyle(0x72efdd, 0.85);
-        gfx.fillCircle(12, -8, 4);
-        gfx.fillStyle(0xffffff, 0.95);
-        gfx.fillCircle(11, -9, 1.5);
+        gfx.fillStyle(0x90e0ef, 0.85);
+        gfx.fillCircle(-12, 14, 2.5);
+        gfx.fillCircle(2, 14, 3);
+        gfx.fillCircle(16, 13, 2.5);
+
+        gfx.fillStyle(0xffffff, 1);
+        gfx.fillCircle(-1, 10, 1.5);
+        gfx.fillCircle(7, 11, 1.5);
 
         container.add(gfx);
-        container.setScale(1.25);
+        container.setScale(1.2);
         this.washBrushFollower = container;
 
-        EventBus.emit('toast', { message: '🫧 Wash brush active! Drag it over cats to scrub and clean them!' });
+        this.createWashBrushFollower();
       }
-    } else {
-      if (this.washBrushFollower) {
-        this.washBrushFollower.destroy();
-        this.washBrushFollower = null;
-      }
+      this.washBrushFollower?.setVisible(true);
+    } else if (this.washBrushFollower) {
+      this.washBrushFollower.setVisible(false);
     }
+  }
+
+  private createWashBrushFollower(): void {
+    if (this.washBrushFollower) return;
+    this.washBrushFollower = this.scene.add.container(0, 0);
+    this.washBrushFollower.setDepth(99999);
+    this.washBrushFollower.setVisible(false);
+
+    const bg = this.scene.add.graphics();
+    bg.fillStyle(0x78350f, 0.95);
+    bg.fillRoundedRect(-22, -10, 44, 16, 4);
+
+    bg.fillStyle(0x92400e, 0.9);
+    bg.fillRoundedRect(-14, -17, 28, 9, 3);
+    bg.fillStyle(0xb45309, 0.9);
+    bg.fillRoundedRect(-11, -15, 22, 5, 2);
+
+    bg.fillStyle(0xfef08a, 0.95);
+    bg.fillRoundedRect(-20, 6, 40, 9, 2);
+
+    bg.fillStyle(0x451a03, 0.35);
+    for (let bx = -16; bx <= 16; bx += 5) {
+      bg.fillRect(bx, 6, 1.5, 9);
+    }
+
+    bg.fillStyle(0xffffff, 0.85);
+    bg.fillCircle(-12, -4, 4);
+    bg.fillCircle(10, -5, 3.5);
+    bg.fillCircle(0, -6, 5);
+    bg.fillCircle(14, 5, 3);
+    bg.fillCircle(-15, 6, 3.5);
+
+    this.washBrushFollower.add(bg);
   }
 
   getSelectedTool(): ToolType | null {
@@ -171,7 +231,7 @@ export class ToolInteractionController {
     const startX = fromX ?? (this.kibbleBag ? this.kibbleBag.x : targetX);
     const startY = fromY ?? (this.kibbleBag ? this.kibbleBag.y - 14 : targetY - 10);
 
-    if (this.kibblePieces.length >= 30) {
+    if (this.kibblePieces.length >= 24) {
       const oldest = this.kibblePieces.shift();
       oldest?.despawn();
     }
@@ -185,6 +245,11 @@ export class ToolInteractionController {
       if (this.washBrushFollower) this.washBrushFollower.setVisible(false);
       return;
     }
+
+    this.lastPointerX = pointer.worldX;
+    this.lastPointerY = pointer.worldY;
+    this.isPointerDown = pointer.isDown;
+
     if (this.washBrushFollower) {
       this.washBrushFollower.setVisible(true);
       this.washBrushFollower.setPosition(pointer.worldX, pointer.worldY);
@@ -192,81 +257,6 @@ export class ToolInteractionController {
         this.washBrushFollower.rotation = Math.sin(animTimer * 16) * 0.22;
       } else {
         this.washBrushFollower.rotation = 0;
-      }
-    }
-
-    const catSprites = this.callbacks.getCatSprites();
-
-    // Pet tool active drag
-    if (this.selectedTool === 'pet' && pointer.isDown) {
-      const px = pointer.worldX;
-      const py = pointer.worldY;
-      const now = this.scene.time.now;
-
-      if (!this.lastPetLoveTime || now - this.lastPetLoveTime > 120) {
-        let pettedAny = false;
-        for (const sprite of catSprites.values()) {
-          if (sprite.isCurrentlyDragged()) continue;
-          const dist = Phaser.Math.Distance.Between(px, py, sprite.x, sprite.y);
-          if (dist < 85) {
-            pettedAny = true;
-            const wasNeedy = sprite.cat.affection < 98;
-            sprite.cat.affection = Math.min(100, sprite.cat.affection + 4.0);
-            sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 1.2);
-            sprite.cat.energy = Math.min(100, sprite.cat.energy + 0.4);
-
-            sprite.triggerKneadBiscuits(5.5);
-            this.spawnPetHeart(sprite.x, sprite.y - 10);
-
-            if (wasNeedy) {
-              this.love.add(2);
-              this.growth.addGrowth(sprite.cat, 1);
-              EventBus.emit('love-changed', { love: this.love.love });
-            }
-
-            sprite.showEmote(wasNeedy ? '❤️' : '🥰');
-            sprite.refreshVisuals();
-          }
-        }
-
-        if (pettedAny) {
-          this.lastPetLoveTime = now;
-          sound.playPurr();
-          this.callbacks.notifyUi();
-        }
-      }
-    }
-
-    // Wash tool active drag
-    if (this.selectedTool === 'wash' && pointer.isDown) {
-      const px = pointer.worldX;
-      const py = pointer.worldY;
-      const now = this.scene.time.now;
-      const dt = 0.016;
-
-      for (const sprite of catSprites.values()) {
-        if (sprite.isCurrentlyDragged()) continue;
-        const dist = Phaser.Math.Distance.Between(px, py, sprite.x, sprite.y);
-
-        if (dist < 75) {
-          this.spawnSoapBubbles(sprite.x + Phaser.Math.Between(-12, 12), sprite.y + Phaser.Math.Between(-8, 8));
-
-          const wasDirty = sprite.cat.cleanliness < 98;
-          sprite.cat.cleanliness = Math.min(100, sprite.cat.cleanliness + 34 * dt);
-          sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 0.5 * dt);
-
-          if (wasDirty && (!this.lastWashLoveTime || now - this.lastWashLoveTime > 450)) {
-            this.lastWashLoveTime = now;
-            this.love.add(2);
-            this.growth.addGrowth(sprite.cat, 1);
-            EventBus.emit('love-changed', { love: this.love.love });
-            sound.playBubble();
-            sprite.showEmote('🫧');
-          }
-
-          sprite.refreshVisuals();
-          this.callbacks.notifyUi();
-        }
       }
     }
   }
@@ -296,6 +286,22 @@ export class ToolInteractionController {
       sound.playBubble();
       sprite.showEmote('🫧');
       this.spawnSoapBubbles(sprite.x, sprite.y);
+
+      // Small AOE splash: clean any nearby cats within 115px
+      const catSprites = this.callbacks.getCatSprites();
+      const splash2 = 115 * 115;
+      for (const otherSprite of catSprites.values()) {
+        if (otherSprite !== sprite && otherSprite.active && !otherSprite.isCurrentlyDragged()) {
+          const dx = sprite.x - otherSprite.x;
+          const dy = sprite.y - otherSprite.y;
+          if (dx * dx + dy * dy <= splash2) {
+            otherSprite.cat.cleanliness = Math.min(100, otherSprite.cat.cleanliness + 45);
+            otherSprite.showEmote('🫧');
+            this.spawnSoapBubbles(otherSprite.x, otherSprite.y);
+            otherSprite.refreshVisuals();
+          }
+        }
+      }
     }
 
     sprite.refreshVisuals();
@@ -318,9 +324,116 @@ export class ToolInteractionController {
     }
 
     this.updateKibblePieces(deltaSeconds);
+    this.updateToolInteractions(deltaSeconds);
+  }
+
+  private updateToolInteractions(dt: number): void {
+    if (isAnyModalOpen() || !this.selectedTool) return;
+    if (this.selectedTool !== 'pet' && this.selectedTool !== 'wash') return;
+
+    this.uiNotifyCooldown -= dt;
+    const catSprites = this.callbacks.getCatSprites();
+    const px = this.lastPointerX;
+    const py = this.lastPointerY;
+    const now = this.scene.time.now;
+    let shouldNotifyUi = false;
+
+    // Pet tool active drag
+    if (this.selectedTool === 'pet' && this.isPointerDown) {
+      if (!this.lastPetLoveTime || now - this.lastPetLoveTime > 120) {
+        let pettedAny = false;
+        const petRadius2 = 85 * 85;
+
+        for (const sprite of catSprites.values()) {
+          if (sprite.isCurrentlyDragged()) continue;
+          const dx = px - sprite.x;
+          const dy = py - sprite.y;
+          if (dx * dx + dy * dy < petRadius2) {
+            pettedAny = true;
+            const wasNeedy = sprite.cat.affection < 98;
+            sprite.cat.affection = Math.min(100, sprite.cat.affection + 4.0);
+            sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 1.2);
+            sprite.cat.energy = Math.min(100, sprite.cat.energy + 0.4);
+
+            sprite.triggerKneadBiscuits(5.5);
+            this.spawnPetHeart(sprite.x, sprite.y - 10);
+
+            if (wasNeedy) {
+              this.love.add(2);
+              this.growth.addGrowth(sprite.cat, 1);
+              EventBus.emit('love-changed', { love: this.love.love });
+            }
+
+            sprite.showEmote(wasNeedy ? '❤️' : '🥰');
+            sprite.refreshVisuals();
+          }
+        }
+
+        if (pettedAny) {
+          this.lastPetLoveTime = now;
+          sound.playPurr();
+          shouldNotifyUi = true;
+        }
+      }
+    }
+
+    // Wash tool active: cats autonomously flee and get scrubbed in a small AOE
+    if (this.selectedTool === 'wash') {
+      const fleeRadius2 = 135 * 135;
+      const scrubRadius2 = 115 * 115;
+
+      for (const sprite of catSprites.values()) {
+        if (sprite.isCurrentlyDragged() || sprite.cat.animationState === 'sleep') continue;
+        const dx = px - sprite.x;
+        const dy = py - sprite.y;
+        const d2 = dx * dx + dy * dy;
+
+        // Autonomous fleeing: cats spot the brush and sprint away on their own!
+        if (d2 < fleeRadius2) {
+          sprite.triggerFleeFromBrush(px, py);
+        }
+
+        // Active scrubbing contact with a generous small AOE radius (115px) & faster cleaning
+        if (this.isPointerDown && d2 < scrubRadius2) {
+          this.spawnSoapBubbles(sprite.x + Phaser.Math.Between(-14, 14), sprite.y + Phaser.Math.Between(-10, 10));
+
+          const wasDirty = sprite.cat.cleanliness < 98;
+          sprite.cat.cleanliness = Math.min(100, sprite.cat.cleanliness + 85 * dt);
+          sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 1.8 * dt);
+
+          if (wasDirty && (!this.lastWashLoveTime || now - this.lastWashLoveTime > 260)) {
+            this.lastWashLoveTime = now;
+            this.love.add(3);
+            this.growth.addGrowth(sprite.cat, 2);
+            EventBus.emit('love-changed', { love: this.love.love });
+            sound.playBubble();
+            sprite.showEmote('🫧');
+          }
+
+          sprite.refreshVisuals();
+          shouldNotifyUi = true;
+        }
+      }
+    }
+
+    if (shouldNotifyUi && this.uiNotifyCooldown <= 0) {
+      this.uiNotifyCooldown = 0.28;
+      this.callbacks.notifyUi();
+    }
   }
 
   private updateKibblePieces(deltaSeconds: number): void {
+    if (this.kibblePieces.length === 0) return;
+
+    for (let i = this.kibblePieces.length - 1; i >= 0; i--) {
+      const piece = this.kibblePieces[i];
+      if (!piece.active) {
+        this.kibblePieces.splice(i, 1);
+      }
+    }
+
+    if (this.kibblePieces.length === 0) return;
+
     this.kibbleSearchTimer += deltaSeconds;
     const shouldRecalculateTarget = this.kibbleSearchTimer >= 0.25;
     if (shouldRecalculateTarget) {
@@ -328,75 +441,69 @@ export class ToolInteractionController {
     }
 
     const catSprites = this.callbacks.getCatSprites();
+    const eatRadius2 = 24 * 24;
+    const pounceRadius2 = 55 * 55;
+    const chaseRadius2 = 650 * 650;
 
-    for (let i = this.kibblePieces.length - 1; i >= 0; i--) {
-      const piece = this.kibblePieces[i];
-      if (!piece.active) {
-        this.kibblePieces.splice(i, 1);
-        continue;
-      }
-    }
+    for (const sprite of catSprites.values()) {
+      if (!sprite.active || sprite.isCurrentlyDragged() || sprite.cat.animationState === 'sleep') continue;
 
-    if (this.kibblePieces.length > 0) {
-      for (const sprite of catSprites.values()) {
-        if (!sprite.active || sprite.isCurrentlyDragged() || sprite.cat.animationState === 'sleep') continue;
+      let nearestPiece: KibblePiece | null = null;
+      let minD2 = 99999999;
 
-        let nearestPiece: KibblePiece | null = null;
-        let minDist = 999999;
-
-        for (const piece of this.kibblePieces) {
-          if (!piece.active || piece.isEaten) continue;
-          const d = Phaser.Math.Distance.Between(sprite.x, sprite.y, piece.x, piece.y);
-          if (d < minDist) {
-            minDist = d;
-            nearestPiece = piece;
-          }
+      for (let i = 0; i < this.kibblePieces.length; i++) {
+        const piece = this.kibblePieces[i];
+        if (!piece.active || piece.isEaten) continue;
+        const dx = piece.x - sprite.x;
+        const dy = piece.y - sprite.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < minD2) {
+          minD2 = d2;
+          nearestPiece = piece;
         }
+      }
 
-        if (nearestPiece) {
-          if (minDist <= 24) {
-            nearestPiece.eat();
-            sound.playCrunch();
+      if (nearestPiece) {
+        if (minD2 <= eatRadius2) {
+          nearestPiece.eat();
+          sound.playCrunch();
 
-            const wasVeryHungry = sprite.cat.hunger < 50;
-            sprite.cat.hunger = Math.min(100, sprite.cat.hunger + 32);
-            sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 8);
-            sprite.cat.affection = Math.min(100, sprite.cat.affection + 4);
-            this.growth.addGrowth(sprite.cat, 6);
+          const wasVeryHungry = sprite.cat.hunger < 50;
+          sprite.cat.hunger = Math.min(100, sprite.cat.hunger + 32);
+          sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 8);
+          sprite.cat.affection = Math.min(100, sprite.cat.affection + 4);
+          this.growth.addGrowth(sprite.cat, 6);
 
-            this.love.add(3);
-            EventBus.emit('love-changed', { love: this.love.love });
+          this.love.add(3);
+          EventBus.emit('love-changed', { love: this.love.love });
 
-            sprite.triggerPlayState(1.4);
-            sprite.showEmote(wasVeryHungry ? '🐟' : '😋');
-            sprite.refreshVisuals();
-            this.callbacks.notifyUi();
-          } else if (minDist <= 55 && !sprite.isPounceActive() && Math.random() < 0.45) {
-            const targetPiece = nearestPiece;
-            sprite.clearChaseTarget();
-            sprite.executePounce(targetPiece.x, targetPiece.y, () => {
-              if (targetPiece.active && !targetPiece.isEaten) {
-                targetPiece.eat();
-                sound.playCrunch();
+          sprite.triggerPlayState(1.4);
+          sprite.showEmote(wasVeryHungry ? '🐟' : '😋');
+          sprite.refreshVisuals();
+        } else if (minD2 <= pounceRadius2 && !sprite.isPounceActive() && Math.random() < 0.35) {
+          const targetPiece = nearestPiece;
+          sprite.clearChaseTarget();
+          sprite.executePounce(targetPiece.x, targetPiece.y, () => {
+            if (targetPiece.active && !targetPiece.isEaten) {
+              targetPiece.eat();
+              sound.playCrunch();
 
-                const wasVeryHungry = sprite.cat.hunger < 50;
-                sprite.cat.hunger = Math.min(100, sprite.cat.hunger + 32);
-                sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 8);
-                sprite.cat.affection = Math.min(100, sprite.cat.affection + 4);
-                this.growth.addGrowth(sprite.cat, 6);
+              const wasVeryHungry = sprite.cat.hunger < 50;
+              sprite.cat.hunger = Math.min(100, sprite.cat.hunger + 32);
+              sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 8);
+              sprite.cat.affection = Math.min(100, sprite.cat.affection + 4);
+              this.growth.addGrowth(sprite.cat, 6);
 
-                this.love.add(3);
-                EventBus.emit('love-changed', { love: this.love.love });
+              this.love.add(3);
+              EventBus.emit('love-changed', { love: this.love.love });
 
-                sprite.triggerPlayState(1.4);
-                sprite.showEmote(wasVeryHungry ? '🐟' : '😋');
-                sprite.refreshVisuals();
-                this.callbacks.notifyUi();
-              }
-            });
-          } else if (shouldRecalculateTarget && minDist < 650 && !sprite.isPounceActive()) {
-            sprite.setChaseTarget(nearestPiece.x, nearestPiece.y);
-          }
+              sprite.triggerPlayState(1.4);
+              sprite.showEmote(wasVeryHungry ? '🐟' : '😋');
+              sprite.refreshVisuals();
+            }
+          });
+        } else if (shouldRecalculateTarget && minD2 < chaseRadius2 && !sprite.isPounceActive()) {
+          sprite.setChaseTarget(nearestPiece.x, nearestPiece.y);
         }
       }
     }

@@ -40,12 +40,19 @@ export class SanctuaryScene extends Phaser.Scene {
 
   private currentArea: CatArea = 'yard';
   private catSprites = new Map<string, CatSprite>();
+  private activeCatSpriteList: CatSprite[] = [];
+  private needsTickAccumMs = 0;
   private lastTick = 0;
   private lastPerfumeBondSoundTime = 0;
   private relationshipTickAccum = 0;
   private onlineProgressionAccumMs = 0;
   private animTimer = 0;
   private activeDeliveryBoxes: DeliveryBox[] = [];
+
+  // Conga Parade Event (~every 10 minutes)
+  private congaParadeTimer = 600;
+  private isCongaParadeActive = false;
+  private congaParadeDuration = 0;
 
   // Sub-Controllers
   private areaRenderer!: AreaRenderer;
@@ -332,7 +339,7 @@ export class SanctuaryScene extends Phaser.Scene {
     sprite.setAvailableMachines(machines);
     const furniture = this.getAvailableFurnitureForCurrentArea(bounds);
     sprite.setAvailableFurniture(furniture);
-    sprite.setOtherSpritesProvider(() => Array.from(this.catSprites.values()));
+    sprite.setOtherSpritesProvider(() => this.activeCatSpriteList);
     sprite.setToyBallProvider(() => this.toolController.getToyBall());
     sprite.setMachineUseCallback((c, machineId) => {
       const res = this.automation.useMachine(c, machineId);
@@ -355,6 +362,11 @@ export class SanctuaryScene extends Phaser.Scene {
     });
 
     this.catSprites.set(cat.id, sprite);
+    this.refreshActiveCatSpriteList();
+  }
+
+  private refreshActiveCatSpriteList(): void {
+    this.activeCatSpriteList = Array.from(this.catSprites.values());
   }
 
   private bindUiEvents(): void {
@@ -656,6 +668,10 @@ export class SanctuaryScene extends Phaser.Scene {
       } else {
         EventBus.emit('toast', { message: `Need ${nextUpgrade.costCarePoints.toLocaleString()} 💗 for this upgrade.` });
       }
+    });
+
+    EventBus.on('trigger-conga-parade', () => {
+      this.startCongaParade();
     });
   }
 
@@ -972,6 +988,8 @@ export class SanctuaryScene extends Phaser.Scene {
       }
     }
 
+    this.refreshActiveCatSpriteList();
+
     if (count === 0) return;
 
     this.love.add(totalLove);
@@ -1202,11 +1220,12 @@ export class SanctuaryScene extends Phaser.Scene {
   override update(time: number, delta: number): void {
     const deltaMs = time - this.lastTick;
     this.lastTick = time;
-    const deltaMinutes = deltaMs / 60000;
     const deltaSeconds = deltaMs / 1000;
     this.animTimer += deltaSeconds;
 
-    for (const sprite of this.catSprites.values()) {
+    const sprites = this.activeCatSpriteList;
+    for (let i = 0; i < sprites.length; i++) {
+      const sprite = sprites[i];
       if (sprite.active) {
         sprite.update(delta);
       }
@@ -1215,28 +1234,48 @@ export class SanctuaryScene extends Phaser.Scene {
     this.toolController.update(deltaSeconds);
     this.weatherAndLighting.update(deltaSeconds, this.currentArea);
 
-    for (const cat of this.state.cats) {
-      tickCatNeeds(cat, deltaMinutes, this.state.machines);
+    // Conga Parade Event Tick (~every 10 minutes)
+    if (this.isCongaParadeActive) {
+      this.congaParadeDuration -= deltaSeconds;
+      if (this.congaParadeDuration <= 0) {
+        this.endCongaParade();
+      }
+    } else {
+      this.congaParadeTimer -= deltaSeconds;
+      if (this.congaParadeTimer <= 0) {
+        this.startCongaParade();
+      }
     }
 
-    const evoEvents = this.growth.tickGrowth(this.state.cats, deltaMinutes);
-    for (const evo of evoEvents) {
-      const sp = this.catSprites.get(evo.cat.id);
-      if (sp) sp.refreshVisuals();
-    }
+    // Throttled Needs & Growth Processing (every 1000ms instead of every 16ms)
+    this.needsTickAccumMs += deltaMs;
+    if (this.needsTickAccumMs >= 1000) {
+      const deltaMinutes = this.needsTickAccumMs / 60000;
+      this.needsTickAccumMs = 0;
 
-    let loveGained = this.love.tickPassiveLove(deltaMinutes);
-    const cafeCats = this.state.cats.filter((c) => c.area === 'cafe').length;
-    if (this.state.areas.cafe?.unlocked && cafeCats > 0) {
-      const fountainBoost = this.state.furniture.includes('fountain_dish') ? 1.2 : 1.0;
-      const cafeTipLove = cafeCats * 0.12 * fountainBoost * deltaMinutes;
-      this.love.add(cafeTipLove);
-      loveGained += cafeTipLove;
-    }
+      for (let i = 0; i < this.state.cats.length; i++) {
+        tickCatNeeds(this.state.cats[i], deltaMinutes, this.state.machines);
+      }
 
-    if (loveGained > 0) {
-      this.state.totalLoveEarned += loveGained;
-      EventBus.emit('love-changed', { love: this.love.love });
+      const evoEvents = this.growth.tickGrowth(this.state.cats, deltaMinutes);
+      for (let i = 0; i < evoEvents.length; i++) {
+        const sp = this.catSprites.get(evoEvents[i].cat.id);
+        if (sp) sp.refreshVisuals();
+      }
+
+      let loveGained = this.love.tickPassiveLove(deltaMinutes);
+      const cafeCats = this.state.cats.filter((c) => c.area === 'cafe').length;
+      if (this.state.areas.cafe?.unlocked && cafeCats > 0) {
+        const fountainBoost = this.state.furniture.includes('fountain_dish') ? 1.2 : 1.0;
+        const cafeTipLove = cafeCats * 0.12 * fountainBoost * deltaMinutes;
+        this.love.add(cafeTipLove);
+        loveGained += cafeTipLove;
+      }
+
+      if (loveGained > 0) {
+        this.state.totalLoveEarned += loveGained;
+        EventBus.emit('love-changed', { love: this.love.love });
+      }
     }
 
     this.onlineProgressionAccumMs += deltaMs;
@@ -1273,57 +1312,188 @@ export class SanctuaryScene extends Phaser.Scene {
       }
 
       const now = Date.now();
+      const adultCountByArea: Record<string, number> = {};
+      const catsMap = new Map<string, Cat>();
+      for (let i = 0; i < this.state.cats.length; i++) {
+        const c = this.state.cats[i];
+        catsMap.set(c.id, c);
+        if (c.stage === 'adult') {
+          adultCountByArea[c.area] = (adultCountByArea[c.area] || 0) + 1;
+        }
+      }
+
       for (const [catId, sprite] of this.catSprites.entries()) {
-        const cat = this.state.cats.find((c) => c.id === catId);
-        if (!cat || cat.stage !== 'adult') { sprite.setBreedReady(false); continue; }
-        const hasPartner = this.state.cats.some(
-          (c) => c.id !== catId && c.stage === 'adult' && c.area === cat.area,
-        );
-        if (!hasPartner) { sprite.setBreedReady(false); continue; }
-        const onCooldown = Object.entries(this.state.breedingCooldowns).some(([key, ts]) => {
-          return key.includes(catId) && now - ts < BREED_COOLDOWN_MS;
-        });
+        const cat = catsMap.get(catId);
+        if (!cat || cat.stage !== 'adult' || (adultCountByArea[cat.area] || 0) < 2) {
+          sprite.setBreedReady(false);
+          continue;
+        }
+        let onCooldown = false;
+        for (const key in this.state.breedingCooldowns) {
+          if (key.includes(catId) && now - this.state.breedingCooldowns[key] < BREED_COOLDOWN_MS) {
+            onCooldown = true;
+            break;
+          }
+        }
         sprite.setBreedReady(!onCooldown);
       }
     }
   }
 
   private tickRelationshipsAndEvents(periodSeconds: number): void {
-    const sleeping = this.state.cats.filter((c) => c.animationState === 'sleep');
-    for (let i = 0; i < sleeping.length; i++) {
-      for (let j = i + 1; j < sleeping.length; j++) {
-        if (sleeping[i].area === sleeping[j].area) {
-          this.relationships.nap(sleeping[i], sleeping[j]);
+    const sleepingByArea: Record<string, Cat[]> = {};
+    const playingByArea: Record<string, Cat[]> = {};
+    const eatingByArea: Record<string, Cat[]> = {};
+
+    for (let i = 0; i < this.state.cats.length; i++) {
+      const c = this.state.cats[i];
+      if (c.animationState === 'sleep') {
+        (sleepingByArea[c.area] ||= []).push(c);
+      } else if (c.animationState === 'play') {
+        (playingByArea[c.area] ||= []).push(c);
+      } else if (c.hunger > 80) {
+        (eatingByArea[c.area] ||= []).push(c);
+      }
+    }
+
+    for (const area in sleepingByArea) {
+      const list = sleepingByArea[area];
+      if (list.length >= 2) {
+        const pairs = Math.min(3, Math.floor(list.length / 2));
+        for (let k = 0; k < pairs; k++) {
+          const idxA = Math.floor(Math.random() * list.length);
+          let idxB = Math.floor(Math.random() * list.length);
+          if (idxA === idxB) idxB = (idxA + 1) % list.length;
+          this.relationships.nap(list[idxA], list[idxB]);
         }
       }
     }
 
-    const playing = this.state.cats.filter((c) => c.animationState === 'play');
-    for (let i = 0; i < playing.length; i++) {
-      for (let j = i + 1; j < playing.length; j++) {
-        if (playing[i].area === playing[j].area) {
-          this.relationships.play(playing[i], playing[j]);
+    for (const area in playingByArea) {
+      const list = playingByArea[area];
+      if (list.length >= 2) {
+        const pairs = Math.min(3, Math.floor(list.length / 2));
+        for (let k = 0; k < pairs; k++) {
+          const idxA = Math.floor(Math.random() * list.length);
+          let idxB = Math.floor(Math.random() * list.length);
+          if (idxA === idxB) idxB = (idxA + 1) % list.length;
+          this.relationships.play(list[idxA], list[idxB]);
         }
       }
     }
 
-    const eating = this.state.cats.filter((c) => c.hunger > 80 && c.animationState !== 'sleep');
-    for (let i = 0; i < eating.length; i++) {
-      for (let j = i + 1; j < eating.length; j++) {
-        if (eating[i].area === eating[j].area && Math.random() < 0.3) {
-          this.relationships.eat(eating[i], eating[j]);
-        }
+    for (const area in eatingByArea) {
+      const list = eatingByArea[area];
+      if (list.length >= 2 && Math.random() < 0.3) {
+        const idxA = Math.floor(Math.random() * list.length);
+        let idxB = Math.floor(Math.random() * list.length);
+        if (idxA === idxB) idxB = (idxA + 1) % list.length;
+        this.relationships.eat(list[idxA], list[idxB]);
       }
     }
 
     this.relationships.updateAllBestFriends();
 
     const events = this.events_.tick(periodSeconds);
-    for (const e of events) {
-      EventBus.emit('toast', { message: e.message });
+    for (let i = 0; i < events.length; i++) {
+      EventBus.emit('toast', { message: events[i].message });
     }
     if (events.length > 0) {
       EventBus.emit('love-changed', { love: this.love.love });
+    }
+  }
+
+  private startCongaParade(): void {
+    const sprites = Array.from(this.catSprites.values()).filter((s) => s.active && !s.isCurrentlyDragged());
+    if (sprites.length < 2) {
+      this.congaParadeTimer = 60; // Retry in 1 min if fewer than 2 cats present
+      return;
+    }
+
+    this.isCongaParadeActive = true;
+    this.congaParadeDuration = 32; // 32 seconds of pure conga fun
+    this.congaParadeTimer = 540 + Math.random() * 120; // 9-11 minutes until next parade
+
+    sound.playAdoptFanfare();
+    EventBus.emit('toast', { message: '🎉 Conga Parade! All cats are joining the Grand Conga Line! 🐾🎶' });
+
+    this.spawnCelebrationConfetti();
+
+    // Create a smooth snaking serpentine path through the area's walkable bounds
+    const bounds = this.areaRenderer.walkableBounds(this.currentArea);
+    const pad = 45;
+    const l = bounds.left + pad;
+    const r = bounds.right - pad;
+    const t = bounds.top + pad;
+    const b = bounds.bottom - pad;
+    const mx = (l + r) / 2;
+    const my = (t + b) / 2;
+
+    const waypoints = [
+      new Phaser.Math.Vector2(l, my - 25),
+      new Phaser.Math.Vector2(mx - 35, t),
+      new Phaser.Math.Vector2(r, my - 15),
+      new Phaser.Math.Vector2(mx + 35, b),
+      new Phaser.Math.Vector2(l + 30, b - 20),
+      new Phaser.Math.Vector2(mx, my),
+      new Phaser.Math.Vector2(r - 25, t + 25),
+      new Phaser.Math.Vector2(l + 25, t + 25),
+    ];
+
+    const leader = sprites.find((s) => s.cat.stage === 'adult') || sprites[0];
+    const ordered = [leader, ...sprites.filter((s) => s !== leader)];
+
+    leader.startCongaLeader(waypoints);
+    for (let i = 1; i < ordered.length; i++) {
+      ordered[i].startCongaFollower(ordered[i - 1]);
+    }
+  }
+
+  private endCongaParade(): void {
+    if (!this.isCongaParadeActive) return;
+    this.isCongaParadeActive = false;
+
+    for (const sprite of this.catSprites.values()) {
+      if (sprite.active) {
+        sprite.endCongaParade();
+        sprite.cat.fun = 100;
+        sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 25);
+        sprite.refreshVisuals();
+      }
+    }
+
+    this.love.add(50);
+    this.state.totalLoveEarned += 50;
+    EventBus.emit('love-changed', { love: this.love.love });
+    sound.playSparkle();
+    EventBus.emit('toast', { message: '🎊 Conga Parade complete! Everyone is full of joy! (+50 💗)' });
+    this.spawnCelebrationConfetti();
+    this.saveManager.save(this.state);
+    this.notifyUiState();
+  }
+
+  private spawnCelebrationConfetti(): void {
+    const bounds = this.areaRenderer.walkableBounds(this.currentArea);
+    const colors = [0xff477e, 0xffd166, 0x06d6a0, 0x118ab2, 0x9b5de5, 0xf15bb5, 0xffffff];
+    for (let i = 0; i < 30; i++) {
+      const x = Phaser.Math.Between(bounds.left + 15, bounds.right - 15);
+      const y = bounds.top - 15;
+      const confetti = this.add.graphics();
+      confetti.fillStyle(Phaser.Math.RND.pick(colors), 0.95);
+      confetti.fillRoundedRect(-4, -4, 8, 8, 2);
+      confetti.setPosition(x, y);
+      confetti.setDepth(9999);
+
+      this.tweens.add({
+        targets: confetti,
+        y: bounds.bottom - Phaser.Math.Between(10, 80),
+        x: x + Phaser.Math.Between(-45, 45),
+        rotation: Phaser.Math.Between(-8, 8),
+        alpha: 0,
+        duration: Phaser.Math.Between(1800, 2600),
+        ease: 'Quad.easeIn',
+        onComplete: () => confetti.destroy(),
+      });
     }
   }
 }
