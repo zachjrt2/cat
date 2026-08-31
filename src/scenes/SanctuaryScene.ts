@@ -14,6 +14,7 @@ import { AutomationSystem } from '../systems/AutomationSystem';
 import { BreedingSystem, BREED_COOLDOWN_MS } from '../systems/BreedingSystem';
 import { tickCatNeeds, applyAutomationThresholds } from '../systems/NeedsSystem';
 import { CatSprite, type AvailableMachineInfo } from '../entities/CatSprite';
+import { DeliveryBox, type DeliveryData } from '../entities/DeliveryBox';
 import { AUTOSAVE_INTERVAL_MS, AREA_INFO_MAP, FURNITURE_CATALOG, RARE_SUMMONS, OFFLINE_STAR_UPGRADES, calculateRehomeLove, getAreaCapacityUpgradeCost, CAT_PERFUME_COST, CAT_PERFUME_COOLDOWN_MS, CAT_PERFUME_FRENZY_SECONDS } from '../data/constants';
 import { EventBus } from '../ui/EventBus';
 import { sound } from '../systems/SoundManager';
@@ -44,6 +45,7 @@ export class SanctuaryScene extends Phaser.Scene {
   private relationshipTickAccum = 0;
   private onlineProgressionAccumMs = 0;
   private animTimer = 0;
+  private activeDeliveryBoxes: DeliveryBox[] = [];
 
   // Sub-Controllers
   private areaRenderer!: AreaRenderer;
@@ -367,7 +369,7 @@ export class SanctuaryScene extends Phaser.Scene {
         EventBus.emit('love-changed', { love: this.love.love });
         EventBus.emit('toast', { message: `✏️ Renamed cat to ${newName}! (-${cost} 💗)` });
       } else {
-        EventBus.emit('toast', { message: `Not enough Care Points! Need ${cost} 💗.` });
+        EventBus.emit('toast', { message: `Need ${cost} 💗 to rename.` });
       }
     });
 
@@ -376,12 +378,38 @@ export class SanctuaryScene extends Phaser.Scene {
     });
 
     EventBus.on('buy-machine', ({ machineId }: { machineId: string }) => {
-      if (this.automation.buyMachine(machineId)) {
-        this.saveManager.save(this.state);
-        this.drawCurrentArea();
-        this.refreshCatMachines();
-        this.notifyUiState();
+      const def = this.automation.getMachineDef(machineId);
+      if (!def) return;
+      if (this.automation.getMachineLevel(machineId) > 0) {
+        EventBus.emit('toast', { message: `You already own ${def.name}!` });
+        return;
       }
+      if (!this.love.spend(def.baseCost)) {
+        EventBus.emit('toast', { message: `Need ${def.baseCost.toLocaleString()} 💗 to purchase ${def.name}.` });
+        return;
+      }
+      EventBus.emit('love-changed', { love: this.love.love });
+      this.spawnDeliveryBox({
+        type: 'machine',
+        id: machineId,
+        name: def.name,
+        emoji: '⚙️',
+        area: def.area,
+        onOpen: () => {
+          this.state.machines[machineId] = 1;
+          for (const cat of this.state.cats) {
+            if (cat.area === def.area) {
+              applyAutomationThresholds(cat, this.state.machines);
+            }
+          }
+          this.saveManager.save(this.state);
+          this.drawCurrentArea();
+          this.refreshCatMachines();
+          this.notifyUiState();
+          sound.playAdoptFanfare();
+          EventBus.emit('toast', { message: `🎉 Installed ${def.name} in ${def.area.toUpperCase()}!` });
+        },
+      });
     });
 
     EventBus.on('upgrade-machine', ({ machineId }: { machineId: string }) => {
@@ -395,6 +423,14 @@ export class SanctuaryScene extends Phaser.Scene {
 
     EventBus.on('rehome-cat', ({ catId }: { catId: string }) => {
       this.handleRehomeCat(catId);
+    });
+
+    EventBus.on('rehome-cats-batch', ({ catIds }: { catIds: string[] }) => {
+      this.handleRehomeCatsBatch(catIds);
+    });
+
+    EventBus.on('instant-grow-cat', ({ catId, cost }: { catId: string; cost: number }) => {
+      this.handleInstantGrowCat(catId, cost);
     });
 
     EventBus.on('breed-cats', ({ parentAId, parentBId }: { parentAId: string; parentBId: string }) => {
@@ -465,13 +501,22 @@ export class SanctuaryScene extends Phaser.Scene {
 
     EventBus.on('buy-cat-perfume', () => {
       if (this.love.spend(CAT_PERFUME_COST)) {
-        this.state.catPerfumeCount = (this.state.catPerfumeCount || 0) + 1;
-        this.saveManager.save(this.state);
-        this.notifyUiState();
-        sound.playPop();
-        EventBus.emit('toast', { message: `Purchased Cat Perfume! (${this.state.catPerfumeCount} in stock)` });
+        EventBus.emit('love-changed', { love: this.love.love });
+        this.spawnDeliveryBox({
+          type: 'perfume',
+          id: 'cat_perfume',
+          name: 'Cat Perfume',
+          emoji: '🌸',
+          onOpen: () => {
+            this.state.catPerfumeCount = (this.state.catPerfumeCount || 0) + 1;
+            this.saveManager.save(this.state);
+            this.notifyUiState();
+            sound.playAdoptFanfare();
+            EventBus.emit('toast', { message: `🌸 Added Cat Perfume to inventory! (${this.state.catPerfumeCount} in stock)` });
+          },
+        });
       } else {
-        EventBus.emit('toast', { message: `Need ${CAT_PERFUME_COST} 💗 Care Points to buy Cat Perfume.` });
+        EventBus.emit('toast', { message: `Need ${CAT_PERFUME_COST} 💗 to buy Cat Perfume.` });
         sound.playPop();
       }
     });
@@ -570,7 +615,7 @@ export class SanctuaryScene extends Phaser.Scene {
         this.saveManager.save(this.state);
         this.notifyUiState();
       } else {
-        EventBus.emit('toast', { message: `Need ${nextUpgrade.costCarePoints.toLocaleString()} Care Points for this upgrade.` });
+        EventBus.emit('toast', { message: `Need ${nextUpgrade.costCarePoints.toLocaleString()} 💗 for this upgrade.` });
       }
     });
   }
@@ -620,6 +665,15 @@ export class SanctuaryScene extends Phaser.Scene {
     this.toolController.onAreaSwitched(newAreaWalkable);
     this.drawCurrentArea();
     this.spawnCatsInCurrentArea();
+
+    for (const box of this.activeDeliveryBoxes) {
+      if (box && box.active) {
+        box.x = newAreaWalkable.centerX + (Math.random() - 0.5) * (newAreaWalkable.width * 0.3);
+        box.y = newAreaWalkable.centerY + (Math.random() - 0.5) * (newAreaWalkable.height * 0.2);
+        box.setDepth(box.y + 25);
+      }
+    }
+
     this.notifyUiState();
   }
 
@@ -669,6 +723,25 @@ export class SanctuaryScene extends Phaser.Scene {
     this.notifyUiState();
   }
 
+  private spawnDeliveryBox(delivery: DeliveryData): void {
+    const bounds = this.areaRenderer.walkableBounds(this.currentArea);
+    const targetX = bounds.centerX + (Math.random() - 0.5) * (bounds.width * 0.45);
+    const targetY = bounds.centerY + (Math.random() - 0.5) * (bounds.height * 0.35);
+
+    const box = new DeliveryBox(this, targetX, targetY, {
+      ...delivery,
+      onOpen: () => {
+        const idx = this.activeDeliveryBoxes.indexOf(box);
+        if (idx >= 0) this.activeDeliveryBoxes.splice(idx, 1);
+        delivery.onOpen();
+      },
+    });
+
+    this.activeDeliveryBoxes.push(box);
+    sound.playPop();
+    EventBus.emit('toast', { message: '📦 Delivery arrived!' });
+  }
+
   private tryBuyFurniture(furnitureId: string): void {
     const item = FURNITURE_CATALOG.find((f) => f.id === furnitureId);
     if (!item) return;
@@ -679,16 +752,26 @@ export class SanctuaryScene extends Phaser.Scene {
     }
 
     if (!this.love.spend(item.loveCost)) {
-      EventBus.emit('toast', { message: `Need ${item.loveCost} 💗 to purchase ${item.name}.` });
+      EventBus.emit('toast', { message: `Need ${item.loveCost.toLocaleString()} 💗 to purchase ${item.name}.` });
       return;
     }
 
-    this.state.furniture.push(furnitureId);
-    sound.playAdoptFanfare();
-    EventBus.emit('toast', { message: `✨ Placed ${item.name} in the sanctuary!` });
-    this.saveManager.save(this.state);
-    this.notifyUiState();
-    this.drawCurrentArea();
+    EventBus.emit('love-changed', { love: this.love.love });
+    this.spawnDeliveryBox({
+      type: 'furniture',
+      id: furnitureId,
+      name: item.name,
+      emoji: '🛋️',
+      area: item.area,
+      onOpen: () => {
+        this.state.furniture.push(furnitureId);
+        this.saveManager.save(this.state);
+        this.drawCurrentArea();
+        this.notifyUiState();
+        sound.playAdoptFanfare();
+        EventBus.emit('toast', { message: `🎉 Placed ${item.name} in ${item.area.toUpperCase()}!` });
+      },
+    });
   }
 
   private trySummonRareCat(rareType: RareCatType): void {
@@ -825,6 +908,104 @@ export class SanctuaryScene extends Phaser.Scene {
 
     this.saveManager.save(this.state);
     this.notifyUiState();
+  }
+
+  private handleRehomeCatsBatch(catIds: string[]): void {
+    if (!catIds.length) return;
+    let totalLove = 0;
+    let totalStars = 0;
+    let count = 0;
+
+    for (const catId of catIds) {
+      const catIndex = this.state.cats.findIndex((c) => c.id === catId);
+      if (catIndex === -1) continue;
+      const cat = this.state.cats[catIndex];
+      const reward = calculateRehomeLove(cat);
+      totalLove += reward.total;
+      totalStars += reward.stars;
+      count++;
+
+      this.state.cats.splice(catIndex, 1);
+      const sprite = this.catSprites.get(catId);
+      if (sprite) {
+        sprite.destroy();
+        this.catSprites.delete(catId);
+      }
+    }
+
+    if (count === 0) return;
+
+    this.love.add(totalLove);
+    this.state.totalLoveEarned += totalLove;
+    this.milestones.addTokens(totalStars);
+    this.state.totalRehomedCats = (this.state.totalRehomedCats || 0) + count;
+    this.state.totalRehomeLoveEarned = (this.state.totalRehomeLoveEarned || 0) + totalLove;
+
+    sound.playAdoptFanfare();
+    EventBus.emit('toast', {
+      message: `🏡 ${count} cats found loving forever homes! (+${totalLove.toLocaleString()} 💗, +${totalStars} ⭐)`,
+    });
+
+    if (this.state.cats.length === 0) {
+      const penalty = Math.floor(this.state.love / 2);
+      this.state.love = Math.max(0, this.state.love - penalty);
+
+      const bounds = this.areaRenderer.areaBounds();
+      const usedNames = new Set(this.state.cats.map((c) => c.name));
+
+      for (let i = 0; i < 2; i++) {
+        const newCat = generateCat({ day: this.state.day, usedNames, existingCats: this.state.cats, stage: 'adult' });
+        newCat.area = 'yard';
+        newCat.journal.entries.push({
+          day: this.state.day,
+          timestamp: Date.now(),
+          message: 'Arrived at the empty sanctuary, drawn by a warm familiar scent.',
+        });
+        this.state.cats.push(newCat);
+        usedNames.add(newCat.name);
+        if (this.currentArea === 'yard') {
+          this.spawnCatSprite(newCat, bounds);
+        }
+        sound.playPop();
+        setTimeout(() => sound.playKittenMeow(false), 400 + i * 300);
+      }
+
+      EventBus.emit('love-changed', { love: this.love.love });
+      EventBus.emit('toast', {
+        message: `🏠 The sanctuary was empty… two cats wandered in, but it cost you ${penalty.toLocaleString()} 💗 love.`,
+      });
+    } else if (this.state.cats.length < 2 && !this.state.strayArrivalDueAt) {
+      this.state.strayArrivalDueAt = Date.now() + 60 * 60 * 1000;
+    }
+
+    this.saveManager.save(this.state);
+    this.notifyUiState();
+  }
+
+  private handleInstantGrowCat(catId: string, cost: number): void {
+    const cat = this.state.cats.find((c) => c.id === catId);
+    if (!cat || cat.stage === 'adult') return;
+
+    if (this.love.love < cost) {
+      EventBus.emit('toast', { message: `Not enough Care Points. Need ${cost.toLocaleString()} 💗.` });
+      return;
+    }
+
+    this.love.spend(cost);
+    EventBus.emit('love-changed', { love: this.love.love });
+
+    const evo = this.growth.instantGrow(cat);
+    if (evo) {
+      const sprite = this.catSprites.get(catId);
+      if (sprite) {
+        sprite.refreshVisuals();
+        sprite.showEmote('✨');
+      }
+      sound.playSparkle();
+      sound.playSuccess();
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+    }
   }
 
   private handleApplyPerfume(screenX?: number, screenY?: number, catId?: string): void {

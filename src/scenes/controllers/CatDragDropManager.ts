@@ -246,8 +246,11 @@ export class CatDragDropManager {
         });
       }
     } else {
-      const pitchOffset = cat.stage === 'kitten' ? 5 : cat.stage === 'teen' ? 2 : Phaser.Math.Between(-2, 2);
-      sound.playMeow(pitchOffset);
+      if (cat.stage === 'kitten') {
+        sound.playKittenMeow();
+      } else {
+        sound.playMeow(cat.stage === 'teen' ? 1.06 : 1.0);
+      }
       sprite.showEmote(cat.stage === 'kitten' ? '🐾' : '❤️');
     }
 
@@ -324,7 +327,7 @@ export class CatDragDropManager {
       this.callbacks.saveGame();
       this.callbacks.notifyUi();
       EventBus.emit('toast', {
-        message: `✨ ${adult.name} gently groomed little ${young.name}! (+5 💗 Care Points)`,
+        message: `✨ ${adult.name} gently groomed little ${young.name}! (+5 💗)`,
       });
       return;
     }
@@ -351,7 +354,7 @@ export class CatDragDropManager {
       this.callbacks.saveGame();
       this.callbacks.notifyUi();
       EventBus.emit('toast', {
-        message: `🐾 ${catA.name} & ${catB.name} started a fun kitten tag game! (+4 💗 Care Points)`,
+        message: `🐾 ${catA.name} & ${catB.name} started a fun kitten tag game! (+4 💗)`,
       });
     }
   }

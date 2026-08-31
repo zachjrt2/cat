@@ -127,16 +127,25 @@ export class CatInfoModal {
     let currentIndex = catsList.findIndex((c) => c.id === selectedCatId);
     if (currentIndex < 0) currentIndex = 0;
 
+    let love = currentLove;
     let currentAvatarCtrl: AvatarController | null = null;
+
+    const handleLoveChanged = ({ love: newLove }: { love: number }) => {
+      love = Math.floor(newLove);
+      const cat = catsList[currentIndex];
+      if (cat) {
+        const growBtn = modal.querySelector<HTMLButtonElement>('#instant-grow-btn');
+        if (growBtn) {
+          const isTeen = cat.stage === 'teen';
+          const growCost = isTeen ? 300 : 500;
+          growBtn.disabled = love < growCost;
+        }
+      }
+    };
+    EventBus.on('love-changed', handleLoveChanged);
+
     const backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
-    backdrop.addEventListener('click', (e) => {
-      if (e.target === backdrop) {
-        sound.playTap();
-        currentAvatarCtrl?.cancel();
-        backdrop.remove();
-      }
-    });
 
     const modal = document.createElement('div');
     modal.className = 'modal cat-journal-modal';
@@ -177,12 +186,24 @@ export class CatInfoModal {
         navigateToCat(nextIdx, 'next');
       } else if (e.key === 'Escape') {
         sound.playTap();
-        currentAvatarCtrl?.cancel();
-        window.removeEventListener('keydown', handleKeyNavigation);
-        backdrop.remove();
+        closeJournal();
       }
     };
     window.addEventListener('keydown', handleKeyNavigation);
+
+    const closeJournal = () => {
+      EventBus.off('love-changed', handleLoveChanged);
+      currentAvatarCtrl?.cancel();
+      window.removeEventListener('keydown', handleKeyNavigation);
+      backdrop.remove();
+    };
+
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) {
+        sound.playTap();
+        closeJournal();
+      }
+    });
 
     const renderCurrentCat = () => {
       const cat = catsList[currentIndex];
@@ -275,9 +296,9 @@ export class CatInfoModal {
                   ? `<div class="growth-status growth-ready">Almost ready! Keep sanctuary care high (${Math.round(avgCare)}% avg) for faster growth.</div>`
                   : `<div class="growth-status growth-tip">High sanctuary care gives up to 10x growth speed! (Current: ${growthMultiplier.toFixed(1)}x)</div>`
               }
-              <button class="instant-grow-btn" id="instant-grow-btn" ${currentLove < growCost ? 'disabled' : ''}>
+              <button class="instant-grow-btn" id="instant-grow-btn" ${love < growCost ? 'disabled' : ''}>
                 <span class="svg-inline">${SVG_ICONS.sparkle}</span>
-                <span>Grow to ${cat.stage === 'kitten' ? 'Teen' : 'Adult'} (${growCost.toLocaleString()} CP 💗)</span>
+                <span>Grow to ${cat.stage === 'kitten' ? 'Teen' : 'Adult'} (${growCost.toLocaleString()} 💗)</span>
               </button>
             </div>
           `;
@@ -305,7 +326,7 @@ export class CatInfoModal {
           <div class="journal-title-box">
             <div class="name-edit-row" id="name-display-row">
               <h2 id="cat-name-display">${escapeHtml(cat.name)}</h2>
-              <button class="rename-cat-btn" id="rename-cat-btn" title="Rename Cat (200 Care Points 💗)">
+              <button class="rename-cat-btn" id="rename-cat-btn" title="Rename Cat (200 💗)">
                 <span class="svg-inline">${SVG_ICONS.edit}</span> Rename (200 💗)
               </button>
             </div>
@@ -468,9 +489,7 @@ export class CatInfoModal {
 
       modal.querySelector('#goto-cat-btn')?.addEventListener('click', () => {
         sound.playSparkle();
-        currentAvatarCtrl?.cancel();
-        window.removeEventListener('keydown', handleKeyNavigation);
-        backdrop.remove();
+        closeJournal();
         EventBus.emit('switch-area', { area: cat.area });
         setTimeout(() => {
           EventBus.emit('focus-cat', { catId: cat.id });
@@ -478,9 +497,18 @@ export class CatInfoModal {
       });
 
       modal.querySelector('#instant-grow-btn')?.addEventListener('click', () => {
-        sound.playTap();
+        if (love < growCost) return;
+        sound.playSparkle();
+        love -= growCost;
+        if (cat.stage === 'kitten') {
+          cat.stage = 'teen';
+          cat.growthProgress = 0;
+        } else if (cat.stage === 'teen') {
+          cat.stage = 'adult';
+          cat.growthProgress = 100;
+        }
         EventBus.emit('instant-grow-cat', { catId: cat.id, cost: growCost });
-        setTimeout(() => renderCurrentCat(), 200);
+        renderCurrentCat();
       });
 
       // Rename Cat
@@ -515,7 +543,7 @@ export class CatInfoModal {
             return;
           }
 
-          if (currentLove < 200) {
+          if (love < 200) {
             sound.playTap();
             EventBus.emit('toast', { message: 'Not enough Care Points. Need 200 💗 to rename.' });
             return;
@@ -552,10 +580,8 @@ export class CatInfoModal {
 
       modal.querySelector('#sort-all-cats-btn')?.addEventListener('click', () => {
         sound.playTap();
-        currentAvatarCtrl?.cancel();
-        window.removeEventListener('keydown', handleKeyNavigation);
-        backdrop.remove();
-        RosterModal.open(root, catsList, areasState, cat.id);
+        closeJournal();
+        RosterModal.open(root, catsList, areasState, cat.id, love);
       });
 
       // Quick Care Action Buttons
@@ -610,7 +636,11 @@ export class CatInfoModal {
       const avatarWrap = modal.querySelector('#avatar-interactive-wrapper') as HTMLElement | null;
       if (avatarWrap) {
         avatarWrap.addEventListener('click', () => {
-          sound.playMeow(cat.stage === 'kitten' ? 4 : cat.stage === 'teen' ? 2 : 0);
+          if (cat.stage === 'kitten') {
+            sound.playKittenMeow();
+          } else {
+            sound.playMeow(cat.stage === 'teen' ? 1.06 : 1.0);
+          }
           currentAvatarCtrl?.triggerReaction('tap');
 
           // Spawn cute floating heart emoji over the avatar
@@ -633,9 +663,7 @@ export class CatInfoModal {
       modal.querySelector('#rehome-cat-btn')?.addEventListener('click', () => {
         sound.playTap();
         CatInfoModal.openRehomeConfirmModal(root, cat, rehomeVal, () => {
-          currentAvatarCtrl?.cancel();
-          window.removeEventListener('keydown', handleKeyNavigation);
-          backdrop.remove();
+          closeJournal();
         });
       });
 
@@ -646,9 +674,7 @@ export class CatInfoModal {
 
       modal.querySelector('#journal-close-btn')?.addEventListener('click', () => {
         sound.playTap();
-        currentAvatarCtrl?.cancel();
-        window.removeEventListener('keydown', handleKeyNavigation);
-        backdrop.remove();
+        closeJournal();
       });
 
       currentAvatarCtrl?.cancel();
@@ -783,51 +809,29 @@ export class CatInfoModal {
   ): void {
     const backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
-    backdrop.style.zIndex = '10000000000000000000';
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) {
+        sound.playTap();
+        backdrop.remove();
+      }
+    });
 
     const modal = document.createElement('div');
     modal.className = 'modal rehome-confirm-modal';
     modal.innerHTML = `
-      <div class="rehome-confirm-header">
+      <div class="rehome-modal-content">
         <div class="rehome-heart-icon">${SVG_ICONS.lovingHome}</div>
-        <h2>Find a Loving Forever Home</h2>
-        <div class="rehome-subtitle">A wonderful family has fallen in love with <b>${escapeHtml(cat.name)}</b>!</div>
-      </div>
+        <h2>Adopt Out ${escapeHtml(cat.name)}?</h2>
 
-      <div class="rehome-letter-box">
-        <div class="letter-stamp">🏡 Adopted!</div>
-        <p class="letter-text">
-          "We promise to give <b>${escapeHtml(cat.name)}</b> endless cuddles, their favorite <b>${escapeHtml(cat.favoriteFood)}</b>, 
-          and all the warm sunny spots by the window they could ever wish for."
-        </p>
-      </div>
+        <div class="rehome-reward-pill">
+          <span class="rehome-reward-love">+${reward.total.toLocaleString()} 💗</span>
+          ${reward.stars > 0 ? `<span class="rehome-reward-stars">+${reward.stars} ⭐</span>` : ''}
+        </div>
 
-      <div class="rehome-rewards-card">
-        <div class="rehome-rewards-title">Adoption Rewards</div>
-        <div class="rehome-reward-row">
-          <span>Base Care Points:</span>
-          <span>+${reward.base.toLocaleString()} 💗</span>
+        <div class="rehome-btn-group">
+          <button class="rehome-confirm-btn" id="confirm-rehome-btn">Adopt Out</button>
+          <button class="rehome-cancel-btn" id="cancel-rehome-btn">Cancel</button>
         </div>
-        <div class="rehome-reward-row">
-          <span>Happiness & Health Bonus:</span>
-          <span>+${reward.happinessBonus.toLocaleString()} 💗</span>
-        </div>
-        <div class="rehome-reward-row rehome-star-row">
-          <span>Adoption Tokens:</span>
-          <span>+${reward.stars} ⭐ Stars</span>
-        </div>
-        <div class="rehome-reward-total">
-          <span>Total Care Points Earned:</span>
-          <span>+${reward.total.toLocaleString()} 💗</span>
-        </div>
-      </div>
-
-      <div class="rehome-btn-group">
-        <button class="rehome-proceed-btn" id="confirm-rehome-btn">
-          <span>Yes, Bless Their New Home!</span>
-          <span class="rehome-btn-sub">+${reward.total.toLocaleString()} 💗 · +${reward.stars} ⭐</span>
-        </button>
-        <button class="rehome-cancel-btn" id="cancel-rehome-btn">Keep ${escapeHtml(cat.name)} at Sanctuary</button>
       </div>
     `;
 
@@ -912,27 +916,69 @@ export class CatInfoModal {
         const activeFrame = currentSequence[frameIndex] || currentSequence[0];
         const srcX = activeFrame.col * FRAME_SIZE;
         const srcY = activeFrame.row * FRAME_SIZE;
+        const targetSize = cat.mutation === 'tiny' ? canvas.width * 0.68 : cat.mutation === 'giant' ? canvas.width : canvas.width * 0.90;
+        const targetX = (canvas.width - targetSize) / 2;
+        const targetY = (canvas.height - targetSize) / 2 + (cat.mutation === 'tiny' ? 5 : 0);
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+        ctx.save();
+        if (cat.mutation === 'inverted') {
+          const invT = (Math.sin(now / 360) + 1) / 2;
+          ctx.filter = `invert(0.92) hue-rotate(${160 + invT * 50}deg) saturate(1.8)`;
+        } else if (cat.mutation === 'frosted') {
+          const iceT = (Math.sin(now / 380) + 1) / 2;
+          ctx.filter = `hue-rotate(${175 + iceT * 35}deg) saturate(${1.6 + iceT * 1.0}) brightness(${1.05 + iceT * 0.25})`;
+        } else if (cat.mutation === 'flaming') {
+          const fireT = (Math.sin(now / 300) + 1) / 2;
+          ctx.filter = `sepia(0.65) saturate(${3.2 + fireT * 1.5}) hue-rotate(${-32 + fireT * 35}deg) brightness(${1.05 + fireT * 0.2})`;
+        } else if (cat.mutation === 'chromatic') {
+          ctx.filter = `hue-rotate(${(now / 12) % 360}deg) saturate(2.4)`;
+        } else if (cat.mutation === 'sparkly') {
+          const sparkT = (Math.sin(now / 320) + 1) / 2;
+          ctx.filter = `hue-rotate(${275 + sparkT * 40}deg) saturate(2.2) brightness(${1.2 + sparkT * 0.25})`;
+        } else if (cat.mutation === 'gilded') {
+          const goldT = (Math.sin(now / 340) + 1) / 2;
+          ctx.filter = `sepia(0.9) saturate(${3.8 + goldT * 1.2}) hue-rotate(8deg) brightness(${1.1 + goldT * 0.3})`;
+        } else if (cat.mutation === 'stinky') {
+          const stinkyT = (Math.sin(now / 450) + 1) / 2;
+          const hue = 30 + stinkyT * 85; // Oscillates from 30deg (muddy brown) to 115deg (toxic green)
+          ctx.filter = `sepia(0.55) hue-rotate(${hue}deg) saturate(2.5) brightness(0.95)`;
+        }
+
         // Draw Base Skin Frame
-        ctx.drawImage(baseImg, srcX, srcY, FRAME_SIZE, FRAME_SIZE, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(baseImg, srcX, srcY, FRAME_SIZE, FRAME_SIZE, targetX, targetY, targetSize, targetSize);
 
         // Draw Marking Overlay Frame
         if (markingImg && markingImg.complete) {
-          ctx.drawImage(markingImg, srcX, srcY, FRAME_SIZE, FRAME_SIZE, 0, 0, canvas.width, canvas.height);
+          ctx.drawImage(markingImg, srcX, srcY, FRAME_SIZE, FRAME_SIZE, targetX, targetY, targetSize, targetSize);
         }
+        ctx.restore();
 
-        // Draw Mutation Ambient Glow
-        if (cat.mutation === 'sparkly') {
-          ctx.fillStyle = 'rgba(240, 171, 252, 0.4)';
+        // Draw Mutation Special Visual Overlays
+        if (cat.mutation === 'angelic') {
+          ctx.strokeStyle = '#fde047';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          const haloBob = Math.sin((now % 1200) / 1200 * Math.PI * 2) * 2;
+          ctx.ellipse(canvas.width / 2, targetY - 4 + haloBob, 12, 4, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (cat.mutation === 'stinky') {
+          const puffPhase = (now % 1400) / 1400;
+          ctx.fillStyle = 'rgba(74, 222, 128, 0.75)';
+          ctx.beginPath();
+          ctx.arc(canvas.width / 2 + Math.sin(puffPhase * 6.28) * 8, targetY - puffPhase * 16, 4 * (1 - puffPhase * 0.3), 0, Math.PI * 2);
+          ctx.fill();
+        } else if (cat.mutation === 'sparkly') {
+          ctx.fillStyle = 'rgba(240, 171, 252, 0.85)';
           const starPhase = (now % 1000) / 1000;
           ctx.fillRect(8 + Math.sin(starPhase * 6.28) * 4, 8, 3, 3);
           ctx.fillRect(52 - Math.sin(starPhase * 6.28) * 4, 12, 2.5, 2.5);
         } else if (cat.mutation === 'gilded') {
-          ctx.fillStyle = 'rgba(251, 191, 36, 0.35)';
-          ctx.fillRect(50, 48, 3, 3);
-          ctx.fillRect(10, 50, 3, 3);
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.9)';
+          const goldPhase = (now % 1200) / 1200;
+          ctx.fillRect(50, 48 - Math.sin(goldPhase * 6.28) * 3, 3, 3);
+          ctx.fillRect(10, 50 + Math.sin(goldPhase * 6.28) * 3, 3, 3);
         }
       }
 

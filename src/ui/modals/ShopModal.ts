@@ -1,5 +1,5 @@
 import type { Cat, CatArea, FenceLayout, Milestone, SanctuaryArea } from '../../data/types';
-import { AREA_INFO_MAP, AUTOMATION_CATALOG, FURNITURE_CATALOG, OFFLINE_STAR_UPGRADES, getAreaCapacityUpgradeCost } from '../../data/constants';
+import { AREA_INFO_MAP, AUTOMATION_CATALOG, FURNITURE_CATALOG, OFFLINE_STAR_UPGRADES, getAreaCapacityUpgradeCost, CAT_PERFUME_COST } from '../../data/constants';
 import { SVG_ICONS } from '../icons';
 import { sound } from '../../systems/SoundManager';
 import { EventBus } from '../EventBus';
@@ -38,21 +38,169 @@ export class ShopModal {
     data: ShopModalData,
     defaultTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' = 'areas',
   ): void {
+    let currentActiveTab = defaultTab;
+    let currentFence = data.fenceLayout;
+    const pendingPurchases = new Set<string>();
+
     const backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
-    backdrop.addEventListener('click', (e) => {
-      if (e.target === backdrop) {
-        sound.playTap();
-        backdrop.remove();
-      }
-    });
 
     const modal = document.createElement('div');
     modal.className = 'modal shop-modal';
 
-    let currentFence = data.fenceLayout;
+    const updateBalances = () => {
+      const loveBalVal = modal.querySelector('.shop-love-pill .shop-bal-val');
+      if (loveBalVal) {
+        loveBalVal.textContent = data.love.toLocaleString();
+      }
+      const starsBalVal = modal.querySelector('.shop-stars-pill .shop-bal-val');
+      if (starsBalVal) {
+        starsBalVal.textContent = `${data.tokens}`;
+      }
+    };
+
+    const updateButtonAffordability = () => {
+      modal.querySelectorAll<HTMLButtonElement>('.unlock-area-btn').forEach((btn) => {
+        const areaKey = btn.dataset.area as CatArea;
+        const meta = AREA_INFO_MAP[areaKey];
+        if (meta) {
+          const canAfford = data.love >= meta.unlockCostLove;
+          const meetsThreshold = data.catCount >= meta.unlockThresholdCats;
+          btn.disabled = !canAfford || !meetsThreshold;
+        }
+      });
+
+      modal.querySelectorAll<HTMLButtonElement>('.upgrade-cap-btn').forEach((btn) => {
+        const areaKey = btn.dataset.area as CatArea;
+        const meta = AREA_INFO_MAP[areaKey];
+        const areaState = data.areas[areaKey];
+        if (meta && areaState) {
+          const cost = getAreaCapacityUpgradeCost(areaState, meta.baseCapacity);
+          btn.disabled = data.love < cost;
+        }
+      });
+
+      modal.querySelectorAll<HTMLButtonElement>('.buy-machine-btn').forEach((btn) => {
+        const machineId = btn.dataset.machineId;
+        const m = AUTOMATION_CATALOG.find((item) => item.id === machineId);
+        if (m) {
+          if (pendingPurchases.has(m.id)) {
+            btn.disabled = true;
+          } else {
+            btn.disabled = data.love < m.baseCost;
+          }
+        }
+      });
+
+      modal.querySelectorAll<HTMLButtonElement>('.upgrade-machine-btn').forEach((btn) => {
+        const machineId = btn.dataset.machineId;
+        const m = AUTOMATION_CATALOG.find((item) => item.id === machineId);
+        const lvl = data.machines[machineId || ''] || 0;
+        if (m && lvl > 0 && lvl < 3) {
+          const cost = lvl === 1 ? m.upgradeCostLvl2 : m.upgradeCostLvl3;
+          btn.disabled = data.love < cost;
+        }
+      });
+
+      modal.querySelectorAll<HTMLButtonElement>('.buy-furniture-btn').forEach((btn) => {
+        const furnitureId = btn.dataset.furnitureId;
+        const item = FURNITURE_CATALOG.find((f) => f.id === furnitureId);
+        if (item) {
+          if (pendingPurchases.has(item.id)) {
+            btn.disabled = true;
+          } else {
+            btn.disabled = data.love < item.loveCost;
+          }
+        }
+      });
+
+      const offlineBtn = modal.querySelector<HTMLButtonElement>('.upgrade-offline-stars-btn');
+      if (offlineBtn) {
+        const lvl = data.offlineStarLevel || 1;
+        const nextDef = OFFLINE_STAR_UPGRADES[lvl];
+        if (nextDef) {
+          offlineBtn.disabled = data.love < nextDef.costCarePoints;
+        }
+      }
+
+      modal.querySelectorAll<HTMLButtonElement>('.buy-perfume-btn').forEach((btn) => {
+        btn.disabled = data.love < CAT_PERFUME_COST;
+      });
+    };
+
+    const handleLoveChanged = ({ love }: { love: number }) => {
+      data.love = Math.floor(love);
+      updateBalances();
+      updateButtonAffordability();
+    };
+
+    const handleTokensChanged = ({ tokens }: { tokens: number }) => {
+      data.tokens = tokens;
+      updateBalances();
+    };
+
+    const handleCatsChanged = ({ count }: { count: number }) => {
+      data.catCount = count;
+      updateButtonAffordability();
+    };
+
+    const handleSanctuaryState = (payload: {
+      areas: Record<CatArea, SanctuaryArea>;
+      currentArea: CatArea;
+      cats: Cat[];
+      furniture: string[];
+      machines?: Record<string, number>;
+      milestones: Milestone[];
+      tokens: number;
+      offlineStarLevel?: number;
+      catPerfumeCount?: number;
+      fenceLayout?: FenceLayout;
+    }) => {
+      data.areas = payload.areas;
+      data.cats = payload.cats;
+      data.catCount = payload.cats.length;
+      if (payload.furniture) {
+        data.furniture = payload.furniture;
+        payload.furniture.forEach((id) => pendingPurchases.delete(id));
+      }
+      if (payload.machines) {
+        data.machines = payload.machines;
+        Object.keys(payload.machines).forEach((id) => pendingPurchases.delete(id));
+      }
+      if (payload.milestones) data.milestones = payload.milestones;
+      if (payload.tokens !== undefined) data.tokens = payload.tokens;
+      if (payload.offlineStarLevel !== undefined) data.offlineStarLevel = payload.offlineStarLevel;
+      if (payload.catPerfumeCount !== undefined) data.catPerfumeCount = payload.catPerfumeCount;
+      if (payload.fenceLayout) {
+        data.fenceLayout = payload.fenceLayout;
+        currentFence = payload.fenceLayout;
+      }
+      renderTabs(currentActiveTab, true);
+    };
+
+    EventBus.on('love-changed', handleLoveChanged);
+    EventBus.on('tokens-changed', handleTokensChanged);
+    EventBus.on('cats-changed', handleCatsChanged);
+    EventBus.on('sanctuary-state', handleSanctuaryState);
+
+    const closeModal = () => {
+      EventBus.off('love-changed', handleLoveChanged);
+      EventBus.off('tokens-changed', handleTokensChanged);
+      EventBus.off('cats-changed', handleCatsChanged);
+      EventBus.off('sanctuary-state', handleSanctuaryState);
+      modal.remove();
+      backdrop.remove();
+    };
+
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) {
+        sound.playTap();
+        closeModal();
+      }
+    });
 
     const renderTabs = (activeTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades', preserveScroll = true) => {
+      currentActiveTab = activeTab;
       const savedModalScroll = preserveScroll ? modal.scrollTop : 0;
       const contentEl = modal.querySelector('.shop-content');
       const savedContentScroll = preserveScroll && contentEl ? contentEl.scrollTop : 0;
@@ -61,9 +209,9 @@ export class ShopModal {
         <div class="shop-header">
           <h2 class="shop-title">Sanctuary Emporium</h2>
           <div class="shop-balances">
-            <div class="shop-balance-pill shop-love-pill" title="Care Points (CP)">
+            <div class="shop-balance-pill shop-love-pill" title="Care Points">
               <span class="svg-inline">${SVG_ICONS.heart}</span>
-              <span class="shop-bal-val">${data.love.toLocaleString()} CP</span>
+              <span class="shop-bal-val">${data.love.toLocaleString()}</span>
             </div>
             <div class="shop-balance-pill shop-stars-pill" title="Stars (Plinko)">
               <span class="svg-inline">${SVG_ICONS.star}</span>
@@ -84,9 +232,9 @@ export class ShopModal {
           ${activeTab === 'areas'
             ? ShopModal.renderShopAreasContent(data)
             : activeTab === 'machines'
-              ? ShopModal.renderShopMachinesContent(data)
+              ? ShopModal.renderShopMachinesContent(data, pendingPurchases)
               : activeTab === 'furniture'
-                ? ShopModal.renderShopFurnitureContent(data)
+                ? ShopModal.renderShopFurnitureContent(data, pendingPurchases)
                 : activeTab === 'milestones'
                   ? ShopModal.renderShopMilestonesContent(data)
                   : ShopModal.renderShopUpgradesContent(data, currentFence)
@@ -127,7 +275,7 @@ export class ShopModal {
 
       modal.querySelector('#shop-close-btn')?.addEventListener('click', () => {
         sound.playTap();
-        backdrop.remove();
+        closeModal();
       });
 
       // Bind Area Unlock buttons
@@ -135,7 +283,6 @@ export class ShopModal {
         btn.addEventListener('click', () => {
           const areaKey = (btn as HTMLElement).dataset.area as CatArea;
           EventBus.emit('unlock-area', { area: areaKey });
-          setTimeout(() => renderTabs('areas', true), 200);
         });
       });
 
@@ -144,7 +291,6 @@ export class ShopModal {
         btn.addEventListener('click', () => {
           const areaKey = (btn as HTMLElement).dataset.area as CatArea;
           EventBus.emit('upgrade-capacity', { area: areaKey });
-          setTimeout(() => renderTabs('areas', true), 200);
         });
       });
 
@@ -152,9 +298,24 @@ export class ShopModal {
       modal.querySelectorAll('.buy-machine-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           const machineId = (btn as HTMLElement).dataset.machineId;
-          if (machineId) {
-            EventBus.emit('buy-machine', { machineId });
-            setTimeout(() => renderTabs('machines', true), 200);
+          if (machineId && !pendingPurchases.has(machineId)) {
+            const m = AUTOMATION_CATALOG.find((item) => item.id === machineId);
+            if (m && data.love >= m.baseCost) {
+              pendingPurchases.add(machineId);
+              data.love -= m.baseCost;
+              updateBalances();
+              updateButtonAffordability();
+              btn.classList.add('delivering-btn');
+              (btn as HTMLButtonElement).disabled = true;
+              btn.innerHTML = `📦 Delivering...`;
+              const card = btn.closest('.shop-card');
+              const badge = card?.querySelector('.machine-unowned-badge');
+              if (badge) {
+                badge.className = 'machine-unowned-badge delivering-badge';
+                badge.textContent = '📦 Delivering';
+              }
+              EventBus.emit('buy-machine', { machineId });
+            }
           }
         });
       });
@@ -163,8 +324,15 @@ export class ShopModal {
         btn.addEventListener('click', () => {
           const machineId = (btn as HTMLElement).dataset.machineId;
           if (machineId) {
-            EventBus.emit('upgrade-machine', { machineId });
-            setTimeout(() => renderTabs('machines', true), 200);
+            const m = AUTOMATION_CATALOG.find((item) => item.id === machineId);
+            const lvl = data.machines[machineId] || 0;
+            const cost = lvl === 1 ? m?.upgradeCostLvl2 : m?.upgradeCostLvl3;
+            if (cost && data.love >= cost) {
+              btn.classList.add('delivering-btn');
+              btn.innerHTML = `✨ Upgrading...`;
+              (btn as HTMLButtonElement).disabled = true;
+              EventBus.emit('upgrade-machine', { machineId });
+            }
           }
         });
       });
@@ -173,9 +341,18 @@ export class ShopModal {
       modal.querySelectorAll('.buy-furniture-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           const furnitureId = (btn as HTMLElement).dataset.furnitureId;
-          if (furnitureId) {
-            EventBus.emit('buy-furniture', { furnitureId });
-            setTimeout(() => renderTabs('furniture', true), 200);
+          if (furnitureId && !pendingPurchases.has(furnitureId)) {
+            const item = FURNITURE_CATALOG.find((f) => f.id === furnitureId);
+            if (item && data.love >= item.loveCost) {
+              pendingPurchases.add(furnitureId);
+              data.love -= item.loveCost;
+              updateBalances();
+              updateButtonAffordability();
+              btn.classList.add('delivering-btn');
+              (btn as HTMLButtonElement).disabled = true;
+              btn.innerHTML = `📦 Delivering...`;
+              EventBus.emit('buy-furniture', { furnitureId });
+            }
           }
         });
       });
@@ -186,7 +363,6 @@ export class ShopModal {
           const milestoneId = (btn as HTMLElement).dataset.milestoneId;
           if (milestoneId) {
             EventBus.emit('claim-milestone', { milestoneId });
-            setTimeout(() => renderTabs('milestones', true), 200);
           }
         });
       });
@@ -194,14 +370,26 @@ export class ShopModal {
       // Bind Upgrade Offline Stars button
       modal.querySelector('.upgrade-offline-stars-btn')?.addEventListener('click', () => {
         EventBus.emit('upgrade-offline-stars', {});
-        setTimeout(() => renderTabs('upgrades', true), 200);
       });
 
       // Bind Buy Cat Perfume button
       modal.querySelectorAll('.buy-perfume-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
-          EventBus.emit('buy-cat-perfume', {});
-          setTimeout(() => renderTabs('upgrades', true), 200);
+          if (data.love >= CAT_PERFUME_COST) {
+            data.love -= CAT_PERFUME_COST;
+            updateBalances();
+            updateButtonAffordability();
+            const prevText = btn.innerHTML;
+            btn.classList.add('delivering-btn');
+            btn.innerHTML = `📦 Delivering...`;
+            (btn as HTMLButtonElement).disabled = true;
+            EventBus.emit('buy-cat-perfume', {});
+            setTimeout(() => {
+              btn.classList.remove('delivering-btn');
+              btn.innerHTML = prevText;
+              updateButtonAffordability();
+            }, 350);
+          }
         });
       });
 
@@ -216,7 +404,7 @@ export class ShopModal {
             EventBus.emit('toast', {
               message: `🏡 Sanctuary Fence Layout updated to ${layout === 'none' ? 'Open' : layout === 'horizontal' ? 'Horizontal Split' : layout === 'vertical' ? 'Vertical Split' : '4-Quadrant Cross'}!`,
             });
-            setTimeout(() => renderTabs('upgrades', true), 100);
+            renderTabs('upgrades', true);
           }
         });
       });
@@ -272,7 +460,7 @@ export class ShopModal {
     }).join('');
   }
 
-  private static renderShopMachinesContent(data: ShopModalData): string {
+  private static renderShopMachinesContent(data: ShopModalData, pendingPurchases: Set<string> = new Set()): string {
     return `
       <div class="machines-intro">
         Automated stations passively maintain cats' needs (T1: 50% · T2: 80% · T3: 100%).
@@ -281,6 +469,7 @@ export class ShopModal {
         ${AUTOMATION_CATALOG.map((m) => {
           const areaUnlocked = data.areas[m.area]?.unlocked;
           const currentLevel = data.machines[m.id] || 0;
+          const isPending = pendingPurchases.has(m.id);
           const areaMeta = AREA_INFO_MAP[m.area];
 
           let statusBadge = '';
@@ -289,6 +478,13 @@ export class ShopModal {
           if (!areaUnlocked) {
             statusBadge = `<span class="lock-badge">Locked</span>`;
             actionBtn = `<button class="shop-action-btn" disabled>Unlock ${areaMeta.label}</button>`;
+          } else if (isPending) {
+            statusBadge = `<span class="machine-unowned-badge delivering-badge">📦 Delivering</span>`;
+            actionBtn = `
+              <button class="shop-action-btn delivering-btn" disabled>
+                📦 Delivering...
+              </button>
+            `;
           } else if (currentLevel === 0) {
             const canAfford = data.love >= m.baseCost;
             statusBadge = `<span class="machine-unowned-badge">Unowned</span>`;
@@ -334,9 +530,10 @@ export class ShopModal {
     `;
   }
 
-  private static renderShopFurnitureContent(data: ShopModalData): string {
+  private static renderShopFurnitureContent(data: ShopModalData, pendingPurchases: Set<string> = new Set()): string {
     return FURNITURE_CATALOG.map((item) => {
       const isOwned = data.furniture.includes(item.id);
+      const isPending = pendingPurchases.has(item.id);
       const canAfford = data.love >= item.loveCost;
       const areaMeta = AREA_INFO_MAP[item.area];
 
@@ -348,6 +545,21 @@ export class ShopModal {
               <p>${item.description}</p>
               <div class="shop-card-meta">Location: <b>${areaMeta.label}</b> · <span class="bonus-tag">${item.bonusText}</span></div>
             </div>
+          </div>
+        `;
+      }
+
+      if (isPending) {
+        return `
+          <div class="shop-card">
+            <div class="shop-card-info">
+              <h3>${item.name} <span class="machine-unowned-badge delivering-badge">📦 Delivering</span></h3>
+              <p>${item.description}</p>
+              <div class="shop-card-meta">Location: <b>${areaMeta.label}</b> · <span class="bonus-tag">${item.bonusText}</span></div>
+            </div>
+            <button class="shop-action-btn delivering-btn" disabled>
+              📦 Delivering...
+            </button>
           </div>
         `;
       }
@@ -411,14 +623,14 @@ export class ShopModal {
     const nextDef = OFFLINE_STAR_UPGRADES[currentLvl];
 
     return `
-      <div class="milestones-intro">Spend Care Points (CP) to upgrade passive Star generation while offline:</div>
+      <div class="milestones-intro">Upgrade passive Star generation while offline:</div>
       <div class="shop-card ${isMax ? 'unlocked-card' : ''}" style="margin-top:10px;">
         <div class="shop-card-info">
           <h3>⭐ Passive Star Generation (Level ${currentLvl} / 5)</h3>
           <p>Generates <b>${currentLvl} Star${currentLvl > 1 ? 's' : ''} per hour</b> while offline (no accumulation limit).</p>
           ${isMax
             ? `<div class="shop-card-meta"><span class="unlocked-badge">Maximum Level Reached (5 Stars/hr)</span></div>`
-            : `<div class="shop-card-meta">Next Level: <b>${nextDef?.ratePerHour} Stars/hr</b> · Cost: <b>${nextDef?.costCarePoints.toLocaleString()} CP 💗</b></div>`
+            : `<div class="shop-card-meta">Next Level: <b>${nextDef?.ratePerHour} Stars/hr</b> · Cost: <b>${nextDef?.costCarePoints.toLocaleString()} 💗</b></div>`
           }
         </div>
         ${!isMax && nextDef
@@ -439,8 +651,8 @@ export class ShopModal {
           <p>Triggers a 10s Breeding Frenzy on an adult cat to earn ⭐ Stars.</p>
         </div>
         <div class="machine-action-wrap">
-          <button class="shop-action-btn buy-perfume-btn" ${data.love < 200 ? 'disabled' : ''}>
-            Buy (200 💗)
+          <button class="shop-action-btn buy-perfume-btn" ${data.love < CAT_PERFUME_COST ? 'disabled' : ''}>
+            Buy (${CAT_PERFUME_COST} 💗)
           </button>
         </div>
       </div>

@@ -1133,12 +1133,13 @@ export class PlinkoModal {
       { col: 1, row: 1, dur: 280 },
     ];
 
-    let frameIdx = 0;
-    let lastTime = performance.now();
+    let frameIdx = Math.floor(Math.random() * sitFrames.length);
+    let lastTime = performance.now() - Math.random() * sitFrames[frameIdx].dur;
+    const speedFactor = 0.92 + Math.random() * 0.16;
 
     const draw = (now: number) => {
       if (stopped) return;
-      if (now - lastTime >= sitFrames[frameIdx].dur) {
+      if (now - lastTime >= sitFrames[frameIdx].dur / speedFactor) {
         frameIdx = (frameIdx + 1) % sitFrames.length;
         lastTime = now;
       }
@@ -1146,27 +1147,57 @@ export class PlinkoModal {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       if (baseImg && baseImg.complete && baseImg.naturalWidth > 0) {
+        const targetSize = cat.mutation === 'tiny' ? canvas.width * 0.68 : cat.mutation === 'giant' ? canvas.width : canvas.width * 0.90;
+        const targetX = (canvas.width - targetSize) / 2;
+        const targetY = (canvas.height - targetSize) / 2 + (cat.mutation === 'tiny' ? 4 : 0);
+
         ctx.save();
         if (cat.mutation === 'inverted') {
-          ctx.filter = 'invert(1)';
+          const invT = (Math.sin(now / 360) + 1) / 2;
+          ctx.filter = `invert(0.92) hue-rotate(${160 + invT * 50}deg) saturate(1.8)`;
         } else if (cat.mutation === 'frosted') {
-          ctx.filter = 'hue-rotate(180deg) saturate(1.8) brightness(1.1)';
+          const iceT = (Math.sin(now / 380) + 1) / 2;
+          ctx.filter = `hue-rotate(${175 + iceT * 35}deg) saturate(${1.6 + iceT * 1.0}) brightness(${1.05 + iceT * 0.25})`;
         } else if (cat.mutation === 'flaming') {
-          ctx.filter = 'hue-rotate(335deg) saturate(2.4) brightness(1.15)';
+          const fireT = (Math.sin(now / 300) + 1) / 2;
+          ctx.filter = `sepia(0.65) saturate(${3.2 + fireT * 1.5}) hue-rotate(${-32 + fireT * 35}deg) brightness(${1.05 + fireT * 0.2})`;
         } else if (cat.mutation === 'chromatic') {
-          ctx.filter = `hue-rotate(${(now / 18) % 360}deg) saturate(2.2)`;
+          ctx.filter = `hue-rotate(${(now / 12) % 360}deg) saturate(2.4)`;
         } else if (cat.mutation === 'sparkly') {
-          ctx.filter = 'brightness(1.25) saturate(1.4)';
+          const sparkT = (Math.sin(now / 320) + 1) / 2;
+          ctx.filter = `hue-rotate(${275 + sparkT * 40}deg) saturate(2.2) brightness(${1.2 + sparkT * 0.25})`;
+        } else if (cat.mutation === 'gilded') {
+          const goldT = (Math.sin(now / 340) + 1) / 2;
+          ctx.filter = `sepia(0.9) saturate(${3.8 + goldT * 1.2}) hue-rotate(8deg) brightness(${1.1 + goldT * 0.3})`;
+        } else if (cat.mutation === 'stinky') {
+          const stinkyT = (Math.sin(now / 450) + 1) / 2;
+          const hue = 30 + stinkyT * 85; // Oscillates from 30deg (muddy brown) to 115deg (toxic green)
+          ctx.filter = `sepia(0.55) hue-rotate(${hue}deg) saturate(2.5) brightness(0.95)`;
         }
 
         const sx = frame.col * 32;
         const sy = frame.row * 32;
-        ctx.drawImage(baseImg, sx, sy, 32, 32, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(baseImg, sx, sy, 32, 32, targetX, targetY, targetSize, targetSize);
 
         if (markImg && markImg.complete && markImg.naturalWidth > 0) {
-          ctx.drawImage(markImg, sx, sy, 32, 32, 0, 0, canvas.width, canvas.height);
+          ctx.drawImage(markImg, sx, sy, 32, 32, targetX, targetY, targetSize, targetSize);
         }
         ctx.restore();
+
+        if (cat.mutation === 'angelic') {
+          ctx.strokeStyle = '#fde047';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          const haloBob = Math.sin((now % 1200) / 1200 * Math.PI * 2) * 1.5;
+          ctx.ellipse(canvas.width / 2, targetY - 3 + haloBob, 10, 3.5, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (cat.mutation === 'stinky') {
+          const puffPhase = (now % 1400) / 1400;
+          ctx.fillStyle = 'rgba(74, 222, 128, 0.7)';
+          ctx.beginPath();
+          ctx.arc(canvas.width / 2 + Math.sin(puffPhase * 6.28) * 6, targetY - puffPhase * 12, 3.5 * (1 - puffPhase * 0.3), 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       animId = requestAnimationFrame(draw);

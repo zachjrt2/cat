@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { CatArea, FenceLayout, GameState } from '../../data/types';
-import { FURNITURE_CATALOG } from '../../data/constants';
+import { FURNITURE_CATALOG, AUTOMATION_CATALOG } from '../../data/constants';
 import { sound } from '../../systems/SoundManager';
 import { EventBus, isAnyModalOpen } from '../../ui/EventBus';
 
@@ -169,6 +169,7 @@ export class AreaRenderer {
     }
 
     this.drawPlacedFurniture(currentArea, state);
+    this.drawPlacedMachines(currentArea, state);
     this.createAdoptionBox();
     this.createInspectTarget(state);
     this.drawFenceDividers(currentArea, state.fenceLayout || 'none');
@@ -1102,6 +1103,387 @@ export class AreaRenderer {
     }
   }
 
+  private drawPlacedMachines(currentArea: CatArea, state: GameState): void {
+    const bounds = this.areaBounds();
+    const machinesInArea = AUTOMATION_CATALOG.filter(
+      (m) => m.area === currentArea && (state.machines[m.id] ?? 0) > 0,
+    );
+
+    for (const machine of machinesInArea) {
+      const level = state.machines[machine.id] ?? 1;
+      const mx = bounds.left + bounds.width * machine.xPercent;
+      const my = bounds.top + bounds.height * machine.yPercent;
+
+      const container = this.scene.add.container(mx, my);
+      container.name = 'area-bg';
+      container.setDepth(my - 4);
+
+      const shadow = this.scene.add.graphics();
+      shadow.fillStyle(0x000000, 0.2);
+      shadow.fillEllipse(0, 16, 56, 20);
+      container.add(shadow);
+
+      const mGfx = this.scene.add.graphics();
+      container.add(mGfx);
+
+      switch (machine.id) {
+        // ── YARD MACHINES ──
+        case 'yard_feeder': {
+          mGfx.fillStyle(0x7f5539, 1);
+          mGfx.fillRoundedRect(-20, -12, 40, 26, 4);
+          mGfx.fillStyle(0xd4a373, 1);
+          mGfx.fillRect(-16, -10, 32, 22);
+
+          mGfx.fillStyle(0xbae6fd, 0.65);
+          mGfx.fillRoundedRect(-14, -36, 28, 26, 6);
+          mGfx.fillStyle(0xb45309, 0.9);
+          mGfx.fillCircle(-6, -24, 3);
+          mGfx.fillCircle(4, -20, 3.5);
+          mGfx.fillCircle(0, -28, 3);
+          mGfx.fillCircle(5, -26, 2.5);
+
+          mGfx.fillStyle(0xd97706, 1);
+          mGfx.fillTriangle(-18, -36, 18, -36, 0, -48);
+
+          mGfx.fillStyle(0x94a3b8, 1);
+          mGfx.fillEllipse(-12, 14, 20, 10);
+          mGfx.fillEllipse(12, 14, 20, 10);
+          mGfx.fillStyle(0xb45309, 1);
+          mGfx.fillCircle(-12, 13, 3);
+          mGfx.fillStyle(0x38bdf8, 0.9);
+          mGfx.fillEllipse(12, 14, 14, 6);
+          break;
+        }
+        case 'yard_petter': {
+          mGfx.fillStyle(0xa8a29e, 1);
+          mGfx.fillRoundedRect(-18, 8, 36, 10, 3);
+          mGfx.fillStyle(0xd6d3d1, 1);
+          mGfx.fillRect(-6, -28, 12, 38);
+
+          mGfx.fillStyle(0xff758f, 1);
+          mGfx.fillRoundedRect(-16, -26, 10, 30, 4);
+          mGfx.fillRoundedRect(6, -26, 10, 30, 4);
+          mGfx.fillStyle(0xffcad4, 0.85);
+          mGfx.fillCircle(-11, -18, 3);
+          mGfx.fillCircle(11, -10, 3);
+
+          mGfx.fillStyle(0xe11d48, 1);
+          mGfx.fillCircle(-3, -34, 4);
+          mGfx.fillCircle(3, -34, 4);
+          mGfx.fillTriangle(-7, -33, 7, -33, 0, -26);
+          break;
+        }
+        case 'yard_brush': {
+          mGfx.fillStyle(0x78350f, 1);
+          mGfx.fillRect(-22, -26, 8, 38);
+          mGfx.fillRect(14, -26, 8, 38);
+          mGfx.fillStyle(0x92400e, 1);
+          mGfx.fillRoundedRect(-24, -36, 48, 14, 5);
+
+          mGfx.fillStyle(0x451a03, 1);
+          for (let by = -22; by <= 8; by += 4) {
+            mGfx.fillRect(-14, by, 7, 2.5);
+            mGfx.fillRect(7, by, 7, 2.5);
+          }
+          break;
+        }
+        case 'yard_toy': {
+          mGfx.fillStyle(0x475569, 1);
+          mGfx.fillRoundedRect(-16, 6, 32, 10, 4);
+          mGfx.fillStyle(0x94a3b8, 1);
+          mGfx.fillRect(-4, -24, 8, 32);
+
+          mGfx.fillStyle(0x0284c7, 1);
+          mGfx.fillCircle(0, -26, 8);
+
+          mGfx.fillStyle(0xec4899, 1);
+          mGfx.fillEllipse(-14, -34, 16, 6);
+          mGfx.fillStyle(0xfacc15, 1);
+          mGfx.fillEllipse(14, -34, 16, 6);
+          mGfx.fillStyle(0x22c55e, 1);
+          mGfx.fillEllipse(0, -42, 6, 18);
+          mGfx.fillStyle(0x38bdf8, 1);
+          mGfx.fillCircle(0, -26, 3.5);
+          break;
+        }
+        case 'yard_washer': {
+          mGfx.fillStyle(0x57534e, 1);
+          mGfx.fillEllipse(0, 4, 54, 28);
+          mGfx.fillStyle(0x78716c, 1);
+          mGfx.fillEllipse(0, 0, 48, 24);
+
+          mGfx.fillStyle(0x38bdf8, 1);
+          mGfx.fillEllipse(0, 1, 38, 18);
+          mGfx.fillStyle(0xbae6fd, 0.8);
+          mGfx.fillCircle(-4, 0, 5);
+
+          mGfx.fillStyle(0xffffff, 0.95);
+          mGfx.fillCircle(-10, -3, 5);
+          mGfx.fillCircle(-6, -6, 4);
+          mGfx.fillCircle(8, -2, 5);
+          mGfx.fillCircle(12, 1, 4);
+          mGfx.fillCircle(4, -5, 3.5);
+          break;
+        }
+
+        // ── SHELTER MACHINES ──
+        case 'shelter_feeder': {
+          mGfx.fillStyle(0x7c2d12, 1);
+          mGfx.fillRoundedRect(-20, -22, 40, 36, 4);
+          mGfx.fillStyle(0xfef3c7, 1);
+          mGfx.fillRect(-16, -18, 32, 20);
+
+          mGfx.fillStyle(0x64748b, 1);
+          mGfx.fillEllipse(-10, 14, 18, 10);
+          mGfx.fillEllipse(10, 14, 18, 10);
+          mGfx.fillStyle(0x9a3412, 1);
+          mGfx.fillCircle(-10, 13, 3);
+          mGfx.fillStyle(0x0284c7, 0.9);
+          mGfx.fillEllipse(10, 14, 12, 6);
+          break;
+        }
+        case 'shelter_petter': {
+          mGfx.fillStyle(0xe07a5f, 1);
+          mGfx.fillRoundedRect(-24, -10, 48, 24, 8);
+          mGfx.fillStyle(0xf4a261, 0.85);
+          mGfx.fillRoundedRect(-20, -7, 40, 18, 6);
+
+          mGfx.lineStyle(1.5, 0xd97706, 0.8);
+          mGfx.beginPath();
+          mGfx.moveTo(-14, -2);
+          mGfx.lineTo(-8, 2);
+          mGfx.lineTo(-2, -2);
+          mGfx.lineTo(4, 2);
+          mGfx.lineTo(10, -2);
+          mGfx.strokePath();
+
+          mGfx.fillStyle(0xf59e0b, 1);
+          mGfx.fillCircle(18, -6, 3);
+          break;
+        }
+        case 'shelter_brush': {
+          mGfx.fillStyle(0x334155, 1);
+          mGfx.fillRect(-14, -28, 28, 38);
+          mGfx.fillStyle(0x64748b, 1);
+          mGfx.fillRect(-11, -25, 22, 32);
+
+          mGfx.fillStyle(0x38bdf8, 1);
+          for (let y = -20; y <= 2; y += 6) {
+            mGfx.fillCircle(-6, y, 2.5);
+            mGfx.fillCircle(0, y + 3, 2.5);
+            mGfx.fillCircle(6, y, 2.5);
+          }
+          break;
+        }
+        case 'shelter_toy': {
+          mGfx.fillStyle(0x1e293b, 1);
+          mGfx.fillRoundedRect(-14, -6, 28, 18, 4);
+          mGfx.fillStyle(0x475569, 1);
+          mGfx.fillRect(-6, -22, 12, 18);
+
+          mGfx.fillStyle(0x0f172a, 1);
+          mGfx.fillCircle(0, -24, 9);
+          mGfx.fillStyle(0xef4444, 1);
+          mGfx.fillCircle(4, -24, 3);
+
+          mGfx.fillStyle(0xef4444, 0.85);
+          mGfx.fillCircle(18, 12, 3.5);
+          break;
+        }
+        case 'shelter_washer': {
+          mGfx.fillStyle(0x0284c7, 1);
+          mGfx.fillRoundedRect(-22, -10, 44, 24, 8);
+          mGfx.fillStyle(0x38bdf8, 1);
+          mGfx.fillRoundedRect(-18, -7, 36, 18, 6);
+
+          mGfx.fillStyle(0xe0f2fe, 0.7);
+          mGfx.fillCircle(0, -10, 14);
+          mGfx.fillStyle(0xffffff, 0.95);
+          mGfx.fillCircle(-6, -12, 4);
+          mGfx.fillCircle(4, -8, 3.5);
+          mGfx.fillCircle(0, 0, 5);
+          break;
+        }
+
+        // ── SUNROOM MACHINES ──
+        case 'sunroom_feeder': {
+          mGfx.fillStyle(0xd97706, 1);
+          mGfx.fillRoundedRect(-18, 6, 36, 8, 3);
+          mGfx.fillRect(-3, -24, 6, 32);
+
+          mGfx.fillStyle(0xfef08a, 1);
+          mGfx.fillEllipse(0, -10, 32, 10);
+          mGfx.fillStyle(0xbae6fd, 0.7);
+          mGfx.fillCircle(0, -16, 10);
+          mGfx.fillStyle(0xf97316, 1);
+          mGfx.fillCircle(-3, -12, 3);
+          mGfx.fillCircle(3, -12, 3);
+          break;
+        }
+        case 'sunroom_petter': {
+          mGfx.fillStyle(0xd97706, 1);
+          mGfx.fillRect(-20, 8, 5, 8);
+          mGfx.fillRect(15, 8, 5, 8);
+          mGfx.fillStyle(0x065f46, 1);
+          mGfx.fillRoundedRect(-24, -8, 48, 18, 6);
+          mGfx.fillStyle(0x10b981, 0.9);
+          mGfx.fillRoundedRect(-20, -5, 40, 12, 4);
+
+          mGfx.fillStyle(0x38bdf8, 0.9);
+          mGfx.fillTriangle(0, -22, -6, -10, 6, -10);
+          break;
+        }
+        case 'sunroom_brush': {
+          mGfx.lineStyle(3, 0xd97706, 1);
+          mGfx.strokeCircle(0, -12, 20);
+
+          mGfx.fillStyle(0x15803d, 1);
+          mGfx.fillCircle(-16, -20, 4);
+          mGfx.fillCircle(16, -20, 4);
+          mGfx.fillStyle(0x38bdf8, 1);
+          mGfx.fillCircle(-12, -8, 2.5);
+          mGfx.fillCircle(12, -8, 2.5);
+          mGfx.fillCircle(0, -28, 3);
+          break;
+        }
+        case 'sunroom_toy': {
+          mGfx.fillStyle(0xd97706, 1);
+          mGfx.fillRect(-3, -32, 6, 40);
+          mGfx.fillCircle(0, -32, 5);
+
+          mGfx.fillStyle(0xf472b6, 1);
+          mGfx.fillEllipse(-14, -26, 10, 6);
+          mGfx.fillStyle(0x60a5fa, 1);
+          mGfx.fillEllipse(14, -24, 10, 6);
+          mGfx.fillStyle(0xfde047, 1);
+          mGfx.fillCircle(-14, -16, 2.5);
+          mGfx.fillCircle(14, -14, 2.5);
+          break;
+        }
+        case 'sunroom_washer': {
+          mGfx.fillStyle(0x065f46, 1);
+          mGfx.fillEllipse(0, 8, 48, 18);
+          mGfx.fillStyle(0xfbcfe8, 1);
+          mGfx.fillEllipse(0, 0, 42, 22);
+
+          mGfx.fillStyle(0xf472b6, 1);
+          mGfx.fillCircle(-12, -4, 7);
+          mGfx.fillCircle(12, -4, 7);
+          mGfx.fillCircle(0, -8, 8);
+          mGfx.fillStyle(0xffffff, 0.85);
+          mGfx.fillCircle(0, -18, 5);
+          mGfx.fillCircle(-4, -22, 3.5);
+          break;
+        }
+
+        // ── CAFE MACHINES ──
+        case 'cafe_feeder': {
+          mGfx.fillStyle(0x3e2723, 1);
+          mGfx.fillRoundedRect(-22, -12, 44, 24, 4);
+          mGfx.fillStyle(0x5d4037, 1);
+          mGfx.fillRect(-18, -9, 36, 18);
+
+          mGfx.fillStyle(0xe0f2fe, 0.65);
+          mGfx.fillRoundedRect(-16, -24, 32, 14, 3);
+          mGfx.fillStyle(0xf97316, 1);
+          mGfx.fillCircle(-8, -17, 3.5);
+          mGfx.fillStyle(0xfacc15, 1);
+          mGfx.fillCircle(0, -17, 3.5);
+          mGfx.fillStyle(0xec4899, 1);
+          mGfx.fillCircle(8, -17, 3.5);
+          break;
+        }
+        case 'cafe_petter': {
+          mGfx.fillStyle(0x3e2723, 1);
+          mGfx.fillRoundedRect(-20, -18, 40, 32, 6);
+          mGfx.fillStyle(0x991b1b, 1);
+          mGfx.fillRoundedRect(-16, -14, 32, 24, 4);
+          mGfx.fillStyle(0xdc2626, 0.85);
+          mGfx.fillRoundedRect(-12, -10, 24, 16, 3);
+
+          mGfx.fillStyle(0xd97706, 1);
+          mGfx.fillRect(-2, -26, 4, 12);
+          mGfx.fillStyle(0xffcad4, 1);
+          mGfx.fillCircle(0, -28, 4.5);
+          break;
+        }
+        case 'cafe_brush': {
+          mGfx.fillStyle(0x78350f, 1);
+          mGfx.fillRoundedRect(-12, -28, 24, 40, 4);
+
+          mGfx.fillStyle(0xd97706, 1);
+          for (let y = -24; y <= 4; y += 5) {
+            mGfx.fillRect(-10, y, 20, 2.5);
+          }
+
+          mGfx.fillStyle(0xfacc15, 1);
+          mGfx.fillCircle(0, -32, 6);
+          break;
+        }
+        case 'cafe_toy': {
+          mGfx.fillStyle(0x78350f, 1);
+          mGfx.fillRect(-3, -26, 6, 34);
+          mGfx.fillCircle(0, -26, 5);
+
+          mGfx.fillStyle(0xec4899, 1);
+          mGfx.fillCircle(-14, -26, 6);
+          mGfx.fillStyle(0x8b5cf6, 1);
+          mGfx.fillCircle(14, -26, 6);
+          mGfx.fillStyle(0x3b82f6, 1);
+          mGfx.fillCircle(0, -40, 6);
+          mGfx.fillStyle(0x10b981, 1);
+          mGfx.fillCircle(0, -12, 6);
+          break;
+        }
+        case 'cafe_washer': {
+          mGfx.fillStyle(0xfef3c7, 1);
+          mGfx.fillRoundedRect(-20, -8, 40, 22, 6);
+          mGfx.lineStyle(2, 0xd97706, 0.9);
+          mGfx.strokeRoundedRect(-20, -8, 40, 22, 6);
+
+          mGfx.lineStyle(3, 0xd97706, 1);
+          mGfx.strokeCircle(22, 2, 7);
+
+          mGfx.fillStyle(0xffffff, 0.95);
+          mGfx.fillCircle(-8, -8, 6);
+          mGfx.fillCircle(0, -11, 7);
+          mGfx.fillCircle(8, -8, 6);
+          mGfx.fillCircle(-4, -18, 3.5);
+          mGfx.fillCircle(4, -22, 4);
+          break;
+        }
+      }
+
+      const tierStr = level === 3 ? '⭐⭐⭐' : level === 2 ? '⭐⭐' : '⭐';
+      const tierBadge = this.scene.add.text(0, -32, tierStr, {
+        fontFamily: 'Outfit, Inter, sans-serif',
+        fontSize: '9px',
+      });
+      tierBadge.setOrigin(0.5);
+      container.add(tierBadge);
+
+      const hitZone = this.scene.add.zone(0, 0, 56, 56).setInteractive({ cursor: 'pointer' });
+      container.add(hitZone);
+
+      hitZone.on('pointerdown', () => {
+        if (isAnyModalOpen()) return;
+        sound.playPop();
+        this.scene.tweens.add({
+          targets: container,
+          scaleX: 1.15,
+          scaleY: 0.88,
+          duration: 90,
+          yoyo: true,
+          ease: 'Back.easeOut',
+        });
+        const threshold = level === 1 ? '50%' : level === 2 ? '80%' : '100%';
+        EventBus.emit('toast', {
+          message: `⚙️ ${machine.name} (Tier ${level}) - Auto maintains ${machine.needType} at ${threshold}!`,
+        });
+      });
+    }
+  }
+
   private createAdoptionBox(): void {
     if (this.adoptionBoxContainer) {
       this.adoptionBoxContainer.destroy();
@@ -1207,7 +1589,7 @@ export class AreaRenderer {
       if (isAnyModalOpen()) return;
       sound.playTap();
       EventBus.emit('toast', {
-        message: '🏡 Drag any cat into the box to find their loving forever home! (+💗 Care Points)',
+        message: '🏡 Drag any cat into the box to find their loving forever home! (+💗)',
       });
       this.scene.tweens.add({
         targets: container,

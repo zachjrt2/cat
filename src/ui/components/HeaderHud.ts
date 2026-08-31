@@ -46,7 +46,7 @@ export class HeaderHud {
     hud.className = 'hud';
     hud.innerHTML = `
       <div class="hud-stats-group">
-        <div class="hud-love" title="Care Points (CP)">
+        <div class="hud-love" title="Care Points">
           <span class="hud-icon heart-icon">${SVG_ICONS.heart}</span>
           <span id="love-value">0</span>
         </div>

@@ -352,7 +352,7 @@ export class UIManager {
       <div class="offline-rewards-row">
         <div class="offline-stat-pill cp-pill">
           <span class="svg-inline">${SVG_ICONS.heart}</span>
-          <span><b>+${summary.loveEarned.toLocaleString()}</b> Care Points</span>
+          <span><b>+${summary.loveEarned.toLocaleString()}</b></span>
         </div>
         ${starsHtml}
       </div>

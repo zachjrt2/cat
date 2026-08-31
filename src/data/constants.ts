@@ -594,7 +594,7 @@ export const SAVE_KEY = 'cozy-cat-sanctuary:save:v1';
 export const ADOPTION_BASE_COST = 20; // Love cost, scales gently with cat count
 
 export const CAT_PERFUME_COST = 200; // 200 Care Points
-export const CAT_PERFUME_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes per cat
+export const CAT_PERFUME_COOLDOWN_MS = 3 * 60 * 1000; // 3 minutes per cat
 export const CAT_PERFUME_FRENZY_SECONDS = 15; // 15 seconds of breeding frenzy
 
 export interface PlinkoUpgradeDef {

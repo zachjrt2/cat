@@ -210,7 +210,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
     this.add(this.hoverGfx);
 
     // 3. Aura Glow
-    if (cat.isRare || cat.color === 'ghost_0' || cat.color === 'gold_0' || cat.color === 'radioactive_0' || cat.mutation === 'sparkly' || cat.mutation === 'gilded') {
+    if (cat.isRare || cat.color === 'ghost_0' || cat.color === 'gold_0' || cat.color === 'radioactive_0' ||
+        cat.mutation === 'sparkly' || cat.mutation === 'gilded' || cat.mutation === 'frosted' ||
+        cat.mutation === 'flaming' || cat.mutation === 'inverted' || cat.mutation === 'angelic' || cat.mutation === 'chromatic') {
       const aura = scene.add.graphics();
       let auraColor = 0xffe66d;
       let auraAlpha = 0.25;
@@ -227,6 +229,21 @@ export class CatSprite extends Phaser.GameObjects.Container {
       } else if (cat.mutation === 'gilded') {
         auraColor = 0xfbbf24;
         auraAlpha = 0.35;
+      } else if (cat.mutation === 'frosted') {
+        auraColor = 0x38bdf8;
+        auraAlpha = 0.28;
+      } else if (cat.mutation === 'flaming') {
+        auraColor = 0xf97316;
+        auraAlpha = 0.30;
+      } else if (cat.mutation === 'inverted') {
+        auraColor = 0x6366f1;
+        auraAlpha = 0.32;
+      } else if (cat.mutation === 'angelic') {
+        auraColor = 0xfef08a;
+        auraAlpha = 0.28;
+      } else if (cat.mutation === 'chromatic') {
+        auraColor = 0xc026d3;
+        auraAlpha = 0.30;
       }
 
       aura.fillStyle(auraColor, auraAlpha);
@@ -258,9 +275,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
     if (cat.mutation === 'gilded') {
       this.baseSprite.setTint(0xffd700);
     } else if (cat.mutation === 'frosted') {
-      this.baseSprite.setTint(0xbbeeff);
+      this.baseSprite.setTint(0xa5f3fc);
+    } else if (cat.mutation === 'flaming') {
+      this.baseSprite.setTint(0xff8a4c);
+    } else if (cat.mutation === 'stinky') {
+      this.baseSprite.setTint(0xdcfce7);
     } else if (cat.mutation === 'inverted') {
-      this.baseSprite.setTint(0x334488);
+      this.baseSprite.setTint(0x818cf8);
     }
 
     this.add(this.baseSprite);
@@ -277,9 +298,13 @@ export class CatSprite extends Phaser.GameObjects.Container {
         if (cat.mutation === 'gilded') {
           this.markingSprite.setTint(0xffd700);
         } else if (cat.mutation === 'frosted') {
-          this.markingSprite.setTint(0xbbeeff);
+          this.markingSprite.setTint(0xa5f3fc);
+        } else if (cat.mutation === 'flaming') {
+          this.markingSprite.setTint(0xff8a4c);
+        } else if (cat.mutation === 'stinky') {
+          this.markingSprite.setTint(0xdcfce7);
         } else if (cat.mutation === 'inverted') {
-          this.markingSprite.setTint(0x334488);
+          this.markingSprite.setTint(0x38bdf8);
         }
         this.add(this.markingSprite);
       }
@@ -402,7 +427,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   highlightAsDropTarget(isTarget: boolean): void {
     this.hoverGfx.clear();
     if (isTarget) {
-      const scale = getScaleForStage(this.cat.stage);
+      const scale = getScaleForCat(this.cat);
       const r = (getHitRadius(this.cat.stage) + 8) * scale;
       const centerY = 4.4 * (scale / BASE_SPRITE_SCALE);
       this.hoverGfx.lineStyle(3, 0xff007f, 1);
@@ -422,7 +447,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   setBreedingPartnerHighlight(isPartner: boolean, isReady: boolean): void {
     this.hoverGfx.clear();
     if (isPartner) {
-      const scale = getScaleForStage(this.cat.stage);
+      const scale = getScaleForCat(this.cat);
       const r = (getHitRadius(this.cat.stage) + 6) * scale;
       const centerY = 4.4 * (scale / BASE_SPRITE_SCALE);
 
@@ -449,7 +474,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   setPerfumeTargetHighlight(isTarget: boolean): void {
     this.hoverGfx.clear();
     if (isTarget) {
-      const scale = getScaleForStage(this.cat.stage);
+      const scale = getScaleForCat(this.cat);
       const r = (getHitRadius(this.cat.stage) + 8) * scale;
       const centerY = 4.4 * (scale / BASE_SPRITE_SCALE);
 
@@ -525,7 +550,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
     if (this.isDragged) return;
     this.hoverGfx.clear();
     if (isHovered || this.currentSelectedTool) {
-      const scale = getScaleForStage(this.cat.stage);
+      const scale = getScaleForCat(this.cat);
       const r = getHitRadius(this.cat.stage) * scale;
       const centerY = 4.4 * (scale / BASE_SPRITE_SCALE);
       this.hoverGfx.lineStyle(2, 0xff758f, isHovered ? 0.9 : 0.4);
@@ -634,7 +659,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   }
 
   showEmote(emoji: string): void {
-    const scale = getScaleForStage(this.cat.stage);
+    const scale = getScaleForCat(this.cat);
     const text = CatSprite.getPooledText(this.scene, emoji, { fontSize: '24px' });
     text.setPosition(this.x, this.y - 20).setOrigin(0.5, 1).setDepth(100);
     this.scene.tweens.add({
@@ -854,7 +879,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
     const dist = Math.hypot(dx, dy);
     this.currentDirection = vectorToDirection(dx, dy);
 
-    const scale = getScaleForStage(this.cat.stage);
+    const scale = getScaleForCat(this.cat);
 
     if (this.baseSprite) {
       this.scene.tweens.killTweensOf(this.baseSprite);
@@ -1075,7 +1100,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private updateDirtGfx(): void {
     this.dirtGfx.clear();
     if (this.cat.cleanliness < 40) {
-      const scale = getScaleForStage(this.cat.stage);
+      const scale = getScaleForCat(this.cat);
       this.dirtGfx.fillStyle(0x6b4f2c, 0.7);
       this.dirtGfx.fillCircle(-6 * (scale / BASE_SPRITE_SCALE), -4 * (scale / BASE_SPRITE_SCALE), 3);
       this.dirtGfx.fillCircle(8 * (scale / BASE_SPRITE_SCALE), 2 * (scale / BASE_SPRITE_SCALE), 2.5);
@@ -1136,12 +1161,83 @@ export class CatSprite extends Phaser.GameObjects.Container {
       }
     }
 
-    // ── Mutation Ambient Particle & Color Updates ───────────────────────────
+    // ── Mutation Dynamic Ambient Color & Particle Updates ──────────────────
+    const now = Date.now();
     if (this.cat.mutation === 'chromatic') {
-      this.chromaticHue = (this.chromaticHue + dt * 80) % 360;
-      const color = Phaser.Display.Color.HSLToColor(this.chromaticHue / 360, 0.85, 0.65);
+      this.chromaticHue = (this.chromaticHue + dt * 90) % 360;
+      const color = Phaser.Display.Color.HSLToColor(this.chromaticHue / 360, 0.88, 0.65);
       this.baseSprite.setTint(color.color);
       if (this.markingSprite) this.markingSprite.setTint(color.color);
+    } else if (this.cat.mutation === 'stinky') {
+      // Rotates smoothly between muddy swamp brown and toxic chartreuse green
+      const stinkyT = (Math.sin(now / 450) + 1) / 2;
+      const brown = Phaser.Display.Color.ValueToColor(0x855b32);
+      const green = Phaser.Display.Color.ValueToColor(0x4ade80);
+      const interpolated = Phaser.Display.Color.Interpolate.ColorWithColor(brown, green, 100, Math.round(stinkyT * 100));
+      const tintHex = Phaser.Display.Color.GetColor(interpolated.r, interpolated.g, interpolated.b);
+      this.baseSprite.setTint(tintHex);
+      if (this.markingSprite) this.markingSprite.setTint(tintHex);
+    } else if (this.cat.mutation === 'frosted') {
+      // Pulses between icy crystal cyan and deep glacial neon blue
+      const iceT = (Math.sin(now / 380) + 1) / 2;
+      const iceLight = Phaser.Display.Color.ValueToColor(0xcffafe);
+      const iceDeep = Phaser.Display.Color.ValueToColor(0x0284c7);
+      const interpolated = Phaser.Display.Color.Interpolate.ColorWithColor(iceLight, iceDeep, 100, Math.round(iceT * 100));
+      const tintHex = Phaser.Display.Color.GetColor(interpolated.r, interpolated.g, interpolated.b);
+      this.baseSprite.setTint(tintHex);
+      if (this.markingSprite) this.markingSprite.setTint(tintHex);
+    } else if (this.cat.mutation === 'flaming') {
+      // Pulses hot between molten fire red and burning amber flame gold
+      const fireT = (Math.sin(now / 300) + 1) / 2;
+      const fireRed = Phaser.Display.Color.ValueToColor(0xdc2626);
+      const flameGold = Phaser.Display.Color.ValueToColor(0xfbbf24);
+      const interpolated = Phaser.Display.Color.Interpolate.ColorWithColor(fireRed, flameGold, 100, Math.round(fireT * 100));
+      const tintHex = Phaser.Display.Color.GetColor(interpolated.r, interpolated.g, interpolated.b);
+      this.baseSprite.setTint(tintHex);
+      if (this.markingSprite) this.markingSprite.setTint(tintHex);
+    } else if (this.cat.mutation === 'gilded') {
+      // Pulses between rich deep brass gold and shimmering solar gold
+      const goldT = (Math.sin(now / 340) + 1) / 2;
+      const deepGold = Phaser.Display.Color.ValueToColor(0xca8a04);
+      const brightGold = Phaser.Display.Color.ValueToColor(0xfef08a);
+      const interpolated = Phaser.Display.Color.Interpolate.ColorWithColor(deepGold, brightGold, 100, Math.round(goldT * 100));
+      const tintHex = Phaser.Display.Color.GetColor(interpolated.r, interpolated.g, interpolated.b);
+      this.baseSprite.setTint(tintHex);
+      if (this.markingSprite) this.markingSprite.setTint(tintHex);
+    } else if (this.cat.mutation === 'sparkly') {
+      // Pulses between cosmic starlight magenta and radiant stardust pink
+      const sparkT = (Math.sin(now / 320) + 1) / 2;
+      const magenta = Phaser.Display.Color.ValueToColor(0xd946ef);
+      const cosmicPink = Phaser.Display.Color.ValueToColor(0xf472b6);
+      const interpolated = Phaser.Display.Color.Interpolate.ColorWithColor(magenta, cosmicPink, 100, Math.round(sparkT * 100));
+      const tintHex = Phaser.Display.Color.GetColor(interpolated.r, interpolated.g, interpolated.b);
+      this.baseSprite.setTint(tintHex);
+      if (this.markingSprite) this.markingSprite.setTint(tintHex);
+    } else if (this.cat.mutation === 'inverted') {
+      // Pulses between spectral electric cyan and alien neon violet
+      const invT = (Math.sin(now / 360) + 1) / 2;
+      const cyan = Phaser.Display.Color.ValueToColor(0x06b6d4);
+      const violet = Phaser.Display.Color.ValueToColor(0x818cf8);
+      const interpolated = Phaser.Display.Color.Interpolate.ColorWithColor(cyan, violet, 100, Math.round(invT * 100));
+      const tintHex = Phaser.Display.Color.GetColor(interpolated.r, interpolated.g, interpolated.b);
+      this.baseSprite.setTint(tintHex);
+      if (this.markingSprite) this.markingSprite.setTint(tintHex);
+    } else if (this.cat.mutation === 'angelic') {
+      // Gentle divine glow pulse + bobbing halo
+      const angT = (Math.sin(now / 420) + 1) / 2;
+      const divineWhite = Phaser.Display.Color.ValueToColor(0xfefce8);
+      const divineGold = Phaser.Display.Color.ValueToColor(0xfde047);
+      const interpolated = Phaser.Display.Color.Interpolate.ColorWithColor(divineWhite, divineGold, 100, Math.round(angT * 100));
+      const tintHex = Phaser.Display.Color.GetColor(interpolated.r, interpolated.g, interpolated.b);
+      this.baseSprite.setTint(tintHex);
+      if (this.markingSprite) this.markingSprite.setTint(tintHex);
+      if (this.haloGfx) {
+        const scale = getScaleForCat(this.cat);
+        const haloBob = Math.sin(now / 200) * 2;
+        this.haloGfx.clear();
+        this.haloGfx.lineStyle(2.5, 0xfde047, 0.95);
+        this.haloGfx.strokeEllipse(0, -30 * (scale / BASE_SPRITE_SCALE) + haloBob, 14, 5);
+      }
     }
 
     this.mutationEmitterTimer -= dt;
@@ -2096,11 +2192,20 @@ export class CatSprite extends Phaser.GameObjects.Container {
       this.baseSprite.setTint(0xffd700);
       if (this.markingSprite) this.markingSprite.setTint(0xffd700);
     } else if (this.cat.mutation === 'frosted') {
-      this.baseSprite.setTint(0xbbeeff);
-      if (this.markingSprite) this.markingSprite.setTint(0xbbeeff);
+      this.baseSprite.setTint(0xa5f3fc);
+      if (this.markingSprite) this.markingSprite.setTint(0xa5f3fc);
+    } else if (this.cat.mutation === 'flaming') {
+      this.baseSprite.setTint(0xff8a4c);
+      if (this.markingSprite) this.markingSprite.setTint(0xff8a4c);
+    } else if (this.cat.mutation === 'stinky') {
+      this.baseSprite.setTint(0xdcfce7);
+      if (this.markingSprite) this.markingSprite.setTint(0xdcfce7);
     } else if (this.cat.mutation === 'inverted') {
-      this.baseSprite.setTint(0x334488);
-      if (this.markingSprite) this.markingSprite.setTint(0x334488);
+      this.baseSprite.setTint(0x818cf8);
+      if (this.markingSprite) this.markingSprite.setTint(0x38bdf8);
+    } else if (this.cat.mutation !== 'chromatic') {
+      this.baseSprite.clearTint();
+      if (this.markingSprite) this.markingSprite.clearTint();
     }
 
     if (this.cat.mutation === 'angelic') {

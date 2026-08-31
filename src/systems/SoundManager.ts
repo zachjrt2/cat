@@ -1,24 +1,62 @@
 /**
  * Cozy Cat Sanctuary — SoundManager
- * Plays real MP3 audio files from /assets/sound/.
+ * Plays real MP3 audio files from /assets/sound/ with calibrated per-sound loudness normalization.
  * Uses Vite's import.meta.env.BASE_URL so the path is correct both
  * locally (/) and on GitHub Pages (/cat/).
  */
 
 function soundUrl(filename: string): string {
-  // import.meta.env.BASE_URL is injected by Vite at build time.
-  // It equals '/' in dev and '/cat/' (or whatever base is) in production.
   const base = import.meta.env.BASE_URL ?? '/';
   const prefix = base.endsWith('/') ? base : base + '/';
   return `${prefix}assets/sound/${filename}`;
 }
 
+/**
+ * Calibrated perceived loudness normalization factors (0..1.0).
+ * Prevents loud raw recording transients (like meow1, meow4, kitten) from overpowering softer clips.
+ */
+const SOUND_NORMALIZATION_MAP: Record<string, number> = {
+  // Adult Meows (meow1 & meow4 have high peak mastering; meow3 is quiet)
+  'meow1.mp3': 0.44,
+  'meow2.mp3': 0.65,
+  'meow3.mp3': 0.85,
+  'meow4.mp3': 0.38,
+  'meow5.mp3': 0.65,
+
+  // Kitten Meows (kitten.mp3 has loud high-pitch spike)
+  'kitten.mp3': 0.46,
+  'kitten2.mp3': 0.62,
+
+  // Chirps
+  'chirp.mp3': 0.52,
+  'chirp2.mp3': 0.48,
+  'chirp3.mp3': 0.48,
+
+  // General SFX
+  'purr.mp3': 0.85,
+  'purr2.mp3': 0.85,
+  'hungry.mp3': 0.55,
+  'click.mp3': 0.50,
+  'pop.mp3': 0.58,
+  'coin.mp3': 0.52,
+  'bounce.mp3': 0.45,
+  'balldrop.mp3': 0.52,
+  'fail.mp3': 0.52,
+  'bigwin.mp3': 0.65,
+  'success.mp3': 0.65,
+  'chestreward.mp3': 0.58,
+  'open.mp3': 0.58,
+};
+
 // ── Per-pool audio element pool ───────────────────────────────────────────────
-function makePool(src: string, size: number, volume = 1): HTMLAudioElement[] {
+function makePool(filename: string, size: number, globalVolume = 1): HTMLAudioElement[] {
+  const normGain = SOUND_NORMALIZATION_MAP[filename] ?? 0.60;
+  const src = soundUrl(filename);
   return Array.from({ length: size }, () => {
     const a = new Audio(src);
     a.preload = 'auto';
-    a.volume = volume;
+    (a as any)._baseGain = normGain;
+    a.volume = Math.max(0, Math.min(1, globalVolume * normGain));
     return a;
   });
 }
@@ -181,7 +219,10 @@ export class SoundManager {
   }
 
   private applyVolumeToPool(pool: HTMLAudioElement[]): void {
-    pool.forEach(a => { a.volume = this.sfxVolume; });
+    pool.forEach(a => {
+      const baseGain = (a as any)._baseGain ?? 0.60;
+      a.volume = Math.max(0, Math.min(1, this.sfxVolume * baseGain));
+    });
   }
 
   // ── Pool lazy init ────────────────────────────────────────────────────────
@@ -190,27 +231,28 @@ export class SoundManager {
     if (this.poolsReady) return;
     this.poolsReady = true;
 
-    this.meowPools = MEOW_FILES.map(f => makePool(soundUrl(f), 2, this.sfxVolume));
-    this.kittenPools = KITTEN_FILES.map(f => makePool(soundUrl(f), 2, this.sfxVolume));
-    this.chirpPools = CHIRP_FILES.map(f => makePool(soundUrl(f), 2, this.sfxVolume));
-    this.purrPool = makePool(soundUrl('purr.mp3'), 3, this.sfxVolume);
-    this.hungryPool = makePool(soundUrl('hungry.mp3'), 2, this.sfxVolume);
-    this.clickPool = makePool(soundUrl('click.mp3'), 4, this.sfxVolume);
-    this.popPool = makePool(soundUrl('pop.mp3'), 3, this.sfxVolume);
-    this.coinPool = makePool(soundUrl('coin.mp3'), 3, this.sfxVolume);
-    this.bouncePool = makePool(soundUrl('bounce.mp3'), 8, this.sfxVolume * 0.85);
-    this.balldropPool = makePool(soundUrl('balldrop.mp3'), 6, this.sfxVolume);
-    this.failPool = makePool(soundUrl('fail.mp3'), 4, this.sfxVolume * 0.9);
-    this.bigwinPool = makePool(soundUrl('bigwin.mp3'), 4, this.sfxVolume);
-    this.successPool = makePool(soundUrl('success.mp3'), 4, this.sfxVolume);
-    this.openChestPool = makePool(soundUrl('open.mp3'), 3, this.sfxVolume);
+    this.meowPools = MEOW_FILES.map(f => makePool(f, 2, this.sfxVolume));
+    this.kittenPools = KITTEN_FILES.map(f => makePool(f, 2, this.sfxVolume));
+    this.chirpPools = CHIRP_FILES.map(f => makePool(f, 2, this.sfxVolume));
+    this.purrPool = makePool('purr.mp3', 3, this.sfxVolume);
+    this.hungryPool = makePool('hungry.mp3', 2, this.sfxVolume);
+    this.clickPool = makePool('click.mp3', 4, this.sfxVolume);
+    this.popPool = makePool('pop.mp3', 3, this.sfxVolume);
+    this.coinPool = makePool('coin.mp3', 3, this.sfxVolume);
+    this.bouncePool = makePool('bounce.mp3', 8, this.sfxVolume);
+    this.balldropPool = makePool('balldrop.mp3', 6, this.sfxVolume);
+    this.failPool = makePool('fail.mp3', 4, this.sfxVolume);
+    this.bigwinPool = makePool('bigwin.mp3', 4, this.sfxVolume);
+    this.successPool = makePool('success.mp3', 4, this.sfxVolume);
+    this.openChestPool = makePool('open.mp3', 3, this.sfxVolume);
   }
 
-  private playFromPool(pool: HTMLAudioElement[], volume?: number): void {
+  private playFromPool(pool: HTMLAudioElement[], volumeMultiplier = 1): void {
     if (!this.sfxEnabled) return;
     const el = pool.find(a => a.paused || a.ended) ?? pool[0];
     el.currentTime = 0;
-    if (volume !== undefined) el.volume = Math.min(this.sfxVolume, volume);
+    const baseGain = (el as any)._baseGain ?? 0.60;
+    el.volume = Math.max(0, Math.min(1, this.sfxVolume * baseGain * volumeMultiplier));
     el.play().catch(() => {});
   }
 
@@ -264,7 +306,7 @@ export class SoundManager {
     if (!this.sfxEnabled) return;
     try {
       const audio = new Audio(soundUrl('chestreward.mp3'));
-      audio.volume = this.sfxVolume;
+      audio.volume = this.sfxVolume * (SOUND_NORMALIZATION_MAP['chestreward.mp3'] ?? 0.58);
       const p = audio.play();
       if (p !== undefined) {
         p.catch(() => {});
@@ -276,8 +318,8 @@ export class SoundManager {
   playChestOpen(): void {
     if (!this.sfxEnabled) return;
     try {
-      const audio = new Audio(soundUrl('chestreward.mp3'));
-      audio.volume = this.sfxVolume;
+      const audio = new Audio(soundUrl('open.mp3'));
+      audio.volume = this.sfxVolume * (SOUND_NORMALIZATION_MAP['open.mp3'] ?? 0.58);
       const p = audio.play();
       if (p !== undefined) {
         p.catch(() => {
@@ -291,30 +333,42 @@ export class SoundManager {
 
   // ── SFX API ───────────────────────────────────────────────────────────────
 
-  /** Adult cat meow – 5 variations, random pick */
-  playMeow(pitchMultiplier = 1): void {
+  /** Adult cat meow – 5 variations, random pick with calibrated normalized loudness */
+  playMeow(pitchParam = 1): void {
     this.initPools();
     if (!this.sfxEnabled) return;
     if (this.activeMeowCount >= SoundManager.MAX_CONCURRENT_MEOWS) return;
     const idx = Math.floor(Math.random() * this.meowPools.length);
-    this.playMeowFromPool(this.meowPools[idx], pitchMultiplier);
+    this.playMeowFromPool(this.meowPools[idx], pitchParam);
   }
 
-  /** Kitten meow – 2 variations */
-  playKittenMeow(birth = false, pitchMultiplier = 1): void {
+  /** Kitten meow – 2 variations with balanced gain */
+  playKittenMeow(birth = false, pitchParam = 1): void {
     this.initPools();
     if (!this.sfxEnabled) return;
     if (!birth && this.activeMeowCount >= SoundManager.MAX_CONCURRENT_MEOWS) return;
     const idx = birth ? 0 : Math.floor(Math.random() * this.kittenPools.length);
-    this.playMeowFromPool(this.kittenPools[idx], pitchMultiplier);
+    this.playMeowFromPool(this.kittenPools[idx], pitchParam);
   }
 
-  /** Internal: play from a meow pool and track the active count. */
-  private playMeowFromPool(pool: HTMLAudioElement[], playbackRate = 1): void {
+  /** Internal: play from a meow pool and track the active count with calibrated playbackRate & gain. */
+  private playMeowFromPool(pool: HTMLAudioElement[], pitchParam = 1): void {
     const el = pool.find(a => a.paused || a.ended) ?? pool[0];
     el.currentTime = 0;
-    el.volume = this.sfxVolume;
-    el.playbackRate = Math.max(0.5, Math.min(2.0, playbackRate));
+    const baseGain = (el as any)._baseGain ?? 0.60;
+    el.volume = Math.max(0, Math.min(1, this.sfxVolume * baseGain));
+
+    // Convert pitch: handles direct multiplier (e.g. 0.85..1.2) or semitones (-2..+5)
+    let rate = 1.0;
+    if (pitchParam > 0.4 && pitchParam < 2.2 && pitchParam !== 1) {
+      rate = pitchParam;
+    } else if (pitchParam >= -12 && pitchParam <= 12 && pitchParam !== 0) {
+      rate = Math.pow(2, pitchParam / 12);
+    }
+    // Add subtle natural feline variety (+-2.5%)
+    rate *= (0.975 + Math.random() * 0.05);
+    el.playbackRate = Math.max(0.75, Math.min(1.4, rate));
+
     this.activeMeowCount++;
     const decrement = () => {
       this.activeMeowCount = Math.max(0, this.activeMeowCount - 1);
@@ -336,7 +390,7 @@ export class SoundManager {
   playHungry(): void {
     this.initPools();
     if (!this.sfxEnabled) return;
-    this.playFromPool(this.hungryPool, 0.6);
+    this.playFromPool(this.hungryPool, 0.9);
   }
 
   /** Chirp – rare vocalization for play state (3 variations) */
@@ -347,14 +401,14 @@ export class SoundManager {
     if (now - this.lastChirpTime < 15000) return; // at most 1 chirp every 15s sanctuary-wide
     this.lastChirpTime = now;
     const idx = Math.floor(Math.random() * this.chirpPools.length);
-    this.playFromPool(this.chirpPools[idx], 0.55);
+    this.playFromPool(this.chirpPools[idx], 0.9);
   }
 
   /** Click – UI interactions */
   playClick(): void {
     this.initPools();
     if (!this.sfxEnabled) return;
-    this.playFromPool(this.clickPool, 0.6);
+    this.playFromPool(this.clickPool);
   }
 
   /** Pop – new item / kitten spawns */
@@ -379,8 +433,9 @@ export class SoundManager {
     if (!this.sfxEnabled) return;
     const el = this.bouncePool.find(a => a.paused || a.ended) ?? this.bouncePool[0];
     el.currentTime = 0;
-    el.volume = this.sfxVolume * 0.85;
-    el.playbackRate = Math.max(0.7, Math.min(1.4, playbackRate));
+    const baseGain = (el as any)._baseGain ?? 0.45;
+    el.volume = Math.max(0, Math.min(1, this.sfxVolume * baseGain));
+    el.playbackRate = Math.max(0.75, Math.min(1.35, playbackRate));
     el.play().catch(() => {});
   }
 

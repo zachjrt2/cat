@@ -24,10 +24,9 @@ export class SaveOptionsModal {
         <h3>🔊 Audio Settings</h3>
         <div class="sound-controls-group">
           <div class="sound-control-row">
-            <label class="sound-toggle-label">
-              <input type="checkbox" id="sfx-toggle" ${sound.isSfxEnabled() ? 'checked' : ''}>
+            <div class="sound-title-row">
               <b>Sound Effects (SFX)</b>
-            </label>
+            </div>
             <div class="sound-slider-wrap">
               <span>🔇</span>
               <input type="range" id="sfx-volume" min="0" max="100" value="${Math.round(sound.getSfxVolume() * 100)}" class="options-slider">
@@ -37,10 +36,9 @@ export class SaveOptionsModal {
           </div>
 
           <div class="sound-control-row">
-            <label class="sound-toggle-label">
-              <input type="checkbox" id="music-toggle" ${sound.isMusicEnabled() ? 'checked' : ''}>
+            <div class="sound-title-row">
               <b>Background Music</b>
-            </label>
+            </div>
             <div class="sound-slider-wrap">
               <span>🔇</span>
               <input type="range" id="music-volume" min="0" max="100" value="${Math.round(sound.getMusicVolume() * 100)}" class="options-slider">
@@ -53,15 +51,11 @@ export class SaveOptionsModal {
 
       <!-- Display & Screen Section -->
       <div class="options-section" style="margin-top: 14px;">
-        <h3>📱 Display & Screen</h3>
-        <div class="sound-control-row" style="align-items:center;">
-          <label class="sound-toggle-label">
-            <input type="checkbox" id="options-fs-toggle" ${Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement) ? 'checked' : ''}>
-            <b>Fullscreen Mode</b>
-          </label>
+        <div class="sound-title-row" style="align-items:center;">
+          <h3 style="margin:0;">📱 Display & Screen</h3>
           <button class="options-fullscreen-btn" id="options-fs-btn" type="button">
             <span class="svg-inline">${Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement) ? SVG_ICONS.exitFullscreen : SVG_ICONS.fullscreen}</span>
-            <span>${Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement) ? 'Exit' : 'Enter'}</span>
+            <span>${Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement) ? 'Exit Fullscreen' : 'Enter Fullscreen'}</span>
           </button>
         </div>
       </div>
@@ -98,14 +92,11 @@ export class SaveOptionsModal {
       <button class="modal-close" id="close-menu" style="margin-top:18px;">Done</button>
     `;
 
-    const sfxToggle = modal.querySelector('#sfx-toggle') as HTMLInputElement;
     const sfxSlider = modal.querySelector('#sfx-volume') as HTMLInputElement;
     const sfxLabel = modal.querySelector('#sfx-vol-label') as HTMLElement;
-    const musicToggle = modal.querySelector('#music-toggle') as HTMLInputElement;
     const musicSlider = modal.querySelector('#music-volume') as HTMLInputElement;
     const musicLabel = modal.querySelector('#music-vol-label') as HTMLElement;
 
-    const optionsFsToggle = modal.querySelector('#options-fs-toggle') as HTMLInputElement | null;
     const optionsFsBtn = modal.querySelector('#options-fs-btn') as HTMLButtonElement | null;
 
     const handleFullscreenToggle = async () => {
@@ -128,33 +119,27 @@ export class SaveOptionsModal {
         console.warn('Fullscreen toggle:', err);
       }
       const isFull = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
-      if (optionsFsToggle) optionsFsToggle.checked = isFull;
       if (optionsFsBtn) {
         optionsFsBtn.innerHTML = `
           <span class="svg-inline">${isFull ? SVG_ICONS.exitFullscreen : SVG_ICONS.fullscreen}</span>
-          <span>${isFull ? 'Exit' : 'Enter'}</span>
+          <span>${isFull ? 'Exit Fullscreen' : 'Enter Fullscreen'}</span>
         `;
       }
     };
 
-    optionsFsToggle?.addEventListener('change', handleFullscreenToggle);
     optionsFsBtn?.addEventListener('click', handleFullscreenToggle);
 
-    sfxToggle.addEventListener('change', () => {
-      sound.setSfxEnabled(sfxToggle.checked);
-    });
     sfxSlider.addEventListener('input', () => {
       const v = parseInt(sfxSlider.value) / 100;
       sound.setSfxVolume(v);
+      sound.setSfxEnabled(v > 0);
       sfxLabel.textContent = `${sfxSlider.value}%`;
     });
 
-    musicToggle.addEventListener('change', () => {
-      sound.setMusicEnabled(musicToggle.checked);
-    });
     musicSlider.addEventListener('input', () => {
       const v = parseInt(musicSlider.value) / 100;
       sound.setMusicVolume(v);
+      sound.setMusicEnabled(v > 0);
       musicLabel.textContent = `${musicSlider.value}%`;
     });
 

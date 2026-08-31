@@ -74,6 +74,15 @@ export class GrowthSystem {
     return events;
   }
 
+  /**
+   * Instantly advances a cat to its next life stage (Kitten -> Teen, Teen -> Adult).
+   */
+  instantGrow(cat: Cat): EvolutionEvent | null {
+    if (cat.stage === 'adult') return null;
+    cat.growthProgress = 100;
+    return this.checkEvolution(cat);
+  }
+
   private checkEvolution(cat: Cat): EvolutionEvent | null {
     if (cat.growthProgress < 100) return null;
 
