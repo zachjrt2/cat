@@ -160,6 +160,15 @@ export interface Milestone {
   claimed: boolean;
 }
 
+export interface ConquestState {
+  clearedRegions: number[];       // indices (0–9) of fully cleared regions
+  pendingLove: number;            // accumulated love not yet deposited to sanctuary
+  pendingStars: number;
+  totalInvasionsLaunched: number;
+  totalBattlesWon: number;
+  totalBattlesLost: number;
+}
+
 export interface GameState {
   love: number;
   adoptionTokens: number;
@@ -174,6 +183,7 @@ export interface GameState {
   plinkoUpgrades?: Record<string, number>; // upgradeId -> level (1, 2, 3)
   catPerfumeCount?: number; // Number of consumable Cat Perfumes owned
   congaWhistleCount?: number; // Number of consumable Conga Whistles owned
+  rainTotemCount?: number; // Number of consumable Rain Chimes/Totems owned (Concentric Rain Dance)
   snowflakeWandCount?: number; // Number of consumable Snowflake Wands owned (Mandala Dance)
   heartWandCount?: number; // Number of consumable Heart Wands owned (Pulsing Heart)
   infinityMetronomeCount?: number; // Number of consumable Infinity Metronomes owned (Figure-8 Loop)
@@ -181,6 +191,7 @@ export interface GameState {
   starCompassCount?: number; // Number of consumable Star Compasses owned (Cat Constellation)
   fenceLayout?: FenceLayout; // Customizable area divider fence layout
   showCatNames?: boolean; // Whether cat name labels are visible in sanctuary
+  conquestState?: ConquestState; // Persistent Cat Conquest progress
   totalPetsGiven: number;
   totalLoveEarned: number;
   totalRehomedCats: number;

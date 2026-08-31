@@ -17,12 +17,12 @@ export class SaveOptionsModal {
     const modal = document.createElement('div');
     modal.className = 'modal options-modal';
     modal.innerHTML = `
-      <h2>⚙️ Sanctuary Options & Sound</h2>
+      <h2>Sanctuary Options & Sound</h2>
       <div class="subtitle">Thanks to <a href="https://pop-shop-packs.itch.io/" target="_blank" rel="noopener noreferrer">Pop shop</a> packs for the cats that inspired this game.</div>
 
       <!-- Sound Settings Section -->
       <div class="options-section">
-        <h3>🔊 Audio Settings</h3>
+        <h3>Audio Settings</h3>
         <div class="sound-controls-group">
           <div class="sound-control-row">
             <div class="sound-title-row">
@@ -52,7 +52,7 @@ export class SaveOptionsModal {
 
       <!-- Display & Preferences Section -->
       <div class="options-section" style="margin-top: 14px;">
-        <h3>📱 Display & Preferences</h3>
+        <h3>Display & Preferences</h3>
         <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
           <div class="sound-title-row" style="align-items:center;">
             <span><b>Fullscreen Mode</b></span>
@@ -72,7 +72,7 @@ export class SaveOptionsModal {
 
       <!-- Ambience & Environment Section -->
       <div class="options-section" style="margin-top: 14px;">
-        <h3>🌤️ Sanctuary Ambience</h3>
+        <h3>Sanctuary Ambience</h3>
         <p style="font-size:12px;color:var(--brown-light);margin:2px 0 10px;">Time of day and weather cycle naturally, but you can also test or shift them manually here.</p>
         <div style="display:flex;gap:8px;">
           <button class="modal-action-btn" id="cycle-time-btn" style="flex:1;margin-bottom:0;" type="button">
@@ -86,7 +86,7 @@ export class SaveOptionsModal {
 
       <!-- Save & Backup Section -->
       <div class="options-section" style="margin-top: 14px;">
-        <h3>💾 Save File & Backup</h3>
+        <h3>Save File & Backup</h3>
         <p style="font-size:12px;color:var(--brown-light);margin:2px 0 10px;">Progress automatically autosaves to your browser every 30 seconds.</p>
         <div class="options-btn-grid">
           <button class="modal-action-btn" id="export-btn">

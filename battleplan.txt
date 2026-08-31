@@ -1,0 +1,180 @@
+====================================================
+  CAT CONQUEST — BATTLE PLAN
+  Last updated: 2026-08-31
+====================================================
+
+DESIGN DECISIONS
+----------------
+- All sanctuary cats imported as army (kittens, teens, adults all join)
+- Life stage scaling: Adults = 1.0x (2× teens), Teens = 0.50x (2× kittens), Kittens = 0.25x
+- 10 Independent Vertical Lane Queues: cats line up backwards in their specific lane (e.g. 300 cats = 30 in queue per lane)
+- Pure vertical queue movement: queues only move vertically forward within their lane as cats fall in that specific lane
+- 🔊 Conquest Mode Audio:
+  • High-energy BGM (music2.mp3) plays continuously while Conquest Mode is active
+  • Clean snappy pop SFX plays whenever any cat is defeated (KO)
+  • Ambient background SFX (sanctuary meows, chirps, purrs, hunger distress) are muted while in Conquest Mode
+  • Ambient sanctuary music (music.mp3) automatically resumes upon exiting Conquest Mode
+- 3× Battle Speed: fast 230ms combat rounds, snappy attack lunges, quick KO poofs, and seamless queue advancing
+- 🧬 Mutation Combat Passives:
+  • 🔥 Flaming: Burns enemy lane on hit (damage over time)
+  • ❄️ Frosted: Chills & slows enemy lane attack rate
+  • 😇 Angelic: Halo pulses periodic +20 HP heals to all reserve cats in queue behind
+  • 🦨 Stinky: Stench cloud gives enemies 35% miss chance
+  • 🦣 Giant: Cleave quake attacks hit target + adjacent lanes with arena screen shake
+  • 🐾 Tiny: +30% evasion & counter-attacks on dodge
+  • ✨ Gilded / Sparkly: Releases Golden Legacy (+40 HP shield) to next cat on defeat
+  • 🌀 Inverted / Chromatic: Prismatic reflection reflects 25% incoming damage
+- Dance Item Economy Rebalance (Linear 1..7 ⭐/cat):
+  • 🎶 Party Whistle (Conga Line): +1 ⭐ per cat
+  • 🌧️ Rainmaker Bell (Rain Dance): +2 ⭐ per cat
+  • ❄️ Snowflake Crystal (Snowflake Mandala): +3 ⭐ per cat
+  • 💖 Catnip Heart Wand (Heart Formation): +4 ⭐ per cat
+  • ♾️ Infinity Metronome (Infinity Loop): +5 ⭐ per cat
+  • 🌅 Solar Prism (Sunset Spiral): +6 ⭐ per cat
+  • 🧭 Star Compass (Cat Constellation): Costs 5,000 ⭐ Stars in Shop; yields +7 ⭐ per cat, +1,600 💗 & instantly advances the life stage of every participating cat (Kitten → Teen → Adult)!
+  • 🛡️ Conquest UI & Aesthetics:
+    • Custom clean vector swords SVG icon on shop tab, conquest header, and action buttons
+    • Cleaned all extraneous emoji icons from conquest tab and scene, keeping only the dedicated conquest SVG icon
+    • 10 combat columns with pure vertical queue ranks
+    • Clean pixel-art friendly HP bars with dynamic status badges (removed the blue shield bar overlay)
+
+
+
+
+
+
+- Clean KO removal: defeated cats play a poof effect and disappear immediately with no lingering ghosts
+- Rare indicator rings / halos scaled down to half size for clean visuals
+- Hordes scale linearly across 10 regions: 30 → 60 → 90 → 120 → 150 → 180 → 210 → 240 → 270 → 300 cats (Boss Battle)
+
+- Authentic pixel-art cat canvas animations matching sanctuary styles (including mutations & stage sizes)
+- Visuals completely match Cozy Cat Sanctuary (wood plank header, cream parchment, green courtyard arena, cobblestone clash divider)
+- Conquest progress (cleared regions) persisted to localStorage
+- Entry point: "⚔️ Conquest" tab in Shop modal, costs 💗 Care Points
+- Battle runs at smooth tick rate with attack lunges, impact flashes, and KO poofs
+- Conqueror badge (clear all 10 regions) is cosmetic/prestige only
+
+====================================================
+  TASK LIST
+====================================================
+
+PHASE 1 — Types & Data Layer
+[x] 1.1  src/data/conquest/ConquestTypes.ts (LifeStage, SpecialAbility, Formation, etc.)
+[x] 1.2  src/data/conquest/ConquestData.ts (30-300 cat linear scaling, BATCH_SIZE=10, real cat assets)
+[x] 1.3  src/data/conquest/StatDeriver.ts (Kitten/Teen/Adult 2x scaling, traits & mutations)
+[x] 1.4  src/data/types.ts [MODIFY]
+[x] 1.5  src/systems/SaveManager.ts [MODIFY]
+
+
+PHASE 2 — Battle Engine
+[x] 2.1  src/scenes/conquest/BattleEngine.ts (10-lane wave resolution, buffs, specials)
+
+
+PHASE 3 — UI Layer & Visual Consistency
+[x] 3.1  src/ui/conquest.css (Warm wood headers, cream parchment, courtyard arena, 10-lane responsive grid)
+[x] 3.2  src/scenes/conquest/ConquestScene.ts (Pixel-art canvas animations, visible reserve ranks, stage scaling)
+
+
+PHASE 4 — Shop Integration
+[x] 4.1  src/ui/modals/ShopModal.ts [MODIFY] (Cozy cream/wood styled Conquest tab)
+[x] 4.2  src/scenes/SanctuaryScene.ts [MODIFY] (EventBus wiring for launch, save, rewards)
+
+
+PHASE 5 — Polish & Verification
+[x] 5.1  npm run build — CLEAN (0 errors, 700ms build)
+[x] 5.2  10 Combat Lanes with active front line
+[x] 5.3  All reserves visibly standing in ranks behind front line
+[x] 5.4  Authentic pixel art cats matching sanctuary sprites
+[x] 5.5  Kittens, teens, and adults with 2x stage scaling
+[x] 5.6  Linear progression up to 300-cat boss battle in Region 9
+
+
+
+====================================================
+  STAT DERIVATION TABLE
+====================================================
+
+Base stats (all cats):
+  HP        = 50 + happiness * 0.5       (range: 50–100)
+  Attack    = 15
+  Defense   = 10
+  Speed     = energy * 0.8 + 10          (range: 10–90)
+  CritChance= 0.05 (5% base)
+  Evasion   = 0.05 (5% base)
+
+Major trait bonuses:
+  hunter/zoomie     → +20 Attack
+  cuddler/social    → +20 Defense
+  diva              → +15 Defense, +10 HP
+  lazy              → +25 HP (tanky)
+
+Minor trait bonuses:
+  mischievous       → +15% crit chance
+  shy               → +10% evasion
+
+Age bonus:
+  +1 to all stats per 7 ageDays
+
+Rarity multiplier:
+  isRare            → all stats × 1.30
+
+Mutation modifiers:
+  giant             → HP × 1.50
+  flaming           → Attack × 1.30
+  frosted           → Defense × 1.30
+  sparkly           → all × 1.15
+  angelic           → HP × 1.25, Defense × 1.25
+  gilded            → all × 1.20
+  tiny              → Speed × 1.40, HP × 0.70
+  chromatic         → CritChance +0.20
+  inverted          → Evasion +0.15
+
+Rare type multiplier:
+  golden            → all × 1.50 (Legendary tier)
+  royal             → all × 1.35
+  others            → (covered by isRare × 1.30)
+
+
+====================================================
+  SPECIAL ABILITIES (per major trait)
+====================================================
+
+hunter      → Pounce:     Deal 3× attack to one random enemy
+zoomie      → Zoom Blitz: Hit all enemies for 0.5× attack
+social      → Rally Cry:  +20 attack to all allies for 3 rounds
+cuddler     → Comfort:    Restore 40 HP to lowest-HP ally
+diva        → Taunt:      All enemies target this cat for 2 rounds
+mischievous → Sabotage:   −40% attack on one enemy for 2 rounds
+shy         → Vanish:     Untargetable for 1 round
+lazy        → Cat Nap:    Skip 1 round, restore to full HP
+curious     → Scout:      +25% damage from all allies for 2 rounds
+
+
+====================================================
+  REGION DEFINITIONS
+====================================================
+
+Region  Name                  Enemies  Cost(💗)  Win Reward
+------  --------------------  -------  --------  ----------
+1       🌾 Nap Fields         4        500       400 💗
+2       🧶 Yarn Fort          6        800       640 💗
+3       🐟 Fish Market        8        1200      960 💗
+4       👑 Royal Palace       10       1800      1440 💗
+5       🌙 Midnight Rooftops  12       2500      2000 💗
+6       🌿 The Wilderness     14       3500      2800 💗
+7       ❄️  Glacier Peaks      16       5000      4000 💗
+8       ☀️  Sunstone Desert    18       7000      5600 💗
+9       ⛈️  Storm Citadel      20       10000     8000 💗
+10      💎 Crystal Throne     1*       15000     12000 💗
+
+* Region 10: single enemy with 3× stat multiplier (boss fight)
+
+Star bonus on region clear: +N ⭐ where N = region number (1–10)
+Perfect battle (0 KOs): +50% love reward
+
+
+====================================================
+  PROGRESS LOG
+====================================================
+[ Started: 2026-08-31 ]
+

@@ -7,6 +7,7 @@ import {
   getAreaCapacityUpgradeCost,
   CAT_PERFUME_COST,
   CONGA_WHISTLE_COST,
+  RAIN_TOTEM_COST,
   SNOWFLAKE_WAND_COST,
   HEART_WAND_COST,
   INFINITY_METRONOME_COST,
@@ -16,6 +17,7 @@ import {
 import { SVG_ICONS } from '../icons';
 import { sound } from '../../systems/SoundManager';
 import { EventBus } from '../EventBus';
+import { CONQUEST_REGIONS } from '../../data/conquest/ConquestData';
 
 const AREA_KEYS: CatArea[] = ['yard', 'shelter', 'sunroom', 'cafe'];
 
@@ -43,21 +45,23 @@ export interface ShopModalData {
   offlineStarLevel: number;
   catPerfumeCount: number;
   congaWhistleCount?: number;
+  rainTotemCount?: number;
   snowflakeWandCount?: number;
   heartWandCount?: number;
   infinityMetronomeCount?: number;
   solarPrismCount?: number;
   starCompassCount?: number;
   fenceLayout: FenceLayout;
+  conquestState?: import('../../data/types').ConquestState;
 }
 
 export class ShopModal {
   static open(
     root: HTMLElement,
     data: ShopModalData,
-    defaultTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' = 'areas',
+    defaultTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' | 'conquest' = 'areas',
   ): void {
-    let currentActiveTab = defaultTab;
+    let currentActiveTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' | 'conquest' = defaultTab;
     let currentFence = data.fenceLayout;
     const pendingPurchases = new Set<string>();
 
@@ -149,7 +153,16 @@ export class ShopModal {
       modal.querySelectorAll<HTMLButtonElement>('.buy-conga-whistle-btn').forEach((btn) => {
         btn.disabled = data.love < CONGA_WHISTLE_COST;
       });
+
+      modal.querySelectorAll<HTMLButtonElement>('.buy-rain-totem-btn').forEach((btn) => {
+        btn.disabled = data.love < RAIN_TOTEM_COST;
+      });
+
+      modal.querySelectorAll<HTMLButtonElement>('.buy-star-compass-btn').forEach((btn) => {
+        btn.disabled = (data.tokens ?? 0) < STAR_COMPASS_COST;
+      });
     };
+
 
     const handleLoveChanged = ({ love }: { love: number }) => {
       data.love = Math.floor(love);
@@ -222,7 +235,7 @@ export class ShopModal {
       }
     });
 
-    const renderTabs = (activeTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades', preserveScroll = true) => {
+    const renderTabs = (activeTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' | 'conquest', preserveScroll = true) => {
       currentActiveTab = activeTab;
       const savedModalScroll = preserveScroll ? modal.scrollTop : 0;
       const contentEl = modal.querySelector('.shop-content');
@@ -249,7 +262,9 @@ export class ShopModal {
           <button class="shop-tab-btn ${activeTab === 'furniture' ? 'active' : ''}" id="tab-furniture-btn" title="Furniture & Decor"><span class="shop-tab-icon">${SVG_ICONS.shop}</span></button>
           <button class="shop-tab-btn ${activeTab === 'milestones' ? 'active' : ''}" id="tab-milestones-btn" title="Sanctuary Milestone Goals"><span class="shop-tab-icon">${SVG_ICONS.star}</span></button>
           <button class="shop-tab-btn ${activeTab === 'upgrades' ? 'active' : ''}" id="tab-upgrades-btn" title="Upgrades & Sorting Fences"><span class="shop-tab-icon">${SVG_ICONS.sparkle}</span></button>
+          <button class="shop-tab-btn ${activeTab === 'conquest' ? 'active' : ''}" id="tab-conquest-btn" title="Cat Conquest — Invade enemy territories!"><span class="shop-tab-icon">${SVG_ICONS.conquest}</span></button>
         </div>
+
 
         <div class="shop-content">
           ${activeTab === 'areas'
@@ -260,7 +275,9 @@ export class ShopModal {
                 ? ShopModal.renderShopFurnitureContent(data, pendingPurchases)
                 : activeTab === 'milestones'
                   ? ShopModal.renderShopMilestonesContent(data)
-                  : ShopModal.renderShopUpgradesContent(data, currentFence)
+                  : activeTab === 'conquest'
+                    ? ShopModal.renderConquestContent(data)
+                    : ShopModal.renderShopUpgradesContent(data, currentFence)
           }
         </div>
 
@@ -294,6 +311,20 @@ export class ShopModal {
       modal.querySelector('#tab-upgrades-btn')?.addEventListener('click', () => {
         sound.playTap();
         renderTabs('upgrades', false);
+      });
+      modal.querySelector('#tab-conquest-btn')?.addEventListener('click', () => {
+        sound.playTap();
+        renderTabs('conquest', false);
+      });
+
+      // Bind conquest launch buttons
+      modal.querySelectorAll<HTMLButtonElement>('.cq-shop-launch-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const regionIndex = parseInt(btn.dataset.region ?? '0', 10);
+          sound.playTap();
+          closeModal();
+          EventBus.emit('launch-conquest', { regionIndex });
+        });
       });
 
       modal.querySelector('#shop-close-btn')?.addEventListener('click', () => {
@@ -437,6 +468,27 @@ export class ShopModal {
         });
       });
 
+      // Bind Buy Rainmaker Bell button
+      modal.querySelectorAll('.buy-rain-totem-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (data.love >= RAIN_TOTEM_COST) {
+            data.love -= RAIN_TOTEM_COST;
+            updateBalances();
+            updateButtonAffordability();
+            const prevText = btn.innerHTML;
+            btn.classList.add('delivering-btn');
+            btn.innerHTML = `📦 Delivering...`;
+            (btn as HTMLButtonElement).disabled = true;
+            EventBus.emit('buy-rain-totem', {});
+            setTimeout(() => {
+              btn.classList.remove('delivering-btn');
+              btn.innerHTML = prevText;
+              updateButtonAffordability();
+            }, 350);
+          }
+        });
+      });
+
       // Bind Buy Snowflake Crystal button
       modal.querySelectorAll('.buy-snowflake-wand-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -524,8 +576,8 @@ export class ShopModal {
       // Bind Buy Star Compass button
       modal.querySelectorAll('.buy-star-compass-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
-          if (data.love >= STAR_COMPASS_COST) {
-            data.love -= STAR_COMPASS_COST;
+          if ((data.tokens ?? 0) >= STAR_COMPASS_COST) {
+            data.tokens -= STAR_COMPASS_COST;
             updateBalances();
             updateButtonAffordability();
             const prevText = btn.innerHTML;
@@ -813,11 +865,27 @@ export class ShopModal {
             <h3><span class="svg-inline">${SVG_ICONS.whistle}</span> Party Whistle</h3>
             <span class="unlocked-badge" style="background:#ede9fe;color:#6d28d9;font-weight:bold;">Stock: <b>${data.congaWhistleCount ?? 0}</b></span>
           </div>
-          <p>Blow the festive party whistle to summon all sanctuary cats into an instant Grand Conga Line! 🐾🎶</p>
+          <p>Summon all sanctuary cats into an instant Grand Conga Line! (Yields <b>+1 ⭐</b>/cat & <b>+25 💗</b>)</p>
         </div>
         <div class="machine-action-wrap">
           <button class="shop-action-btn buy-conga-whistle-btn" ${data.love < CONGA_WHISTLE_COST ? 'disabled' : ''}>
             Buy (${CONGA_WHISTLE_COST} 💗)
+          </button>
+        </div>
+      </div>
+
+      <!-- Consumable: Rainmaker Bell -->
+      <div class="shop-card" style="margin-top:10px;border-left: 4px solid #0284c7;">
+        <div class="shop-card-info">
+          <div class="machine-title-row">
+            <h3><span class="svg-inline">${SVG_ICONS.rainTotem}</span> Rainmaker Bell</h3>
+            <span class="unlocked-badge" style="background:#e0f2fe;color:#0369a1;font-weight:bold;">Stock: <b>${data.rainTotemCount ?? 0}</b></span>
+          </div>
+          <p>Ring the bell to summon refreshing rain and lead cats into a Concentric Rain Dance! (Yields <b>+2 ⭐</b>/cat & <b>+50 💗</b>)</p>
+        </div>
+        <div class="machine-action-wrap">
+          <button class="shop-action-btn buy-rain-totem-btn" ${data.love < RAIN_TOTEM_COST ? 'disabled' : ''}>
+            Buy (${RAIN_TOTEM_COST} 💗)
           </button>
         </div>
       </div>
@@ -829,7 +897,7 @@ export class ShopModal {
             <h3><span class="svg-inline">${SVG_ICONS.snowflakeWand}</span> Snowflake Crystal</h3>
             <span class="unlocked-badge" style="background:#e0f2fe;color:#0369a1;font-weight:bold;">Stock: <b>${data.snowflakeWandCount ?? 0}</b></span>
           </div>
-          <p>Unleash a glittering frost prism that summons cats into a 6-pointed Snowflake Mandala Dance! ❄️✨</p>
+          <p>Summon cats into a 6-pointed Snowflake Mandala Dance! (Yields <b>+3 ⭐</b>/cat & <b>+100 💗</b>)</p>
         </div>
         <div class="machine-action-wrap">
           <button class="shop-action-btn buy-snowflake-wand-btn" ${data.love < SNOWFLAKE_WAND_COST ? 'disabled' : ''}>
@@ -845,7 +913,7 @@ export class ShopModal {
             <h3><span class="svg-inline">${SVG_ICONS.heartWand}</span> Catnip Heart Wand</h3>
             <span class="unlocked-badge" style="background:#ffe4e6;color:#be123c;font-weight:bold;">Stock: <b>${data.heartWandCount ?? 0}</b></span>
           </div>
-          <p>Wave the infused heart wand to assemble all cats into a giant pulsating Heart Formation! 💖🐾</p>
+          <p>Assemble cats into a giant pulsating Heart Formation! (Yields <b>+4 ⭐</b>/cat & <b>+200 💗</b>)</p>
         </div>
         <div class="machine-action-wrap">
           <button class="shop-action-btn buy-heart-wand-btn" ${data.love < HEART_WAND_COST ? 'disabled' : ''}>
@@ -861,7 +929,7 @@ export class ShopModal {
             <h3><span class="svg-inline">${SVG_ICONS.infinityMetronome}</span> Infinity Metronome</h3>
             <span class="unlocked-badge" style="background:#d1fae5;color:#047857;font-weight:bold;">Stock: <b>${data.infinityMetronomeCount ?? 0}</b></span>
           </div>
-          <p>Set the metronome ticking to guide cats into a high-speed interlocking Figure-8 Infinity Loop! ♾️⚡</p>
+          <p>Dual offset counter-running Figure-8 sprint! (Yields <b>+5 ⭐</b>/cat & <b>+400 💗</b>)</p>
         </div>
         <div class="machine-action-wrap">
           <button class="shop-action-btn buy-infinity-metronome-btn" ${data.love < INFINITY_METRONOME_COST ? 'disabled' : ''}>
@@ -877,7 +945,7 @@ export class ShopModal {
             <h3><span class="svg-inline">${SVG_ICONS.solarPrism}</span> Solar Prism</h3>
             <span class="unlocked-badge" style="background:#fef3c7;color:#b45309;font-weight:bold;">Stock: <b>${data.solarPrismCount ?? 0}</b></span>
           </div>
-          <p>Focus the golden solar rays to guide cats into an outward-expanding Fibonacci Golden Spiral! 🌅✨</p>
+          <p>Weave a tightening Fibonacci Sunset Spiral! (Yields <b>+6 ⭐</b>/cat & <b>+800 💗</b>)</p>
         </div>
         <div class="machine-action-wrap">
           <button class="shop-action-btn buy-solar-prism-btn" ${data.love < SOLAR_PRISM_COST ? 'disabled' : ''}>
@@ -893,14 +961,16 @@ export class ShopModal {
             <h3><span class="svg-inline">${SVG_ICONS.starCompass}</span> Star Compass</h3>
             <span class="unlocked-badge" style="background:#f3e8ff;color:#7e22ce;font-weight:bold;">Stock: <b>${data.starCompassCount ?? 0}</b></span>
           </div>
-          <p>Align the astral compass to summon cats into a magnificent Giant Cat Constellation on the floor! 🐱🌟</p>
+          <p>Outline a massive Giant Cat Constellation on the sanctuary floor! (Yields <b>+7 ⭐</b>/cat, <b>+1,600 💗</b> & <b>advances the life stage of all participating cats</b>! 👑)</p>
         </div>
         <div class="machine-action-wrap">
-          <button class="shop-action-btn buy-star-compass-btn" ${data.love < STAR_COMPASS_COST ? 'disabled' : ''}>
-            Buy (${STAR_COMPASS_COST} 💗)
+          <button class="shop-action-btn buy-star-compass-btn" ${(data.tokens ?? 0) < STAR_COMPASS_COST ? 'disabled' : ''}>
+            Buy (${STAR_COMPASS_COST.toLocaleString()} ⭐)
           </button>
         </div>
       </div>
+
+
 
       <!-- Sanctuary Fences & Sorting Dividers -->
       <div class="shop-card" style="margin-top:14px;border-left: 4px solid #f59e0b;display:block;">
@@ -940,4 +1010,64 @@ export class ShopModal {
       </div>
     `;
   }
+
+  // ── Conquest Tab ──────────────────────────────────────────────────────────
+
+  static renderConquestContent(data: ShopModalData): string {
+    const cs = data.conquestState ?? {
+      clearedRegions: [],
+      pendingLove: 0,
+      pendingStars: 0,
+      totalInvasionsLaunched: 0,
+      totalBattlesWon: 0,
+      totalBattlesLost: 0,
+    };
+
+    let html = `
+      <div style="padding:4px 0;">
+        <div style="background:#fffaf2;border:2px solid #d4a373;border-radius:16px;padding:12px 14px;margin-bottom:14px;box-shadow:0 3px 8px rgba(77,56,39,0.06);">
+          <div style="font-size:16px;font-weight:900;color:#4d3827;margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+            <span class="svg-inline" style="color:#ff758f;display:inline-flex;align-items:center;">${SVG_ICONS.conquest}</span> Cat Conquest Campaign
+          </div>
+          <div style="font-size:12px;color:#7c6855;line-height:1.4;font-weight:600;">
+            Spend Care Points to launch your sanctuary cats on conquests across 10 territories! Your cats always return safely.
+          </div>
+          <div style="display:flex;gap:12px;margin-top:10px;font-size:12px;font-weight:800;">
+            <span style="color:#529656;background:#e8f5df;padding:3px 8px;border-radius:999px;border:1px solid #68ad6c;">${cs.clearedRegions.length}/10 Territories Claimed</span>
+            <span style="color:#ff758f;background:#ffe5ec;padding:3px 8px;border-radius:999px;border:1px solid #ff758f;">${cs.totalBattlesWon}W / ${cs.totalBattlesLost}L</span>
+          </div>
+        </div>
+    `;
+
+    for (const region of CONQUEST_REGIONS) {
+      const cleared = cs.clearedRegions.includes(region.index);
+      const isAvailable = region.index === 0 || cs.clearedRegions.includes(region.index - 1) || cleared;
+      const canAfford = data.love >= region.invasionCost;
+
+      html += `
+        <div style="background:#fffaf2;border:2px solid ${cleared ? '#68ad6c' : isAvailable ? '#d4a373' : 'rgba(212,163,115,0.25)'};border-radius:16px;padding:12px 14px;margin-bottom:10px;opacity:${isAvailable ? 1 : 0.55};box-shadow:0 2px 6px rgba(77,56,39,0.05);">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <div style="flex:1;">
+              <div style="font-size:15px;font-weight:900;color:#4d3827;">${region.name}</div>
+              <div style="font-size:11px;color:#7c6855;font-weight:700;">${region.isBoss ? 'Boss Battle' : `${region.enemyCount} Enemy Cats`} · Reward: +${region.loveReward.toLocaleString()} 💗 +${region.starReward} ⭐</div>
+            </div>
+            <span>${cleared ? '<span style="color:#529656;font-size:12px;font-weight:900;">Claimed</span>' : isAvailable ? `<span class="svg-inline" style="color:#ff758f;display:inline-flex;align-items:center;">${SVG_ICONS.conquest}</span>` : '<span style="color:#9c8e7c;font-size:12px;font-weight:700;">Locked</span>'}</span>
+          </div>
+          ${isAvailable ? `<button
+            class="cq-shop-launch-btn"
+            data-region="${region.index}"
+            ${!canAfford ? 'disabled' : ''}
+            style="width:100%;padding:10px;border:none;border-radius:999px;font-family:'Nunito',system-ui,sans-serif;font-size:14px;font-weight:900;cursor:${canAfford ? 'pointer' : 'not-allowed'};background:${cleared ? 'linear-gradient(135deg,#68ad6c,#529656)' : canAfford ? 'linear-gradient(135deg,#ff758f,#e05770)' : '#d8cebd'};color:${canAfford ? 'white' : '#9c8e7c'};box-shadow:${canAfford ? '0 3px 10px rgba(0,0,0,0.12)' : 'none'};"
+          >
+            ${cleared ? 'Re-invade Territory' : `Launch Invasion — ${region.invasionCost.toLocaleString()} 💗`}
+          </button>` : `<div style="font-size:11px;color:#7c6855;text-align:center;font-weight:700;">Clear previous territory first</div>`}
+        </div>
+      `;
+    }
+
+    html += `</div>`;
+    return html;
+  }
+
 }
+

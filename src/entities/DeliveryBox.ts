@@ -7,6 +7,7 @@ export type DeliveryItemType =
   | 'furniture'
   | 'perfume'
   | 'conga_whistle'
+  | 'rain_totem'
   | 'snowflake_wand'
   | 'heart_wand'
   | 'infinity_metronome'

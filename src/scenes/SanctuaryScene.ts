@@ -27,6 +27,7 @@ import {
   CAT_PERFUME_COOLDOWN_MS,
   CAT_PERFUME_FRENZY_SECONDS,
   CONGA_WHISTLE_COST,
+  RAIN_TOTEM_COST,
   SNOWFLAKE_WAND_COST,
   HEART_WAND_COST,
   INFINITY_METRONOME_COST,
@@ -40,6 +41,10 @@ import { AreaRenderer } from './controllers/AreaRenderer';
 import { WeatherAndLightingController } from './controllers/WeatherAndLightingController';
 import { ToolInteractionController } from './controllers/ToolInteractionController';
 import { CatDragDropManager } from './controllers/CatDragDropManager';
+import { ConquestScene } from './conquest/ConquestScene';
+import { CONQUEST_REGIONS } from '../data/conquest/ConquestData';
+
+let activeConquestScene: ConquestScene | null = null;
 
 export class SanctuaryScene extends Phaser.Scene {
   private state!: GameState;
@@ -265,6 +270,7 @@ export class SanctuaryScene extends Phaser.Scene {
       offlineStarLevel: this.state.offlineStarLevel || 1,
       catPerfumeCount: this.state.catPerfumeCount || 0,
       congaWhistleCount: this.state.congaWhistleCount || 0,
+      rainTotemCount: this.state.rainTotemCount || 0,
       snowflakeWandCount: this.state.snowflakeWandCount || 0,
       heartWandCount: this.state.heartWandCount || 0,
       infinityMetronomeCount: this.state.infinityMetronomeCount || 0,
@@ -272,6 +278,7 @@ export class SanctuaryScene extends Phaser.Scene {
       starCompassCount: this.state.starCompassCount || 0,
       fenceLayout: this.state.fenceLayout || 'none',
       plinkoUpgrades: this.state.plinkoUpgrades || {},
+      conquestState: this.state.conquestState,
     });
   }
 
@@ -677,6 +684,25 @@ export class SanctuaryScene extends Phaser.Scene {
     });
 
     // Consumable Purchases
+    EventBus.on('buy-rain-totem', () => {
+      if (this.love.spend(RAIN_TOTEM_COST)) {
+        EventBus.emit('love-changed', { love: this.love.love });
+        this.spawnDeliveryBox({
+          type: 'rain_totem',
+          id: 'rain_totem',
+          name: 'Rainmaker Bell',
+          emoji: '🌧️',
+          onOpen: () => {
+            this.state.rainTotemCount = (this.state.rainTotemCount || 0) + 1;
+            this.saveManager.save(this.state);
+            this.notifyUiState();
+            sound.playAdoptFanfare();
+            EventBus.emit('toast', { message: `🌧️ Added Rainmaker Bell to inventory! (${this.state.rainTotemCount} in stock)` });
+          },
+        });
+      }
+    });
+
     EventBus.on('buy-snowflake-wand', () => {
       if (this.love.spend(SNOWFLAKE_WAND_COST)) {
         EventBus.emit('love-changed', { love: this.love.love });
@@ -754,25 +780,40 @@ export class SanctuaryScene extends Phaser.Scene {
     });
 
     EventBus.on('buy-star-compass', () => {
-      if (this.love.spend(STAR_COMPASS_COST)) {
-        EventBus.emit('love-changed', { love: this.love.love });
+      if (this.milestones.spendTokens(STAR_COMPASS_COST)) {
+        EventBus.emit('tokens-changed', { tokens: this.milestones.tokens });
         this.spawnDeliveryBox({
           type: 'star_compass',
           id: 'star_compass',
           name: 'Star Compass',
-          emoji: '🐱',
+          emoji: '🧭',
           onOpen: () => {
             this.state.starCompassCount = (this.state.starCompassCount || 0) + 1;
             this.saveManager.save(this.state);
             this.notifyUiState();
             sound.playAdoptFanfare();
-            EventBus.emit('toast', { message: `🐱 Added Star Compass to inventory! (${this.state.starCompassCount} in stock)` });
+            EventBus.emit('toast', { message: `🧭 Added Star Compass to inventory! (${this.state.starCompassCount} in stock)` });
           },
         });
+      } else {
+        EventBus.emit('toast', { message: `Need ${STAR_COMPASS_COST.toLocaleString()} ⭐ Stars to buy Star Compass!` });
+        sound.playPop();
       }
     });
 
+
     // Consumable Use Triggers
+    EventBus.on('use-rain-totem', () => {
+      if ((this.state.rainTotemCount || 0) <= 0) {
+        EventBus.emit('toast', { message: 'No Rainmaker Bells in inventory!' });
+        return;
+      }
+      this.state.rainTotemCount = Math.max(0, (this.state.rainTotemCount || 0) - 1);
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+      this.startRainDance(true);
+    });
+
     EventBus.on('use-snowflake-wand', () => {
       if ((this.state.snowflakeWandCount || 0) <= 0) {
         EventBus.emit('toast', { message: 'No Snowflake Crystals in inventory!' });
@@ -928,6 +969,64 @@ export class SanctuaryScene extends Phaser.Scene {
 
     EventBus.on('trigger-conga-parade', () => {
       this.startCongaParade();
+    });
+
+    // ── Conquest Events ────────────────────────────────────────────────────
+    EventBus.on('open-conquest', (payload: {
+      regionIndex: number;
+      cats: Cat[];
+      conquestState: import('../data/types').ConquestState;
+    }) => {
+      if (activeConquestScene) return; // already open
+      if (!this.state.conquestState) {
+        this.state.conquestState = {
+          clearedRegions: [],
+          pendingLove: 0,
+          pendingStars: 0,
+          totalInvasionsLaunched: 0,
+          totalBattlesWon: 0,
+          totalBattlesLost: 0,
+        };
+      }
+      // Deduct invasion cost
+      const region = CONQUEST_REGIONS[payload.regionIndex];
+      if (region && this.love.love < region.invasionCost) {
+        EventBus.emit('toast', { message: `Need ${region.invasionCost.toLocaleString()} 💗 to launch this invasion!` });
+        return;
+      }
+      if (region) {
+        this.love.spend(region.invasionCost);
+        EventBus.emit('love-changed', { love: this.love.love });
+      }
+
+      const gameRoot = document.getElementById('game-container') ?? document.body;
+      activeConquestScene = new ConquestScene(
+        gameRoot,
+        this.state.cats,
+        this.state.conquestState,
+        this.love.love,
+      );
+      activeConquestScene.mount();
+    });
+
+    EventBus.on('conquest-save', ({ conquestState }: { conquestState: import('../data/types').ConquestState }) => {
+      this.state.conquestState = conquestState;
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+    });
+
+    EventBus.on('conquest-reward', ({ love, stars }: { love: number; stars: number }) => {
+      activeConquestScene = null;
+      this.love.add(love);
+      this.state.totalLoveEarned += love;
+      this.milestones.addTokens(stars);
+      EventBus.emit('love-changed', { love: this.love.love });
+      EventBus.emit('tokens-changed', { tokens: this.milestones.tokens });
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+      if (love > 0 || stars > 0) {
+        EventBus.emit('toast', { message: `⚔️ Conquest rewards: +${love.toLocaleString()} 💗${stars > 0 ? ` +${stars} ⭐` : ''}` });
+      }
     });
   }
 
@@ -1327,6 +1426,7 @@ export class SanctuaryScene extends Phaser.Scene {
     }
 
     let targetSprite: CatSprite | null = null;
+    const now = Date.now();
 
     if (catId) {
       targetSprite = this.catSprites.get(catId) || null;
@@ -1383,6 +1483,36 @@ export class SanctuaryScene extends Phaser.Scene {
           }
         }
       }
+    } else {
+      // Direct click on 'Use' from bag: Find best ready adult cat in the sanctuary area
+      const activeSprites = Array.from(this.catSprites.values()).filter((s) => s.active);
+      for (const sprite of activeSprites) {
+        if (sprite.cat.stage !== 'kitten' && sprite.cat.stage !== 'adult') {
+          sprite.cat.stage = 'adult';
+          sprite.cat.growthProgress = 100;
+        }
+      }
+
+      const readyAdults = activeSprites.filter(
+        (s) => s.cat.stage === 'adult' && (!s.cat.lastPerfumeTimestamp || now - s.cat.lastPerfumeTimestamp >= CAT_PERFUME_COOLDOWN_MS)
+      );
+
+      if (readyAdults.length > 0) {
+        targetSprite = readyAdults[0];
+      } else {
+        const anyAdults = activeSprites.filter((s) => s.cat.stage === 'adult');
+        if (anyAdults.length > 0) {
+          targetSprite = anyAdults[0];
+        } else if (activeSprites.length > 0) {
+          EventBus.emit('toast', { message: '🍼 Kittens are too young for Cat Perfume! Wait until they grow up.' });
+          sound.playPop();
+          return;
+        } else {
+          EventBus.emit('toast', { message: 'No cats in this area to use Cat Perfume on!' });
+          sound.playPop();
+          return;
+        }
+      }
     }
 
     if (!targetSprite) {
@@ -1395,7 +1525,6 @@ export class SanctuaryScene extends Phaser.Scene {
     cat.stage = 'adult';
     cat.growthProgress = 100;
 
-    const now = Date.now();
     const elapsed = now - (cat.lastPerfumeTimestamp || 0);
     if (cat.lastPerfumeTimestamp && elapsed < CAT_PERFUME_COOLDOWN_MS) {
       const minsLeft = Math.ceil((CAT_PERFUME_COOLDOWN_MS - elapsed) / 60000);
@@ -1768,7 +1897,9 @@ export class SanctuaryScene extends Phaser.Scene {
 
     const participatingSprites = Array.from(this.catSprites.values()).filter((s) => s.active);
     const catCount = participatingSprites.length;
-    const starsEarned = catCount * 10;
+    const starsEarned = catCount * 1; // 1 star per cat for Party Whistle
+    const loveReward = 25;
+
 
     for (const sprite of participatingSprites) {
       sprite.endCongaParade();
@@ -1783,10 +1914,10 @@ export class SanctuaryScene extends Phaser.Scene {
       this.milestones.addTokens(starsEarned);
     }
 
-    this.love.add(50);
-    this.state.totalLoveEarned += 50;
+    this.love.add(loveReward);
+    this.state.totalLoveEarned += loveReward;
     EventBus.emit('love-changed', { love: this.love.love });
-    EventBus.emit('toast', { message: `🎊 Conga Parade complete! ${catCount} cats earned you +${starsEarned} ⭐ Stars! (+50 💗)` });
+    EventBus.emit('toast', { message: `🎊 Conga Parade complete! ${catCount} cats earned you +${starsEarned} ⭐ Stars! (+${loveReward} 💗)` });
     this.spawnCelebrationConfetti();
     this.saveManager.save(this.state);
     this.notifyUiState();
@@ -1840,11 +1971,18 @@ export class SanctuaryScene extends Phaser.Scene {
     }
   }
 
-  private startRainDance(): void {
+  private startRainDance(fromConsumable = false): void {
     const sprites = Array.from(this.catSprites.values()).filter((s) => s.active && !s.isCurrentlyDragged());
     if (sprites.length < 2) return;
 
     this.isRainDanceActive = true;
+
+    if (fromConsumable) {
+      this.weather.setWeather('rain');
+      this.weatherAndLighting.resetWeatherParticles();
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+    }
 
     // If a conga parade was in progress, stop it for the rain ritual
     if (this.isCongaParadeActive) {
@@ -1889,7 +2027,11 @@ export class SanctuaryScene extends Phaser.Scene {
     });
     this.rainDanceTimer = duration;
 
-    EventBus.emit('toast', { message: '🌧️ The rain has begun! The cats perform their mystical concentric rain dance! 🌀🐾' });
+    EventBus.emit('toast', {
+      message: fromConsumable
+        ? '🌧️ Ringing the Rainmaker Bell! The cats perform their concentric rain dance! 🌀🐾'
+        : '🌧️ The rain has begun! The cats perform their mystical concentric rain dance! 🌀🐾',
+    });
   }
 
   private endRainDance(playDone = true): void {
@@ -1899,7 +2041,8 @@ export class SanctuaryScene extends Phaser.Scene {
 
     const participatingSprites = Array.from(this.catSprites.values()).filter((s) => s.active);
     const catCount = participatingSprites.length;
-    const starsEarned = catCount * 10;
+    const starsEarned = catCount * 2; // 2 stars per cat for Rainmaker Bell
+    const loveReward = 50;
 
     for (const sprite of participatingSprites) {
       sprite.endRainDance();
@@ -1916,10 +2059,10 @@ export class SanctuaryScene extends Phaser.Scene {
       if (starsEarned > 0) {
         this.milestones.addTokens(starsEarned);
       }
-      this.love.add(25);
-      this.state.totalLoveEarned += 25;
+      this.love.add(loveReward);
+      this.state.totalLoveEarned += loveReward;
       EventBus.emit('love-changed', { love: this.love.love });
-      EventBus.emit('toast', { message: `✨ The rain ritual concludes! ${catCount} cats earned you +${starsEarned} ⭐ Stars! (+25 💗)` });
+      EventBus.emit('toast', { message: `✨ The rain ritual concludes! ${catCount} cats earned you +${starsEarned} ⭐ Stars! (+${loveReward} 💗)` });
       this.spawnCelebrationConfetti();
       this.saveManager.save(this.state);
       this.notifyUiState();
@@ -2158,38 +2301,79 @@ export class SanctuaryScene extends Phaser.Scene {
       this.activeDanceFormation === 'sunset' ? 'Sunset Spiral' :
       this.activeDanceFormation === 'constellation' ? 'Cat Constellation' : 'Dance Ritual';
 
+    let starPerCat = 3;
+    let loveReward = 100;
+
+    if (this.activeDanceFormation === 'snowflake') {
+      starPerCat = 3;
+      loveReward = 100;
+    } else if (this.activeDanceFormation === 'heart') {
+      starPerCat = 4;
+      loveReward = 200;
+    } else if (this.activeDanceFormation === 'infinity') {
+      starPerCat = 5;
+      loveReward = 400;
+    } else if (this.activeDanceFormation === 'sunset') {
+      starPerCat = 6;
+      loveReward = 800;
+    } else if (this.activeDanceFormation === 'constellation') {
+      starPerCat = 7;
+      loveReward = 1600;
+    }
+
+
+    const wasConstellation = this.activeDanceFormation === 'constellation';
+
     this.isDanceFormationActive = false;
     this.activeDanceFormation = 'none';
     sound.stopRitualMusic(playDone);
 
     const participatingSprites = Array.from(this.catSprites.values()).filter((s) => s.active);
     const catCount = participatingSprites.length;
-    const starsEarned = catCount * 10;
+    const starsEarned = catCount * starPerCat;
 
+    let evolvedCount = 0;
     for (const sprite of participatingSprites) {
       sprite.endActiveDance();
       sprite.cat.fun = Math.min(100, sprite.cat.fun + 35);
       sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 25);
       sprite.showEmote('⭐');
+
+      // Star Compass Constellation Ritual: advances life stage / growth level of all participating cats!
+      if (wasConstellation && playDone) {
+        const evo = this.growth.instantGrow(sprite.cat);
+        if (evo) {
+          evolvedCount++;
+          sprite.showEmote('👑');
+        }
+      }
+
       sprite.refreshVisuals();
       if (playDone) {
         this.spawnCatStarsBurst(sprite.x, sprite.y);
       }
     }
 
+
     if (playDone) {
       if (starsEarned > 0) {
         this.milestones.addTokens(starsEarned);
       }
-      this.love.add(35);
-      this.state.totalLoveEarned += 35;
+      this.love.add(loveReward);
+      this.state.totalLoveEarned += loveReward;
       EventBus.emit('love-changed', { love: this.love.love });
-      EventBus.emit('toast', { message: `✨ The ${danceName} concludes! ${catCount} cats earned you +${starsEarned} ⭐ Stars! (+35 💗)` });
+      EventBus.emit('toast', { message: `✨ The ${danceName} concludes! ${catCount} cats earned you +${starsEarned} ⭐ Stars! (+${loveReward} 💗)` });
+      if (evolvedCount > 0) {
+        setTimeout(() => {
+          EventBus.emit('toast', { message: `👑 The Cat Constellation blessed your cats! ${evolvedCount} cat${evolvedCount > 1 ? 's' : ''} evolved to their next life stage!` });
+        }, 1200);
+      }
       this.spawnCelebrationConfetti();
       this.saveManager.save(this.state);
       this.notifyUiState();
     }
   }
+
 
   getActiveDanceFormation(): string {
     return this.activeDanceFormation;

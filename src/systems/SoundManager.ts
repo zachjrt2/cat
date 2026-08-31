@@ -89,6 +89,7 @@ export class SoundManager {
   private inPlinkoMode = false;
   private inCongaMode = false;
   private inRainDanceMode = false;
+  private inConquestMode = false;
 
   // SFX pools (loaded lazily on first interaction)
   private poolsReady = false;
@@ -125,7 +126,7 @@ export class SoundManager {
     // Auto-unlock music and sound on first user gesture (pointerdown, keydown, touch)
     const unlockAudio = () => {
       this.initPools();
-      if (this.musicEnabled && !this.inPlinkoMode && !this.inCongaMode && !this.inRainDanceMode) {
+      if (this.musicEnabled && !this.inPlinkoMode && !this.inCongaMode && !this.inRainDanceMode && !this.inConquestMode) {
         if (!this.musicEl || this.musicEl.paused) {
           this.startMusic();
         }
@@ -138,17 +139,18 @@ export class SoundManager {
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        if (this.musicEnabled && !this.inPlinkoMode && !this.inCongaMode && !this.inRainDanceMode && this.musicEl && this.musicEl.paused) {
+        if (this.musicEnabled && !this.inPlinkoMode && !this.inCongaMode && !this.inRainDanceMode && !this.inConquestMode && this.musicEl && this.musicEl.paused) {
           this.musicEl.play().catch(() => {});
         }
       }
     });
 
     window.addEventListener('focus', () => {
-      if (this.musicEnabled && !this.inPlinkoMode && !this.inCongaMode && !this.inRainDanceMode && this.musicEl && this.musicEl.paused) {
+      if (this.musicEnabled && !this.inPlinkoMode && !this.inCongaMode && !this.inRainDanceMode && !this.inConquestMode && this.musicEl && this.musicEl.paused) {
         this.musicEl.play().catch(() => {});
       }
     });
+
   }
 
   private initMusic(): void {
@@ -173,7 +175,7 @@ export class SoundManager {
       this.plinkoMusicEl.preload = 'auto';
 
       this.plinkoMusicEl.addEventListener('ended', () => {
-        if (this.musicEnabled && this.plinkoMusicEl && this.inPlinkoMode) {
+        if (this.musicEnabled && this.plinkoMusicEl && (this.inPlinkoMode || this.inConquestMode)) {
           this.plinkoMusicEl.currentTime = 0;
           this.plinkoMusicEl.play().catch(() => {});
         }
@@ -202,7 +204,7 @@ export class SoundManager {
   isSfxEnabled(): boolean { return this.sfxEnabled; }
   isMusicEnabled(): boolean { return this.musicEnabled; }
   isMusicPlaying(): boolean {
-    const activeEl = this.inPlinkoMode ? this.plinkoMusicEl : this.musicEl;
+    const activeEl = (this.inPlinkoMode || this.inConquestMode) ? this.plinkoMusicEl : this.musicEl;
     return !!(activeEl && !activeEl.paused && !activeEl.ended);
   }
 
@@ -232,8 +234,8 @@ export class SoundManager {
   setMusicVolume(v: number): void {
     this.musicVolume = Math.max(0, Math.min(1, v));
     localStorage.setItem('cozy_music_volume', String(this.musicVolume));
-    if (this.musicEl) this.musicEl.volume = this.musicEnabled && !this.inPlinkoMode && !this.inCongaMode && !this.inRainDanceMode ? this.musicVolume : 0;
-    if (this.plinkoMusicEl) this.plinkoMusicEl.volume = this.musicEnabled && this.inPlinkoMode ? this.musicVolume : 0;
+    if (this.musicEl) this.musicEl.volume = this.musicEnabled && !this.inPlinkoMode && !this.inCongaMode && !this.inRainDanceMode && !this.inConquestMode ? this.musicVolume : 0;
+    if (this.plinkoMusicEl) this.plinkoMusicEl.volume = this.musicEnabled && (this.inPlinkoMode || this.inConquestMode) ? this.musicVolume : 0;
     if (this.congaMusicEl) this.congaMusicEl.volume = this.musicEnabled && this.inCongaMode ? this.musicVolume : 0;
     if (this.rainMusicEl) this.rainMusicEl.volume = this.musicEnabled && this.inRainDanceMode ? this.musicVolume : 0;
     if (this.activeRitualMusicEl) this.activeRitualMusicEl.volume = this.musicEnabled && this.inRainDanceMode ? this.musicVolume : 0;
@@ -247,7 +249,16 @@ export class SoundManager {
   setMusicEnabled(on: boolean): void {
     this.musicEnabled = on;
     localStorage.setItem('cozy_music_enabled', String(on));
-    if (this.inRainDanceMode) {
+    if (this.inConquestMode) {
+      if (this.plinkoMusicEl) {
+        if (on) {
+          this.plinkoMusicEl.volume = this.musicVolume;
+          this.plinkoMusicEl.play().catch(() => {});
+        } else {
+          this.plinkoMusicEl.pause();
+        }
+      }
+    } else if (this.inRainDanceMode) {
       if (this.activeRitualMusicEl) {
         if (on) {
           this.activeRitualMusicEl.volume = this.musicVolume;
@@ -346,7 +357,7 @@ export class SoundManager {
 
   /** Plays background music (with retry on user interaction) */
   startMusic(): void {
-    if (this.inPlinkoMode || this.inCongaMode || this.inRainDanceMode) return;
+    if (this.inPlinkoMode || this.inCongaMode || this.inRainDanceMode || this.inConquestMode) return;
     if (!this.musicEnabled) return;
     if (!this.musicEl) {
       this.initMusic();
@@ -355,6 +366,47 @@ export class SoundManager {
 
     this.musicEl.volume = this.musicVolume;
     this.musicEl.play().catch(() => {});
+  }
+
+  /** Switches to high-energy Conquest Mode BGM (music2.mp3) */
+  startConquestMusic(): void {
+    this.inConquestMode = true;
+    if (this.musicEl) {
+      this.musicEl.pause();
+    }
+    if (this.congaMusicEl) {
+      this.congaMusicEl.pause();
+    }
+    if (this.rainMusicEl) {
+      this.rainMusicEl.pause();
+    }
+    if (this.activeRitualMusicEl) {
+      this.activeRitualMusicEl.pause();
+    }
+    if (!this.musicEnabled) return;
+    this.initMusic();
+    if (this.plinkoMusicEl) {
+      this.plinkoMusicEl.volume = this.musicVolume;
+      this.plinkoMusicEl.currentTime = 0;
+      this.plinkoMusicEl.play().catch(() => {});
+    }
+  }
+
+  /** Stops Conquest BGM and resumes ambient sanctuary music (music.mp3) */
+  stopConquestMusic(): void {
+    this.inConquestMode = false;
+    if (this.plinkoMusicEl && !this.inPlinkoMode) {
+      this.plinkoMusicEl.pause();
+      this.plinkoMusicEl.currentTime = 0;
+    }
+    if (this.musicEnabled && this.musicEl && !this.inCongaMode && !this.inRainDanceMode && !this.inPlinkoMode) {
+      this.musicEl.volume = this.musicVolume;
+      this.musicEl.play().catch(() => {});
+    }
+  }
+
+  isConquestMode(): boolean {
+    return this.inConquestMode;
   }
 
   /** Switches to high-energy Plinko BGM (music2.mp3) */
@@ -380,11 +432,11 @@ export class SoundManager {
   /** Stops Plinko BGM and resumes ambient sanctuary music (music.mp3) */
   stopPlinkoMusic(): void {
     this.inPlinkoMode = false;
-    if (this.plinkoMusicEl) {
+    if (this.plinkoMusicEl && !this.inConquestMode) {
       this.plinkoMusicEl.pause();
       this.plinkoMusicEl.currentTime = 0;
     }
-    if (this.musicEnabled && this.musicEl && !this.inCongaMode) {
+    if (this.musicEnabled && this.musicEl && !this.inCongaMode && !this.inConquestMode) {
       this.musicEl.volume = this.musicVolume;
       this.musicEl.play().catch(() => {});
     }
@@ -464,7 +516,7 @@ export class SoundManager {
   /** Adult cat meow – 5 variations, random pick with calibrated normalized loudness */
   playMeow(pitchParam = 1): void {
     this.initPools();
-    if (!this.sfxEnabled) return;
+    if (!this.sfxEnabled || this.inConquestMode) return;
     if (this.activeMeowCount >= SoundManager.MAX_CONCURRENT_MEOWS) return;
     const idx = Math.floor(Math.random() * this.meowPools.length);
     this.playMeowFromPool(this.meowPools[idx], pitchParam);
@@ -473,7 +525,7 @@ export class SoundManager {
   /** Kitten meow – 2 variations with balanced gain */
   playKittenMeow(birth = false, pitchParam = 1): void {
     this.initPools();
-    if (!this.sfxEnabled) return;
+    if (!this.sfxEnabled || this.inConquestMode) return;
     if (!birth && this.activeMeowCount >= SoundManager.MAX_CONCURRENT_MEOWS) return;
     const idx = birth ? 0 : Math.floor(Math.random() * this.kittenPools.length);
     this.playMeowFromPool(this.kittenPools[idx], pitchParam);
@@ -510,27 +562,28 @@ export class SoundManager {
   /** Purr – when petting */
   playPurr(): void {
     this.initPools();
-    if (!this.sfxEnabled) return;
+    if (!this.sfxEnabled || this.inConquestMode) return;
     this.playFromPool(this.purrPool);
   }
 
   /** Hungry / distress sound – played once when a need hits 0 */
   playHungry(): void {
     this.initPools();
-    if (!this.sfxEnabled) return;
+    if (!this.sfxEnabled || this.inConquestMode) return;
     this.playFromPool(this.hungryPool, 0.9);
   }
 
   /** Chirp – rare vocalization for play state (3 variations) */
   playChirp(): void {
     this.initPools();
-    if (!this.sfxEnabled) return;
+    if (!this.sfxEnabled || this.inConquestMode) return;
     const now = Date.now();
     if (now - this.lastChirpTime < 15000) return; // at most 1 chirp every 15s sanctuary-wide
     this.lastChirpTime = now;
     const idx = Math.floor(Math.random() * this.chirpPools.length);
     this.playFromPool(this.chirpPools[idx], 0.9);
   }
+
 
   /** Click – UI interactions */
   playClick(): void {

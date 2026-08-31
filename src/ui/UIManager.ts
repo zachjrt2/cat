@@ -50,6 +50,7 @@ export class UIManager {
   private offlineStarLevel = 1;
   private catPerfumeCount = 0;
   private congaWhistleCount = 0;
+  private rainTotemCount = 0;
   private snowflakeWandCount = 0;
   private heartWandCount = 0;
   private infinityMetronomeCount = 0;
@@ -57,6 +58,14 @@ export class UIManager {
   private starCompassCount = 0;
   private currentFenceLayout: FenceLayout = 'none';
   private plinkoUpgrades: Record<string, number> = {};
+  private conquestState: import('../data/types').ConquestState = {
+    clearedRegions: [],
+    pendingLove: 0,
+    pendingStars: 0,
+    totalInvasionsLaunched: 0,
+    totalBattlesWon: 0,
+    totalBattlesLost: 0,
+  };
 
   constructor(container: HTMLElement) {
     this.root = container;
@@ -164,6 +173,7 @@ export class UIManager {
     const totalCount =
       this.catPerfumeCount +
       this.congaWhistleCount +
+      this.rainTotemCount +
       this.snowflakeWandCount +
       this.heartWandCount +
       this.infinityMetronomeCount +
@@ -182,111 +192,124 @@ export class UIManager {
     if (!this.isBagOpen) return;
 
     this.bagPanel.innerHTML = `
-      <div class="bag-panel-header">
-        <span class="bag-panel-title"><span class="svg-inline">${SVG_ICONS.bag}</span> Items & Dances</span>
-        <button type="button" class="bag-panel-close-btn" id="bag-close-btn">&times;</button>
-      </div>
-      <div class="bag-items-list">
+      <div class="bag-minimal-tray">
         <!-- 1. Cat Perfume -->
-        <div class="bag-item-row ${this.catPerfumeCount > 0 ? 'has-stock' : 'empty-stock'}" data-item="perfume" title="Apply to an adult cat for a 15s Breeding Frenzy!">
-          <div class="bag-item-icon-wrap" style="background:#fce7f3;color:#be185d;">${SVG_ICONS.perfume}</div>
-          <div class="bag-item-details">
-            <span class="bag-item-name">Cat Perfume</span>
-            <span class="bag-item-sub">Breeding Frenzy (+⭐)</span>
-          </div>
-          <button type="button" class="bag-action-pill ${this.catPerfumeCount > 0 ? 'use-pill' : 'buy-pill'}">
-            ${this.catPerfumeCount > 0 ? `Use (x${this.catPerfumeCount})` : '+ Shop'}
-          </button>
-        </div>
+        <button type="button" class="bag-mini-tile ${this.catPerfumeCount > 0 ? 'in-stock' : 'out-of-stock'}" data-item="perfume" title="Cat Perfume (${this.catPerfumeCount} in stock) - Click to use or drag onto cat for 15s Breeding Frenzy!">
+          <div class="bag-mini-icon" style="color:#db2777;">${SVG_ICONS.perfume}</div>
+          <span class="bag-mini-count">${this.catPerfumeCount > 0 ? `x${this.catPerfumeCount}` : '+'}</span>
+        </button>
 
         <!-- 2. Party Whistle -->
-        <div class="bag-item-row ${this.congaWhistleCount > 0 ? 'has-stock' : 'empty-stock'}" data-item="whistle" title="Blow the whistle to lead all cats in a Grand Conga Line!">
-          <div class="bag-item-icon-wrap" style="background:#ede9fe;color:#6d28d9;">${SVG_ICONS.whistle}</div>
-          <div class="bag-item-details">
-            <span class="bag-item-name">Party Whistle</span>
-            <span class="bag-item-sub">Grand Conga Sprint</span>
-          </div>
-          <button type="button" class="bag-action-pill ${this.congaWhistleCount > 0 ? 'use-pill' : 'buy-pill'}">
-            ${this.congaWhistleCount > 0 ? `Use (x${this.congaWhistleCount})` : '+ Shop'}
-          </button>
-        </div>
+        <button type="button" class="bag-mini-tile ${this.congaWhistleCount > 0 ? 'in-stock' : 'out-of-stock'}" data-item="whistle" title="Party Whistle (${this.congaWhistleCount} in stock) - Grand Conga Line">
+          <div class="bag-mini-icon" style="color:#7c3aed;">${SVG_ICONS.whistle}</div>
+          <span class="bag-mini-count">${this.congaWhistleCount > 0 ? `x${this.congaWhistleCount}` : '+'}</span>
+        </button>
 
-        <!-- 3. Snowflake Crystal -->
-        <div class="bag-item-row ${this.snowflakeWandCount > 0 ? 'has-stock' : 'empty-stock'}" data-item="snowflake" title="Summon cats into a 6-pointed Snowflake Mandala Dance!">
-          <div class="bag-item-icon-wrap" style="background:#e0f2fe;color:#0369a1;">${SVG_ICONS.snowflakeWand}</div>
-          <div class="bag-item-details">
-            <span class="bag-item-name">Snowflake Crystal</span>
-            <span class="bag-item-sub">Mandala Dance ❄️</span>
-          </div>
-          <button type="button" class="bag-action-pill ${this.snowflakeWandCount > 0 ? 'use-pill' : 'buy-pill'}">
-            ${this.snowflakeWandCount > 0 ? `Use (x${this.snowflakeWandCount})` : '+ Shop'}
-          </button>
-        </div>
+        <!-- 3. Rainmaker Bell -->
+        <button type="button" class="bag-mini-tile ${this.rainTotemCount > 0 ? 'in-stock' : 'out-of-stock'}" data-item="rain" title="Rainmaker Bell (${this.rainTotemCount} in stock) - Concentric Rain Dance">
+          <div class="bag-mini-icon" style="color:#0284c7;">${SVG_ICONS.rainTotem}</div>
+          <span class="bag-mini-count">${this.rainTotemCount > 0 ? `x${this.rainTotemCount}` : '+'}</span>
+        </button>
+
+        <!-- 4. Snowflake Crystal -->
+        <button type="button" class="bag-mini-tile ${this.snowflakeWandCount > 0 ? 'in-stock' : 'out-of-stock'}" data-item="snowflake" title="Snowflake Crystal (${this.snowflakeWandCount} in stock) - Mandala Dance">
+          <div class="bag-mini-icon" style="color:#0ea5e9;">${SVG_ICONS.snowflakeWand}</div>
+          <span class="bag-mini-count">${this.snowflakeWandCount > 0 ? `x${this.snowflakeWandCount}` : '+'}</span>
+        </button>
 
         <!-- 4. Catnip Heart Wand -->
-        <div class="bag-item-row ${this.heartWandCount > 0 ? 'has-stock' : 'empty-stock'}" data-item="heart" title="Assemble all cats into a giant pulsating Heart Formation!">
-          <div class="bag-item-icon-wrap" style="background:#ffe4e6;color:#be123c;">${SVG_ICONS.heartWand}</div>
-          <div class="bag-item-details">
-            <span class="bag-item-name">Heart Wand</span>
-            <span class="bag-item-sub">Pulsing Heart Dance 💖</span>
-          </div>
-          <button type="button" class="bag-action-pill ${this.heartWandCount > 0 ? 'use-pill' : 'buy-pill'}">
-            ${this.heartWandCount > 0 ? `Use (x${this.heartWandCount})` : '+ Shop'}
-          </button>
-        </div>
+        <button type="button" class="bag-mini-tile ${this.heartWandCount > 0 ? 'in-stock' : 'out-of-stock'}" data-item="heart" title="Heart Wand (${this.heartWandCount} in stock) - Pulsing Heart Dance">
+          <div class="bag-mini-icon" style="color:#e11d48;">${SVG_ICONS.heartWand}</div>
+          <span class="bag-mini-count">${this.heartWandCount > 0 ? `x${this.heartWandCount}` : '+'}</span>
+        </button>
 
         <!-- 5. Infinity Metronome -->
-        <div class="bag-item-row ${this.infinityMetronomeCount > 0 ? 'has-stock' : 'empty-stock'}" data-item="infinity" title="Start a high-speed interlocking Figure-8 Infinity Loop!">
-          <div class="bag-item-icon-wrap" style="background:#d1fae5;color:#047857;">${SVG_ICONS.infinityMetronome}</div>
-          <div class="bag-item-details">
-            <span class="bag-item-name">Infinity Metronome</span>
-            <span class="bag-item-sub">Figure-8 Sprint ♾️</span>
-          </div>
-          <button type="button" class="bag-action-pill ${this.infinityMetronomeCount > 0 ? 'use-pill' : 'buy-pill'}">
-            ${this.infinityMetronomeCount > 0 ? `Use (x${this.infinityMetronomeCount})` : '+ Shop'}
-          </button>
-        </div>
+        <button type="button" class="bag-mini-tile ${this.infinityMetronomeCount > 0 ? 'in-stock' : 'out-of-stock'}" data-item="infinity" title="Infinity Metronome (${this.infinityMetronomeCount} in stock) - Dual Infinity Sprint">
+          <div class="bag-mini-icon" style="color:#059669;">${SVG_ICONS.infinityMetronome}</div>
+          <span class="bag-mini-count">${this.infinityMetronomeCount > 0 ? `x${this.infinityMetronomeCount}` : '+'}</span>
+        </button>
 
         <!-- 6. Solar Prism -->
-        <div class="bag-item-row ${this.solarPrismCount > 0 ? 'has-stock' : 'empty-stock'}" data-item="solar" title="Weave an outward-expanding Fibonacci Golden Spiral!">
-          <div class="bag-item-icon-wrap" style="background:#fef3c7;color:#b45309;">${SVG_ICONS.solarPrism}</div>
-          <div class="bag-item-details">
-            <span class="bag-item-name">Solar Prism</span>
-            <span class="bag-item-sub">Golden Sunset Spiral 🌅</span>
-          </div>
-          <button type="button" class="bag-action-pill ${this.solarPrismCount > 0 ? 'use-pill' : 'buy-pill'}">
-            ${this.solarPrismCount > 0 ? `Use (x${this.solarPrismCount})` : '+ Shop'}
-          </button>
-        </div>
+        <button type="button" class="bag-mini-tile ${this.solarPrismCount > 0 ? 'in-stock' : 'out-of-stock'}" data-item="solar" title="Solar Prism (${this.solarPrismCount} in stock) - Tightening Fibonacci Spiral">
+          <div class="bag-mini-icon" style="color:#d97706;">${SVG_ICONS.solarPrism}</div>
+          <span class="bag-mini-count">${this.solarPrismCount > 0 ? `x${this.solarPrismCount}` : '+'}</span>
+        </button>
 
         <!-- 7. Star Compass -->
-        <div class="bag-item-row ${this.starCompassCount > 0 ? 'has-stock' : 'empty-stock'}" data-item="compass" title="Outline a Giant Cat Constellation on the sanctuary floor!">
-          <div class="bag-item-icon-wrap" style="background:#f3e8ff;color:#7e22ce;">${SVG_ICONS.starCompass}</div>
-          <div class="bag-item-details">
-            <span class="bag-item-name">Star Compass</span>
-            <span class="bag-item-sub">Cat Constellation 🐱✨</span>
-          </div>
-          <button type="button" class="bag-action-pill ${this.starCompassCount > 0 ? 'use-pill' : 'buy-pill'}">
-            ${this.starCompassCount > 0 ? `Use (x${this.starCompassCount})` : '+ Shop'}
-          </button>
-        </div>
+        <button type="button" class="bag-mini-tile ${this.starCompassCount > 0 ? 'in-stock' : 'out-of-stock'}" data-item="compass" title="Star Compass (${this.starCompassCount} in stock) - Giant Cat Constellation">
+          <div class="bag-mini-icon" style="color:#9333ea;">${SVG_ICONS.starCompass}</div>
+          <span class="bag-mini-count">${this.starCompassCount > 0 ? `x${this.starCompassCount}` : '+'}</span>
+        </button>
       </div>
     `;
 
-    this.bagPanel.querySelector('#bag-close-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      sound.playTap();
-      this.isBagOpen = false;
-      this.updateBagPanel();
-    });
+    let wasPerfumeDragged = false;
+    const perfumeTile = this.bagPanel.querySelector('.bag-mini-tile[data-item="perfume"]') as HTMLElement | null;
+    if (perfumeTile && this.catPerfumeCount > 0) {
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+      let ghostEl: HTMLElement | null = null;
 
-    this.bagPanel.querySelectorAll('.bag-item-row').forEach((row) => {
-      row.addEventListener('click', (e) => {
+      const onPointerMove = (e: PointerEvent) => {
+        if (!isDragging) {
+          const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+          if (dist > 6) {
+            isDragging = true;
+            wasPerfumeDragged = true;
+            this.isBagOpen = false;
+            this.updateBagPanel();
+            EventBus.emit('perfume-drag-start', {});
+
+            ghostEl = document.createElement('div');
+            ghostEl.className = 'perfume-drag-ghost';
+            ghostEl.innerHTML = SVG_ICONS.perfume;
+            ghostEl.style.left = `${e.clientX - 24}px`;
+            ghostEl.style.top = `${e.clientY - 24}px`;
+            document.body.appendChild(ghostEl);
+          }
+        }
+        if (isDragging && ghostEl) {
+          ghostEl.style.left = `${e.clientX - 24}px`;
+          ghostEl.style.top = `${e.clientY - 24}px`;
+        }
+      };
+
+      const onPointerUp = (e: PointerEvent) => {
+        document.removeEventListener('pointermove', onPointerMove);
+        document.removeEventListener('pointerup', onPointerUp);
+        if (isDragging) {
+          isDragging = false;
+          if (ghostEl) {
+            ghostEl.remove();
+            ghostEl = null;
+          }
+          EventBus.emit('perfume-drag-end', {});
+          EventBus.emit('apply-cat-perfume', { screenX: e.clientX, screenY: e.clientY });
+        }
+      };
+
+      perfumeTile.addEventListener('pointerdown', (e: PointerEvent) => {
+        if (this.catPerfumeCount <= 0) return;
+        wasPerfumeDragged = false;
+        startX = e.clientX;
+        startY = e.clientY;
+        document.addEventListener('pointermove', onPointerMove);
+        document.addEventListener('pointerup', onPointerUp);
+      });
+    }
+
+    this.bagPanel.querySelectorAll('.bag-mini-tile').forEach((tile) => {
+      tile.addEventListener('click', (e) => {
         e.stopPropagation();
-        const itemType = (row as HTMLElement).dataset.item;
+        const itemType = (tile as HTMLElement).dataset.item;
         sound.playTap();
 
         if (itemType === 'perfume') {
+          if (wasPerfumeDragged) {
+            wasPerfumeDragged = false;
+            return;
+          }
           if (this.catPerfumeCount > 0) {
             EventBus.emit('apply-cat-perfume', {});
             this.isBagOpen = false;
@@ -297,6 +320,14 @@ export class UIManager {
         } else if (itemType === 'whistle') {
           if (this.congaWhistleCount > 0) {
             EventBus.emit('use-conga-whistle', {});
+            this.isBagOpen = false;
+            this.updateBagPanel();
+          } else {
+            this.openShopModal('upgrades');
+          }
+        } else if (itemType === 'rain') {
+          if (this.rainTotemCount > 0) {
+            EventBus.emit('use-rain-totem', {});
             this.isBagOpen = false;
             this.updateBagPanel();
           } else {
@@ -412,12 +443,14 @@ export class UIManager {
         fenceLayout?: FenceLayout;
         catPerfumeCount?: number;
         congaWhistleCount?: number;
+        rainTotemCount?: number;
         snowflakeWandCount?: number;
         heartWandCount?: number;
         infinityMetronomeCount?: number;
         solarPrismCount?: number;
         starCompassCount?: number;
         plinkoUpgrades?: Record<string, number>;
+        conquestState?: import('../data/types').ConquestState;
       }) => {
         this.areasState = payload.areas;
         this.currentArea = payload.currentArea;
@@ -429,6 +462,7 @@ export class UIManager {
         this.offlineStarLevel = payload.offlineStarLevel ?? 1;
         this.catPerfumeCount = payload.catPerfumeCount ?? 0;
         this.congaWhistleCount = payload.congaWhistleCount ?? 0;
+        this.rainTotemCount = payload.rainTotemCount ?? 0;
         this.snowflakeWandCount = payload.snowflakeWandCount ?? 0;
         this.heartWandCount = payload.heartWandCount ?? 0;
         this.infinityMetronomeCount = payload.infinityMetronomeCount ?? 0;
@@ -436,6 +470,7 @@ export class UIManager {
         this.starCompassCount = payload.starCompassCount ?? 0;
         this.currentFenceLayout = payload.fenceLayout ?? 'none';
         this.plinkoUpgrades = payload.plinkoUpgrades ?? {};
+        if (payload.conquestState) this.conquestState = payload.conquestState;
 
         this.headerHud.updateTokens(this.currentTokens);
         this.headerHud.updateAreas(this.areasState, this.currentArea, this.catsList);
@@ -457,9 +492,13 @@ export class UIManager {
     EventBus.on('offline-summary', (summary: { minutesAway: number; loveEarned: number; starsEarned?: number; headlines: string[] }) => {
       this.showOfflineSummary(summary);
     });
+
+    EventBus.on('launch-conquest', ({ regionIndex }: { regionIndex: number }) => {
+      EventBus.emit('open-conquest', { regionIndex, cats: this.catsList, conquestState: this.conquestState });
+    });
   }
 
-  private openShopModal(defaultTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' = 'areas'): void {
+  private openShopModal(defaultTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' | 'conquest' = 'areas'): void {
     ShopModal.open(
       this.root,
       {
@@ -474,12 +513,14 @@ export class UIManager {
         offlineStarLevel: this.offlineStarLevel,
         catPerfumeCount: this.catPerfumeCount,
         congaWhistleCount: this.congaWhistleCount,
+        rainTotemCount: this.rainTotemCount,
         snowflakeWandCount: this.snowflakeWandCount,
         heartWandCount: this.heartWandCount,
         infinityMetronomeCount: this.infinityMetronomeCount,
         solarPrismCount: this.solarPrismCount,
         starCompassCount: this.starCompassCount,
         fenceLayout: this.currentFenceLayout,
+        conquestState: this.conquestState,
       },
       defaultTab,
     );

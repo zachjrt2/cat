@@ -23,7 +23,22 @@ export function createNewGameState(): GameState {
     milestoneClaimedIds: [],
     offlineStarLevel: 1,
     catPerfumeCount: 0,
+    congaWhistleCount: 0,
+    rainTotemCount: 0,
+    snowflakeWandCount: 0,
+    heartWandCount: 0,
+    infinityMetronomeCount: 0,
+    solarPrismCount: 0,
+    starCompassCount: 0,
     fenceLayout: 'none',
+    conquestState: {
+      clearedRegions: [],
+      pendingLove: 0,
+      pendingStars: 0,
+      totalInvasionsLaunched: 0,
+      totalBattlesWon: 0,
+      totalBattlesLost: 0,
+    },
     totalPetsGiven: 0,
     totalLoveEarned: 0,
     totalRehomedCats: 0,
@@ -57,6 +72,13 @@ export class SaveManager {
       if (typeof state.adoptionTokens !== 'number') state.adoptionTokens = 0;
       if (typeof state.offlineStarLevel !== 'number' || state.offlineStarLevel < 1) state.offlineStarLevel = 1;
       if (typeof state.catPerfumeCount !== 'number' || state.catPerfumeCount < 0) state.catPerfumeCount = 0;
+      if (typeof state.congaWhistleCount !== 'number' || state.congaWhistleCount < 0) state.congaWhistleCount = 0;
+      if (typeof state.rainTotemCount !== 'number' || state.rainTotemCount < 0) state.rainTotemCount = 0;
+      if (typeof state.snowflakeWandCount !== 'number' || state.snowflakeWandCount < 0) state.snowflakeWandCount = 0;
+      if (typeof state.heartWandCount !== 'number' || state.heartWandCount < 0) state.heartWandCount = 0;
+      if (typeof state.infinityMetronomeCount !== 'number' || state.infinityMetronomeCount < 0) state.infinityMetronomeCount = 0;
+      if (typeof state.solarPrismCount !== 'number' || state.solarPrismCount < 0) state.solarPrismCount = 0;
+      if (typeof state.starCompassCount !== 'number' || state.starCompassCount < 0) state.starCompassCount = 0;
       if (!state.fenceLayout || !['none', 'horizontal', 'vertical', 'both'].includes(state.fenceLayout)) {
         state.fenceLayout = 'none';
       }
@@ -72,6 +94,23 @@ export class SaveManager {
       if (!state.timeOfDay) state.timeOfDay = 'day';
       if (!state.weather) state.weather = 'sunny';
       if (!state.plinkoUpgrades || typeof state.plinkoUpgrades !== 'object') state.plinkoUpgrades = {};
+      if (!state.conquestState || typeof state.conquestState !== 'object') {
+        state.conquestState = {
+          clearedRegions: [],
+          pendingLove: 0,
+          pendingStars: 0,
+          totalInvasionsLaunched: 0,
+          totalBattlesWon: 0,
+          totalBattlesLost: 0,
+        };
+      } else {
+        if (!Array.isArray(state.conquestState.clearedRegions)) state.conquestState.clearedRegions = [];
+        if (typeof state.conquestState.pendingLove !== 'number') state.conquestState.pendingLove = 0;
+        if (typeof state.conquestState.pendingStars !== 'number') state.conquestState.pendingStars = 0;
+        if (typeof state.conquestState.totalInvasionsLaunched !== 'number') state.conquestState.totalInvasionsLaunched = 0;
+        if (typeof state.conquestState.totalBattlesWon !== 'number') state.conquestState.totalBattlesWon = 0;
+        if (typeof state.conquestState.totalBattlesLost !== 'number') state.conquestState.totalBattlesLost = 0;
+      }
 
       // Ensure cats have valid life stages; promote non-kittens or legacy cats to adults
       if (Array.isArray(state.cats)) {

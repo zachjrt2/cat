@@ -5,7 +5,7 @@ export class WeatherManager {
   private phaseTimer = 0;
   private weatherTimer = 0;
   private readonly PHASE_DURATION_SEC = 180; // 3 minutes per time-of-day phase (12 min full day/night cycle)
-  private readonly WEATHER_DURATION_SEC = 300; // 5 minutes per weather roll
+  private readonly WEATHER_DURATION_SEC = 1800; // 30 minutes per weather change (weather changes are much rarer)
 
   constructor(private state: GameState) {}
 
@@ -53,11 +53,11 @@ export class WeatherManager {
     this.weatherTimer += deltaSeconds;
     if (this.weatherTimer >= this.WEATHER_DURATION_SEC) {
       this.weatherTimer = 0;
-      // Random weather roll with cozy bias towards sunny
+      // Random weather roll every ~30 minutes with cozy bias towards sunny
       const roll = Math.random();
-      if (roll < 0.6) {
+      if (roll < 0.70) {
         this.setWeather('sunny');
-      } else if (roll < 0.85) {
+      } else if (roll < 0.88) {
         this.setWeather('rain');
       } else {
         this.setWeather('snow');
