@@ -46,6 +46,14 @@ const SOUND_NORMALIZATION_MAP: Record<string, number> = {
   'success.mp3': 0.65,
   'chestreward.mp3': 0.58,
   'open.mp3': 0.58,
+  'congo.mp3': 0.68,
+  'done.mp3': 0.65,
+  'rain.mp3': 0.70,
+  'snow.mp3': 0.70,
+  'love.mp3': 0.70,
+  'infinity.mp3': 0.70,
+  'sun.mp3': 0.70,
+  'cat.mp3': 0.70,
 };
 
 // ── Per-pool audio element pool ───────────────────────────────────────────────
@@ -75,7 +83,12 @@ export class SoundManager {
   // Music elements
   private musicEl: HTMLAudioElement | null = null;
   private plinkoMusicEl: HTMLAudioElement | null = null;
+  private congaMusicEl: HTMLAudioElement | null = null;
+  private rainMusicEl: HTMLAudioElement | null = null;
+  private activeRitualMusicEl: HTMLAudioElement | null = null;
   private inPlinkoMode = false;
+  private inCongaMode = false;
+  private inRainDanceMode = false;
 
   // SFX pools (loaded lazily on first interaction)
   private poolsReady = false;
@@ -93,6 +106,7 @@ export class SoundManager {
   private bigwinPool: HTMLAudioElement[] = [];
   private successPool: HTMLAudioElement[] = [];
   private openChestPool: HTMLAudioElement[] = [];
+  private donePool: HTMLAudioElement[] = [];
 
   // Concurrent meow & chirp limiter
   private activeMeowCount = 0;
@@ -107,6 +121,34 @@ export class SoundManager {
 
     // Initialise music element immediately
     this.initMusic();
+
+    // Auto-unlock music and sound on first user gesture (pointerdown, keydown, touch)
+    const unlockAudio = () => {
+      this.initPools();
+      if (this.musicEnabled && !this.inPlinkoMode && !this.inCongaMode && !this.inRainDanceMode) {
+        if (!this.musicEl || this.musicEl.paused) {
+          this.startMusic();
+        }
+      }
+    };
+
+    window.addEventListener('pointerdown', unlockAudio, { passive: true });
+    window.addEventListener('keydown', unlockAudio, { passive: true });
+    window.addEventListener('touchstart', unlockAudio, { passive: true });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        if (this.musicEnabled && !this.inPlinkoMode && !this.inCongaMode && !this.inRainDanceMode && this.musicEl && this.musicEl.paused) {
+          this.musicEl.play().catch(() => {});
+        }
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      if (this.musicEnabled && !this.inPlinkoMode && !this.inCongaMode && !this.inRainDanceMode && this.musicEl && this.musicEl.paused) {
+        this.musicEl.play().catch(() => {});
+      }
+    });
   }
 
   private initMusic(): void {
@@ -134,6 +176,20 @@ export class SoundManager {
         if (this.musicEnabled && this.plinkoMusicEl && this.inPlinkoMode) {
           this.plinkoMusicEl.currentTime = 0;
           this.plinkoMusicEl.play().catch(() => {});
+        }
+      });
+    }
+
+    if (!this.congaMusicEl) {
+      this.congaMusicEl = new Audio(soundUrl('congo.mp3'));
+      this.congaMusicEl.loop = true;
+      this.congaMusicEl.volume = this.musicEnabled && this.inCongaMode ? this.musicVolume : 0;
+      this.congaMusicEl.preload = 'auto';
+
+      this.congaMusicEl.addEventListener('ended', () => {
+        if (this.musicEnabled && this.congaMusicEl && this.inCongaMode) {
+          this.congaMusicEl.currentTime = 0;
+          this.congaMusicEl.play().catch(() => {});
         }
       });
     }
@@ -167,6 +223,7 @@ export class SoundManager {
     this.applyVolumeToPool(this.bigwinPool);
     this.applyVolumeToPool(this.successPool);
     this.applyVolumeToPool(this.openChestPool);
+    this.applyVolumeToPool(this.donePool);
     this.meowPools.forEach(p => this.applyVolumeToPool(p));
     this.kittenPools.forEach(p => this.applyVolumeToPool(p));
     this.chirpPools.forEach(p => this.applyVolumeToPool(p));
@@ -175,8 +232,11 @@ export class SoundManager {
   setMusicVolume(v: number): void {
     this.musicVolume = Math.max(0, Math.min(1, v));
     localStorage.setItem('cozy_music_volume', String(this.musicVolume));
-    if (this.musicEl) this.musicEl.volume = this.musicEnabled && !this.inPlinkoMode ? this.musicVolume : 0;
+    if (this.musicEl) this.musicEl.volume = this.musicEnabled && !this.inPlinkoMode && !this.inCongaMode && !this.inRainDanceMode ? this.musicVolume : 0;
     if (this.plinkoMusicEl) this.plinkoMusicEl.volume = this.musicEnabled && this.inPlinkoMode ? this.musicVolume : 0;
+    if (this.congaMusicEl) this.congaMusicEl.volume = this.musicEnabled && this.inCongaMode ? this.musicVolume : 0;
+    if (this.rainMusicEl) this.rainMusicEl.volume = this.musicEnabled && this.inRainDanceMode ? this.musicVolume : 0;
+    if (this.activeRitualMusicEl) this.activeRitualMusicEl.volume = this.musicEnabled && this.inRainDanceMode ? this.musicVolume : 0;
   }
 
   setSfxEnabled(on: boolean): void {
@@ -187,7 +247,32 @@ export class SoundManager {
   setMusicEnabled(on: boolean): void {
     this.musicEnabled = on;
     localStorage.setItem('cozy_music_enabled', String(on));
-    if (this.inPlinkoMode) {
+    if (this.inRainDanceMode) {
+      if (this.activeRitualMusicEl) {
+        if (on) {
+          this.activeRitualMusicEl.volume = this.musicVolume;
+          this.activeRitualMusicEl.play().catch(() => {});
+        } else {
+          this.activeRitualMusicEl.pause();
+        }
+      } else if (this.rainMusicEl) {
+        if (on) {
+          this.rainMusicEl.volume = this.musicVolume;
+          this.rainMusicEl.play().catch(() => {});
+        } else {
+          this.rainMusicEl.pause();
+        }
+      }
+    } else if (this.inCongaMode) {
+      if (this.congaMusicEl) {
+        if (on) {
+          this.congaMusicEl.volume = this.musicVolume;
+          this.congaMusicEl.play().catch(() => {});
+        } else {
+          this.congaMusicEl.pause();
+        }
+      }
+    } else if (this.inPlinkoMode) {
       if (this.plinkoMusicEl) {
         if (on) {
           this.plinkoMusicEl.volume = this.musicVolume;
@@ -245,6 +330,7 @@ export class SoundManager {
     this.bigwinPool = makePool('bigwin.mp3', 4, this.sfxVolume);
     this.successPool = makePool('success.mp3', 4, this.sfxVolume);
     this.openChestPool = makePool('open.mp3', 3, this.sfxVolume);
+    this.donePool = makePool('done.mp3', 2, this.sfxVolume);
   }
 
   private playFromPool(pool: HTMLAudioElement[], volumeMultiplier = 1): void {
@@ -260,7 +346,7 @@ export class SoundManager {
 
   /** Plays background music (with retry on user interaction) */
   startMusic(): void {
-    if (this.inPlinkoMode) return;
+    if (this.inPlinkoMode || this.inCongaMode || this.inRainDanceMode) return;
     if (!this.musicEnabled) return;
     if (!this.musicEl) {
       this.initMusic();
@@ -276,6 +362,9 @@ export class SoundManager {
     this.inPlinkoMode = true;
     if (this.musicEl) {
       this.musicEl.pause();
+    }
+    if (this.congaMusicEl) {
+      this.congaMusicEl.pause();
     }
     if (!this.musicEnabled) return;
     this.initMusic();
@@ -295,10 +384,49 @@ export class SoundManager {
       this.plinkoMusicEl.pause();
       this.plinkoMusicEl.currentTime = 0;
     }
-    if (this.musicEnabled && this.musicEl) {
+    if (this.musicEnabled && this.musicEl && !this.inCongaMode) {
       this.musicEl.volume = this.musicVolume;
       this.musicEl.play().catch(() => {});
     }
+  }
+
+  /** Switches to festive Conga BGM (congo.mp3) */
+  startCongaMusic(): void {
+    this.inCongaMode = true;
+    if (this.musicEl) {
+      this.musicEl.pause();
+    }
+    if (this.plinkoMusicEl) {
+      this.plinkoMusicEl.pause();
+    }
+    if (!this.musicEnabled) return;
+    this.initMusic();
+    if (this.congaMusicEl) {
+      this.congaMusicEl.volume = this.musicVolume;
+      this.congaMusicEl.currentTime = 0;
+      this.congaMusicEl.play().catch(() => {});
+    }
+  }
+
+  /** Stops Conga BGM, plays completion fanfare (done.mp3), and resumes ambient sanctuary music */
+  stopCongaMusic(): void {
+    this.inCongaMode = false;
+    if (this.congaMusicEl) {
+      this.congaMusicEl.pause();
+      this.congaMusicEl.currentTime = 0;
+    }
+    this.playDone();
+    if (this.musicEnabled && this.musicEl && !this.inPlinkoMode) {
+      this.musicEl.volume = this.musicVolume;
+      this.musicEl.play().catch(() => {});
+    }
+  }
+
+  /** Plays conga completion sound effect (done.mp3) */
+  playDone(): void {
+    this.initPools();
+    if (!this.sfxEnabled) return;
+    this.playFromPool(this.donePool);
   }
 
   /** Plays chest opening buildup sound effect (chestreward.mp3) */
@@ -467,6 +595,83 @@ export class SoundManager {
     this.playFromPool(this.successPool);
   }
 
+  /**
+   * Plays unique ritual dance music (snow.mp3, love.mp3, infinity.mp3, sun.mp3, cat.mp3, rain.mp3)
+   * instead of background music for the exact duration of the song.
+   * Background music is paused and automatically resumes once the ritual ends with done.mp3 fanfare.
+   */
+  startRitualMusic(filename: string, onEnded?: () => void): number {
+    this.inRainDanceMode = true;
+    if (this.musicEl) {
+      this.musicEl.pause();
+    }
+    if (this.plinkoMusicEl) {
+      this.plinkoMusicEl.pause();
+    }
+    if (this.congaMusicEl) {
+      this.congaMusicEl.pause();
+    }
+    if (this.activeRitualMusicEl) {
+      this.activeRitualMusicEl.pause();
+      this.activeRitualMusicEl.currentTime = 0;
+    }
+
+    const el = new Audio(soundUrl(filename));
+    el.preload = 'auto';
+    this.activeRitualMusicEl = el;
+
+    const normGain = SOUND_NORMALIZATION_MAP[filename] ?? 0.70;
+    el.currentTime = 0;
+    el.volume = (this.musicEnabled ? this.musicVolume : 0) * normGain;
+
+    if (onEnded) {
+      const handleEnded = () => {
+        el.removeEventListener('ended', handleEnded);
+        onEnded();
+      };
+      el.addEventListener('ended', handleEnded, { once: true });
+    }
+
+    if (this.musicEnabled) {
+      el.play().catch(() => {});
+    }
+
+    const duration = (el.duration && isFinite(el.duration) && el.duration > 0) ? el.duration : 18.0;
+    return duration;
+  }
+
+  /** Stops active ritual music, plays done.mp3 fanfare, and restores ambient background music */
+  stopRitualMusic(playDoneFanfare = true): void {
+    if (!this.inRainDanceMode) return;
+    this.inRainDanceMode = false;
+    if (this.activeRitualMusicEl) {
+      this.activeRitualMusicEl.pause();
+      this.activeRitualMusicEl.currentTime = 0;
+      this.activeRitualMusicEl = null;
+    }
+    if (this.rainMusicEl) {
+      this.rainMusicEl.pause();
+      this.rainMusicEl.currentTime = 0;
+    }
+    if (playDoneFanfare) {
+      this.playDone();
+    }
+    if (this.musicEnabled && this.musicEl && !this.inPlinkoMode && !this.inCongaMode) {
+      this.musicEl.volume = this.musicVolume;
+      this.musicEl.play().catch(() => {});
+    }
+  }
+
+  /** Plays rain dance music (rain.mp3) instead of background music for the duration of the ritual */
+  startRainMusic(onEnded?: () => void): number {
+    return this.startRitualMusic('rain.mp3', onEnded);
+  }
+
+  /** Stops rain dance music, plays done.mp3 fanfare, and restores ambient background music */
+  stopRainMusic(playDoneFanfare = true): void {
+    this.stopRitualMusic(playDoneFanfare);
+  }
+
   // ── Legacy aliases (keep existing call-sites working) ────────────────────
 
   playTap(): void { this.playClick(); }
@@ -474,6 +679,40 @@ export class SoundManager {
   playSparkle(): void { this.playPop(); }       // sparkle / brush / automation
   playBubble(): void { this.playPop(); }        // wash bubble
   playAdoptFanfare(): void { this.playPop(); }
+
+  playWhistle(): void {
+    if (!this.sfxEnabled) return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) {
+        this.playPop();
+        return;
+      }
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(1760, now + 0.10);
+      osc.frequency.exponentialRampToValueAtTime(1320, now + 0.18);
+      osc.frequency.exponentialRampToValueAtTime(2093, now + 0.32);
+
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.22 * this.sfxVolume, now + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.44);
+      setTimeout(() => ctx.close(), 550);
+    } catch {
+      this.playPop();
+    }
+  }
 
 }
 

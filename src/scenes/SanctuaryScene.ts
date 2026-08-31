@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { Cat, CatArea, FenceLayout, GameState, RareCatType, ToolType } from '../data/types';
+import type { Cat, CatArea, FenceLayout, GameState, RareCatType, ToolType, WeatherType } from '../data/types';
 import { generateCat, generateRareCat } from '../data/catFactory';
 import { createNewGameState, SaveManager } from '../systems/SaveManager';
 import { LoveManager } from '../systems/LoveManager';
@@ -15,7 +15,24 @@ import { BreedingSystem, BREED_COOLDOWN_MS } from '../systems/BreedingSystem';
 import { tickCatNeeds, applyAutomationThresholds } from '../systems/NeedsSystem';
 import { CatSprite, type AvailableMachineInfo, type AvailableFurnitureInfo } from '../entities/CatSprite';
 import { DeliveryBox, type DeliveryData } from '../entities/DeliveryBox';
-import { AUTOSAVE_INTERVAL_MS, AREA_INFO_MAP, FURNITURE_CATALOG, RARE_SUMMONS, OFFLINE_STAR_UPGRADES, calculateRehomeLove, getAreaCapacityUpgradeCost, CAT_PERFUME_COST, CAT_PERFUME_COOLDOWN_MS, CAT_PERFUME_FRENZY_SECONDS } from '../data/constants';
+import {
+  AUTOSAVE_INTERVAL_MS,
+  AREA_INFO_MAP,
+  FURNITURE_CATALOG,
+  RARE_SUMMONS,
+  OFFLINE_STAR_UPGRADES,
+  calculateRehomeLove,
+  getAreaCapacityUpgradeCost,
+  CAT_PERFUME_COST,
+  CAT_PERFUME_COOLDOWN_MS,
+  CAT_PERFUME_FRENZY_SECONDS,
+  CONGA_WHISTLE_COST,
+  SNOWFLAKE_WAND_COST,
+  HEART_WAND_COST,
+  INFINITY_METRONOME_COST,
+  SOLAR_PRISM_COST,
+  STAR_COMPASS_COST,
+} from '../data/constants';
 import { EventBus } from '../ui/EventBus';
 import { sound } from '../systems/SoundManager';
 import { exportCatCardAsPng } from '../systems/CardExport';
@@ -54,6 +71,21 @@ export class SanctuaryScene extends Phaser.Scene {
   private isCongaParadeActive = false;
   private congaParadeDuration = 0;
 
+  // Rain Ritual Concentric Circles Event (once per storm, matches rain.mp3 duration)
+  private isRainDanceActive = false;
+  private rainDanceTimer = 0;
+  private wasRaining = false;
+  private hasDoneRainDanceThisStorm = false;
+
+  // Active Dance Formations Event State
+  private isDanceFormationActive = false;
+  private activeDanceFormation: 'none' | 'snowflake' | 'heart' | 'infinity' | 'sunset' | 'constellation' = 'none';
+  private danceFormationDuration = 0;
+  private wasSnowing = false;
+  private wasSunset = false;
+  private hasDoneSnowflakeDanceThisSnow = false;
+  private hasDoneSunsetDanceThisSunset = false;
+
   // Sub-Controllers
   private areaRenderer!: AreaRenderer;
   private weatherAndLighting!: WeatherAndLightingController;
@@ -70,6 +102,13 @@ export class SanctuaryScene extends Phaser.Scene {
     this.drawCurrentArea();
     this.spawnCatsInCurrentArea();
     this.bindUiEvents();
+
+    this.wasRaining = this.state.weather === 'rain';
+    this.hasDoneRainDanceThisStorm = this.wasRaining;
+    this.wasSnowing = this.state.weather === 'snow';
+    this.hasDoneSnowflakeDanceThisSnow = this.wasSnowing;
+    this.wasSunset = this.state.timeOfDay === 'sunset';
+    this.hasDoneSunsetDanceThisSunset = this.wasSunset;
 
     this.lastTick = this.time.now;
 
@@ -113,6 +152,7 @@ export class SanctuaryScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => CatSprite.clearPools());
     this.events.on(Phaser.Scenes.Events.DESTROY, () => CatSprite.clearPools());
 
+    sound.startMusic();
     this.notifyUiState();
   }
 
@@ -224,6 +264,12 @@ export class SanctuaryScene extends Phaser.Scene {
       tokens: this.milestones.tokens,
       offlineStarLevel: this.state.offlineStarLevel || 1,
       catPerfumeCount: this.state.catPerfumeCount || 0,
+      congaWhistleCount: this.state.congaWhistleCount || 0,
+      snowflakeWandCount: this.state.snowflakeWandCount || 0,
+      heartWandCount: this.state.heartWandCount || 0,
+      infinityMetronomeCount: this.state.infinityMetronomeCount || 0,
+      solarPrismCount: this.state.solarPrismCount || 0,
+      starCompassCount: this.state.starCompassCount || 0,
       fenceLayout: this.state.fenceLayout || 'none',
       plinkoUpgrades: this.state.plinkoUpgrades || {},
     });
@@ -514,6 +560,20 @@ export class SanctuaryScene extends Phaser.Scene {
       this.notifyUiState();
     });
 
+    EventBus.on('weather-changed', ({ weather }: { weather: WeatherType }) => {
+      if (weather === 'rain') {
+        if (!this.hasDoneRainDanceThisStorm) {
+          this.hasDoneRainDanceThisStorm = true;
+          this.startRainDance();
+        }
+      } else {
+        this.hasDoneRainDanceThisStorm = false;
+        if (this.isRainDanceActive) {
+          this.endRainDance(false);
+        }
+      }
+    });
+
     EventBus.on('upgrade-plinko', ({ upgradeId, level }: { upgradeId: string; level: number }) => {
       if (!this.state.plinkoUpgrades) this.state.plinkoUpgrades = {};
       this.state.plinkoUpgrades[upgradeId] = level;
@@ -570,6 +630,202 @@ export class SanctuaryScene extends Phaser.Scene {
         EventBus.emit('toast', { message: `Need ${CAT_PERFUME_COST} 💗 to buy Cat Perfume.` });
         sound.playPop();
       }
+    });
+
+    EventBus.on('buy-conga-whistle', () => {
+      if (this.love.spend(CONGA_WHISTLE_COST)) {
+        EventBus.emit('love-changed', { love: this.love.love });
+        this.spawnDeliveryBox({
+          type: 'conga_whistle',
+          id: 'conga_whistle',
+          name: 'Party Whistle',
+          emoji: '🎶',
+          onOpen: () => {
+            this.state.congaWhistleCount = (this.state.congaWhistleCount || 0) + 1;
+            this.saveManager.save(this.state);
+            this.notifyUiState();
+            sound.playAdoptFanfare();
+            EventBus.emit('toast', { message: `🎶 Added Party Whistle to inventory! (${this.state.congaWhistleCount} in stock)` });
+          },
+        });
+      } else {
+        EventBus.emit('toast', { message: `Need ${CONGA_WHISTLE_COST} 💗 to buy Party Whistle.` });
+        sound.playPop();
+      }
+    });
+
+    EventBus.on('use-conga-whistle', () => {
+      if ((this.state.congaWhistleCount || 0) <= 0) {
+        EventBus.emit('toast', { message: 'No Party Whistles in inventory!' });
+        sound.playPop();
+        return;
+      }
+
+      const activeSprites = this.activeCatSpriteList.filter((s) => s.active && !s.isCurrentlyDragged());
+      if (activeSprites.length < 2) {
+        EventBus.emit('toast', { message: 'Need at least 2 cats in this area to form a Conga Line!' });
+        sound.playPop();
+        return;
+      }
+
+      this.state.congaWhistleCount = Math.max(0, (this.state.congaWhistleCount || 0) - 1);
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+
+      sound.playWhistle();
+      this.startCongaParade();
+    });
+
+    // Consumable Purchases
+    EventBus.on('buy-snowflake-wand', () => {
+      if (this.love.spend(SNOWFLAKE_WAND_COST)) {
+        EventBus.emit('love-changed', { love: this.love.love });
+        this.spawnDeliveryBox({
+          type: 'snowflake_wand',
+          id: 'snowflake_wand',
+          name: 'Snowflake Crystal',
+          emoji: '❄️',
+          onOpen: () => {
+            this.state.snowflakeWandCount = (this.state.snowflakeWandCount || 0) + 1;
+            this.saveManager.save(this.state);
+            this.notifyUiState();
+            sound.playAdoptFanfare();
+            EventBus.emit('toast', { message: `❄️ Added Snowflake Crystal to inventory! (${this.state.snowflakeWandCount} in stock)` });
+          },
+        });
+      }
+    });
+
+    EventBus.on('buy-heart-wand', () => {
+      if (this.love.spend(HEART_WAND_COST)) {
+        EventBus.emit('love-changed', { love: this.love.love });
+        this.spawnDeliveryBox({
+          type: 'heart_wand',
+          id: 'heart_wand',
+          name: 'Catnip Heart Wand',
+          emoji: '💖',
+          onOpen: () => {
+            this.state.heartWandCount = (this.state.heartWandCount || 0) + 1;
+            this.saveManager.save(this.state);
+            this.notifyUiState();
+            sound.playAdoptFanfare();
+            EventBus.emit('toast', { message: `💖 Added Catnip Heart Wand to inventory! (${this.state.heartWandCount} in stock)` });
+          },
+        });
+      }
+    });
+
+    EventBus.on('buy-infinity-metronome', () => {
+      if (this.love.spend(INFINITY_METRONOME_COST)) {
+        EventBus.emit('love-changed', { love: this.love.love });
+        this.spawnDeliveryBox({
+          type: 'infinity_metronome',
+          id: 'infinity_metronome',
+          name: 'Infinity Metronome',
+          emoji: '♾️',
+          onOpen: () => {
+            this.state.infinityMetronomeCount = (this.state.infinityMetronomeCount || 0) + 1;
+            this.saveManager.save(this.state);
+            this.notifyUiState();
+            sound.playAdoptFanfare();
+            EventBus.emit('toast', { message: `♾️ Added Infinity Metronome to inventory! (${this.state.infinityMetronomeCount} in stock)` });
+          },
+        });
+      }
+    });
+
+    EventBus.on('buy-solar-prism', () => {
+      if (this.love.spend(SOLAR_PRISM_COST)) {
+        EventBus.emit('love-changed', { love: this.love.love });
+        this.spawnDeliveryBox({
+          type: 'solar_prism',
+          id: 'solar_prism',
+          name: 'Solar Prism',
+          emoji: '🌅',
+          onOpen: () => {
+            this.state.solarPrismCount = (this.state.solarPrismCount || 0) + 1;
+            this.saveManager.save(this.state);
+            this.notifyUiState();
+            sound.playAdoptFanfare();
+            EventBus.emit('toast', { message: `🌅 Added Solar Prism to inventory! (${this.state.solarPrismCount} in stock)` });
+          },
+        });
+      }
+    });
+
+    EventBus.on('buy-star-compass', () => {
+      if (this.love.spend(STAR_COMPASS_COST)) {
+        EventBus.emit('love-changed', { love: this.love.love });
+        this.spawnDeliveryBox({
+          type: 'star_compass',
+          id: 'star_compass',
+          name: 'Star Compass',
+          emoji: '🐱',
+          onOpen: () => {
+            this.state.starCompassCount = (this.state.starCompassCount || 0) + 1;
+            this.saveManager.save(this.state);
+            this.notifyUiState();
+            sound.playAdoptFanfare();
+            EventBus.emit('toast', { message: `🐱 Added Star Compass to inventory! (${this.state.starCompassCount} in stock)` });
+          },
+        });
+      }
+    });
+
+    // Consumable Use Triggers
+    EventBus.on('use-snowflake-wand', () => {
+      if ((this.state.snowflakeWandCount || 0) <= 0) {
+        EventBus.emit('toast', { message: 'No Snowflake Crystals in inventory!' });
+        return;
+      }
+      this.state.snowflakeWandCount = Math.max(0, (this.state.snowflakeWandCount || 0) - 1);
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+      this.startSnowflakeMandalaDance(true);
+    });
+
+    EventBus.on('use-heart-wand', () => {
+      if ((this.state.heartWandCount || 0) <= 0) {
+        EventBus.emit('toast', { message: 'No Catnip Heart Wands in inventory!' });
+        return;
+      }
+      this.state.heartWandCount = Math.max(0, (this.state.heartWandCount || 0) - 1);
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+      this.startHeartFormationDance();
+    });
+
+    EventBus.on('use-infinity-metronome', () => {
+      if ((this.state.infinityMetronomeCount || 0) <= 0) {
+        EventBus.emit('toast', { message: 'No Infinity Metronomes in inventory!' });
+        return;
+      }
+      this.state.infinityMetronomeCount = Math.max(0, (this.state.infinityMetronomeCount || 0) - 1);
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+      this.startInfinityLoopDance();
+    });
+
+    EventBus.on('use-solar-prism', () => {
+      if ((this.state.solarPrismCount || 0) <= 0) {
+        EventBus.emit('toast', { message: 'No Solar Prisms in inventory!' });
+        return;
+      }
+      this.state.solarPrismCount = Math.max(0, (this.state.solarPrismCount || 0) - 1);
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+      this.startSunsetSpiralDance(true);
+    });
+
+    EventBus.on('use-star-compass', () => {
+      if ((this.state.starCompassCount || 0) <= 0) {
+        EventBus.emit('toast', { message: 'No Star Compasses in inventory!' });
+        return;
+      }
+      this.state.starCompassCount = Math.max(0, (this.state.starCompassCount || 0) - 1);
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+      this.startCatConstellationDance();
     });
 
     EventBus.on('apply-cat-perfume', ({ screenX, screenY, catId }: { screenX?: number; screenY?: number; catId?: string }) => {
@@ -1234,6 +1490,61 @@ export class SanctuaryScene extends Phaser.Scene {
     this.toolController.update(deltaSeconds);
     this.weatherAndLighting.update(deltaSeconds, this.currentArea);
 
+    this.weather.tick(deltaSeconds);
+    const currentIsRain = this.weather.weather === 'rain';
+    if (currentIsRain && !this.wasRaining) {
+      if (!this.hasDoneRainDanceThisStorm) {
+        this.hasDoneRainDanceThisStorm = true;
+        this.startRainDance();
+      }
+    } else if (!currentIsRain && this.wasRaining) {
+      this.hasDoneRainDanceThisStorm = false;
+      if (this.isRainDanceActive) {
+        this.endRainDance(false);
+      }
+    }
+    this.wasRaining = currentIsRain;
+
+    // Environmental Snow Trigger (Snowflake Mandala Dance)
+    const currentIsSnow = this.weather.weather === 'snow';
+    if (currentIsSnow && !this.wasSnowing) {
+      if (!this.hasDoneSnowflakeDanceThisSnow) {
+        this.hasDoneSnowflakeDanceThisSnow = true;
+        this.startSnowflakeMandalaDance(false);
+      }
+    } else if (!currentIsSnow && this.wasSnowing) {
+      this.hasDoneSnowflakeDanceThisSnow = false;
+    }
+    this.wasSnowing = currentIsSnow;
+
+    // Environmental Sunset Trigger (Sunset Fibonacci Spiral)
+    const currentIsSunset = this.weather.timeOfDay === 'sunset';
+    if (currentIsSunset && !this.wasSunset) {
+      if (!this.hasDoneSunsetDanceThisSunset) {
+        this.hasDoneSunsetDanceThisSunset = true;
+        this.startSunsetSpiralDance(false);
+      }
+    } else if (!currentIsSunset && this.wasSunset) {
+      this.hasDoneSunsetDanceThisSunset = false;
+    }
+    this.wasSunset = currentIsSunset;
+
+    // Rain Ritual Event Tick (duration of rain.mp3)
+    if (this.isRainDanceActive) {
+      this.rainDanceTimer -= deltaSeconds;
+      if (this.rainDanceTimer <= 0) {
+        this.endRainDance(true);
+      }
+    }
+
+    // Active Dance Formation Duration Tick
+    if (this.isDanceFormationActive) {
+      this.danceFormationDuration -= deltaSeconds;
+      if (this.danceFormationDuration <= 0) {
+        this.endAnyActiveDance(true);
+      }
+    }
+
     // Conga Parade Event Tick (~every 10 minutes)
     if (this.isCongaParadeActive) {
       this.congaParadeDuration -= deltaSeconds;
@@ -1411,10 +1722,10 @@ export class SanctuaryScene extends Phaser.Scene {
     }
 
     this.isCongaParadeActive = true;
-    this.congaParadeDuration = 32; // 32 seconds of pure conga fun
+    this.congaParadeDuration = 128; // 128 seconds (4x longer) of pure conga fun
     this.congaParadeTimer = 540 + Math.random() * 120; // 9-11 minutes until next parade
 
-    sound.playAdoptFanfare();
+    sound.startCongaMusic();
     EventBus.emit('toast', { message: '🎉 Conga Parade! All cats are joining the Grand Conga Line! 🐾🎶' });
 
     this.spawnCelebrationConfetti();
@@ -1453,23 +1764,55 @@ export class SanctuaryScene extends Phaser.Scene {
     if (!this.isCongaParadeActive) return;
     this.isCongaParadeActive = false;
 
-    for (const sprite of this.catSprites.values()) {
-      if (sprite.active) {
-        sprite.endCongaParade();
-        sprite.cat.fun = 100;
-        sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 25);
-        sprite.refreshVisuals();
-      }
+    sound.stopCongaMusic();
+
+    const participatingSprites = Array.from(this.catSprites.values()).filter((s) => s.active);
+    const catCount = participatingSprites.length;
+    const starsEarned = catCount * 10;
+
+    for (const sprite of participatingSprites) {
+      sprite.endCongaParade();
+      sprite.cat.fun = 100;
+      sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 25);
+      sprite.showEmote('⭐');
+      sprite.refreshVisuals();
+      this.spawnCatStarsBurst(sprite.x, sprite.y);
+    }
+
+    if (starsEarned > 0) {
+      this.milestones.addTokens(starsEarned);
     }
 
     this.love.add(50);
     this.state.totalLoveEarned += 50;
     EventBus.emit('love-changed', { love: this.love.love });
-    sound.playSparkle();
-    EventBus.emit('toast', { message: '🎊 Conga Parade complete! Everyone is full of joy! (+50 💗)' });
+    EventBus.emit('toast', { message: `🎊 Conga Parade complete! ${catCount} cats earned you +${starsEarned} ⭐ Stars! (+50 💗)` });
     this.spawnCelebrationConfetti();
     this.saveManager.save(this.state);
     this.notifyUiState();
+  }
+
+  private spawnCatStarsBurst(x: number, y: number): void {
+    for (let i = 0; i < 3; i++) {
+      const star = this.add.text(
+        x + Phaser.Math.Between(-12, 12),
+        y - 12 + Phaser.Math.Between(-6, 6),
+        '⭐',
+        { fontSize: '15px' }
+      ).setOrigin(0.5).setDepth(99999);
+
+      this.tweens.add({
+        targets: star,
+        y: y - 50 - Phaser.Math.Between(10, 25),
+        x: star.x + Phaser.Math.Between(-20, 20),
+        scaleX: 1.3,
+        scaleY: 1.3,
+        alpha: 0,
+        duration: 850 + Phaser.Math.Between(0, 350),
+        ease: 'Quad.easeOut',
+        onComplete: () => star.destroy(),
+      });
+    }
   }
 
   private spawnCelebrationConfetti(): void {
@@ -1495,5 +1838,360 @@ export class SanctuaryScene extends Phaser.Scene {
         onComplete: () => confetti.destroy(),
       });
     }
+  }
+
+  private startRainDance(): void {
+    const sprites = Array.from(this.catSprites.values()).filter((s) => s.active && !s.isCurrentlyDragged());
+    if (sprites.length < 2) return;
+
+    this.isRainDanceActive = true;
+
+    // If a conga parade was in progress, stop it for the rain ritual
+    if (this.isCongaParadeActive) {
+      this.isCongaParadeActive = false;
+      sound.stopCongaMusic();
+    }
+
+    const bounds = this.areaRenderer.walkableBounds(this.currentArea);
+    const cx = bounds.centerX;
+    const cy = bounds.centerY;
+
+    // Distribute cats into at least 2 concentric rings so opposite directions are clearly visible
+    const numCats = sprites.length;
+    const maxRings = Math.max(2, Math.min(5, Math.ceil(Math.sqrt(numCats))));
+    const maxRadius = Math.max(70, Math.min(bounds.width, bounds.height) / 2 - 35);
+    const ringStep = (maxRadius - 45) / Math.max(1, maxRings - 1);
+
+    const rings: CatSprite[][] = Array.from({ length: maxRings }, () => []);
+    sprites.forEach((sprite, index) => {
+      rings[index % maxRings].push(sprite);
+    });
+
+    rings.forEach((ringCats, ringIndex) => {
+      if (ringCats.length === 0) return;
+      const radius = 45 + ringIndex * ringStep;
+      // Even ring index (0, 2, 4): Clockwise (+1); Odd ring index (1, 3): Counter-Clockwise (-1)
+      const direction = ringIndex % 2 === 0 ? 1 : -1;
+      const walkSpeed = 70; // Natural steady circular walk
+      const omega = walkSpeed / radius;
+
+      ringCats.forEach((catSprite, catIndex) => {
+        const initialAngle = (catIndex / ringCats.length) * Math.PI * 2;
+        catSprite.startRainDance(cx, cy, radius, initialAngle, direction, omega);
+      });
+    });
+
+    // Play rain.mp3 as dedicated BGM (pausing ambient music) matching dance length to audio duration
+    const duration = sound.startRainMusic(() => {
+      if (this.isRainDanceActive) {
+        this.endRainDance(true);
+      }
+    });
+    this.rainDanceTimer = duration;
+
+    EventBus.emit('toast', { message: '🌧️ The rain has begun! The cats perform their mystical concentric rain dance! 🌀🐾' });
+  }
+
+  private endRainDance(playDone = true): void {
+    if (!this.isRainDanceActive) return;
+    this.isRainDanceActive = false;
+    sound.stopRainMusic(playDone);
+
+    const participatingSprites = Array.from(this.catSprites.values()).filter((s) => s.active);
+    const catCount = participatingSprites.length;
+    const starsEarned = catCount * 10;
+
+    for (const sprite of participatingSprites) {
+      sprite.endRainDance();
+      sprite.cat.fun = Math.min(100, sprite.cat.fun + 30);
+      sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 20);
+      sprite.showEmote('⭐');
+      sprite.refreshVisuals();
+      if (playDone) {
+        this.spawnCatStarsBurst(sprite.x, sprite.y);
+      }
+    }
+
+    if (playDone) {
+      if (starsEarned > 0) {
+        this.milestones.addTokens(starsEarned);
+      }
+      this.love.add(25);
+      this.state.totalLoveEarned += 25;
+      EventBus.emit('love-changed', { love: this.love.love });
+      EventBus.emit('toast', { message: `✨ The rain ritual concludes! ${catCount} cats earned you +${starsEarned} ⭐ Stars! (+25 💗)` });
+      this.spawnCelebrationConfetti();
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+    }
+  }
+
+  private stopAnyConflictingRhythm(): void {
+    if (this.isCongaParadeActive) {
+      this.isCongaParadeActive = false;
+      sound.stopCongaMusic();
+    }
+    if (this.isRainDanceActive) {
+      this.isRainDanceActive = false;
+      sound.stopRainMusic(false);
+    }
+    if (this.isDanceFormationActive) {
+      this.endAnyActiveDance(false);
+    }
+    sound.stopRitualMusic(false);
+  }
+
+  private startSnowflakeMandalaDance(isConsumable = true): void {
+    const sprites = Array.from(this.catSprites.values()).filter((s) => s.active && !s.isCurrentlyDragged());
+    if (sprites.length < 2) return;
+
+    this.stopAnyConflictingRhythm();
+    this.isDanceFormationActive = true;
+    this.activeDanceFormation = 'snowflake';
+
+    const bounds = this.areaRenderer.walkableBounds(this.currentArea);
+    const cx = bounds.centerX;
+    const cy = bounds.centerY;
+    const maxRadius = Math.max(70, Math.min(bounds.width, bounds.height) / 2 - 35);
+
+    // 6 symmetrical snowflake arms
+    sprites.forEach((sprite, index) => {
+      const arm = index % 6;
+      const armAngle = arm * (Math.PI / 3);
+      const slot = Math.floor(index / 6);
+      const dist = Math.min(maxRadius, 55 + slot * 35);
+      sprite.startSnowflakeDance(cx, cy, armAngle, dist);
+    });
+
+    // Play snow.mp3 as dedicated BGM matching dance duration
+    const duration = sound.startRitualMusic('snow.mp3', () => {
+      if (this.isDanceFormationActive) {
+        this.endAnyActiveDance(true);
+      }
+    });
+    this.danceFormationDuration = duration;
+
+    this.spawnCelebrationConfetti();
+    EventBus.emit('toast', {
+      message: isConsumable
+        ? '❄️ The Snowflake Crystal glows! The cats perform a breathing Snowflake Mandala Dance! ❄️✨'
+        : '❄️ Snow is falling! The cats form a mystical Snowflake Mandala! ❄️🐾',
+    });
+  }
+
+  private startHeartFormationDance(): void {
+    const sprites = Array.from(this.catSprites.values()).filter((s) => s.active && !s.isCurrentlyDragged());
+    if (sprites.length < 2) return;
+
+    this.stopAnyConflictingRhythm();
+    this.isDanceFormationActive = true;
+    this.activeDanceFormation = 'heart';
+
+    const bounds = this.areaRenderer.walkableBounds(this.currentArea);
+    const cx = bounds.centerX;
+    const cy = bounds.centerY;
+
+    // Distribute evenly along cardioid curve
+    const n = sprites.length;
+    sprites.forEach((sprite, index) => {
+      const u = (index / n) * Math.PI * 2;
+      sprite.startHeartFormation(cx, cy, u);
+    });
+
+    // Play love.mp3 as dedicated BGM matching dance duration
+    const duration = sound.startRitualMusic('love.mp3', () => {
+      if (this.isDanceFormationActive) {
+        this.endAnyActiveDance(true);
+      }
+    });
+    this.danceFormationDuration = duration;
+
+    this.spawnCelebrationConfetti();
+    EventBus.emit('toast', {
+      message: '💖 The Catnip Heart Wand pulses! All cats unite in a giant pulsating Heart Formation! 🐾💕',
+    });
+  }
+
+  private startInfinityLoopDance(): void {
+    const sprites = Array.from(this.catSprites.values()).filter((s) => s.active && !s.isCurrentlyDragged());
+    if (sprites.length < 2) return;
+
+    this.stopAnyConflictingRhythm();
+    this.isDanceFormationActive = true;
+    this.activeDanceFormation = 'infinity';
+
+    const bounds = this.areaRenderer.walkableBounds(this.currentArea);
+    const cx = bounds.centerX;
+    const cy = bounds.centerY;
+
+    const n = sprites.length;
+    const evenCount = Math.ceil(n / 2);
+    const oddCount = Math.max(1, Math.floor(n / 2));
+
+    sprites.forEach((sprite, index) => {
+      const isOffsetStream = index % 2 === 1;
+      if (!isOffsetStream) {
+        // Stream A: Forward loop (speed +1.9, slight tilt -0.12 rad)
+        const evenIndex = Math.floor(index / 2);
+        const u0 = (evenIndex / evenCount) * Math.PI * 2;
+        sprite.startInfinityLoop(cx, cy, u0, 1.9, -0.12);
+      } else {
+        // Stream B: Offset Counter-running loop (speed -1.9, counter tilt +0.12 rad)
+        const oddIndex = Math.floor(index / 2);
+        const u0 = (oddIndex / oddCount) * Math.PI * 2;
+        sprite.startInfinityLoop(cx, cy, u0, -1.9, 0.12);
+      }
+    });
+
+    // Play infinity.mp3 as dedicated BGM matching dance duration
+    const duration = sound.startRitualMusic('infinity.mp3', () => {
+      if (this.isDanceFormationActive) {
+        this.endAnyActiveDance(true);
+      }
+    });
+    this.danceFormationDuration = duration;
+
+    EventBus.emit('toast', {
+      message: '♾️ The Infinity Metronome ticks! The cats race in dual offset counter-running Figure-8 Loops! ⚡🐾',
+    });
+  }
+
+  private startSunsetSpiralDance(isConsumable = true): void {
+    const sprites = Array.from(this.catSprites.values()).filter((s) => s.active && !s.isCurrentlyDragged());
+    if (sprites.length < 2) return;
+
+    this.stopAnyConflictingRhythm();
+    this.isDanceFormationActive = true;
+    this.activeDanceFormation = 'sunset';
+
+    const bounds = this.areaRenderer.walkableBounds(this.currentArea);
+    const cx = bounds.centerX;
+    const cy = bounds.centerY;
+    const maxRadius = Math.max(70, Math.min(bounds.width, bounds.height) / 2 - 35);
+
+    const n = sprites.length;
+    sprites.forEach((sprite, index) => {
+      const r = 40 + (index / Math.max(1, n - 1)) * (maxRadius - 40);
+      const baseAngle = (index / n) * Math.PI * 2.5;
+      const omega = 0.9;
+      sprite.startSunsetSpiral(cx, cy, r, baseAngle, omega);
+    });
+
+    // Play sun.mp3 as dedicated BGM matching dance duration
+    const duration = sound.startRitualMusic('sun.mp3', () => {
+      if (this.isDanceFormationActive) {
+        this.endAnyActiveDance(true);
+      }
+    });
+    this.danceFormationDuration = duration;
+
+    EventBus.emit('toast', {
+      message: isConsumable
+        ? '🌅 The Solar Prism radiates golden light! The cats weave a Fibonacci Golden Spiral! 🌅✨'
+        : '🌅 The golden hour begins! The cats form a harmonious Sunset Spiral! 🌇🎶',
+    });
+  }
+
+  private startCatConstellationDance(): void {
+    const sprites = Array.from(this.catSprites.values()).filter((s) => s.active && !s.isCurrentlyDragged());
+    if (sprites.length < 2) return;
+
+    this.stopAnyConflictingRhythm();
+    this.isDanceFormationActive = true;
+    this.activeDanceFormation = 'constellation';
+
+    const bounds = this.areaRenderer.walkableBounds(this.currentArea);
+    const cx = bounds.centerX;
+    const cy = bounds.centerY;
+
+    // Scale giant cat face to span 82% of the walkable room
+    const scale = Math.min((bounds.width * 0.82) / 115, (bounds.height * 0.82) / 115);
+
+    // Landmark positions corresponding to the pointed-ear & curved-cheek cat head silhouette:
+    const baseLandmarks = [
+      { x: -48, y: -44, emote: '👂' }, // Left Ear Tip
+      { x: 48, y: -44, emote: '👂' },  // Right Ear Tip
+      { x: -20, y: 7, emote: '👀' },   // Left Eye
+      { x: 20, y: 7, emote: '👀' },    // Right Eye
+      { x: 0, y: 55, emote: '🐾' },    // Bottom Chin Center
+      { x: -55, y: 8, emote: '✨' },   // Left Cheek Apex
+      { x: 55, y: 8, emote: '✨' },    // Right Cheek Apex
+      { x: -28, y: -30, emote: '⭐' }, // Left Ear Inner Slope
+      { x: 28, y: -30, emote: '⭐' },  // Right Ear Inner Slope
+      { x: 0, y: -33, emote: '👑' },   // Forehead Crown Center
+      { x: -50, y: -18, emote: '🌟' }, // Left Ear Outer Wall
+      { x: 50, y: -18, emote: '🌟' },  // Right Ear Outer Wall
+      { x: -38, y: 35, emote: '🐱' },  // Left Lower Jaw
+      { x: 38, y: 35, emote: '🐱' },   // Right Lower Jaw
+      { x: 0, y: 22, emote: '💖' },    // Nose Tip & Muzzle
+      { x: -21, y: 49, emote: '✨' },  // Bottom Left Chin Curve
+      { x: 21, y: 49, emote: '✨' },   // Bottom Right Chin Curve
+    ];
+
+    sprites.forEach((sprite, index) => {
+      const landmark = baseLandmarks[index % baseLandmarks.length];
+      const targetX = cx + landmark.x * scale;
+      const targetY = cy + landmark.y * scale;
+      sprite.startConstellationFormation(targetX, targetY, landmark.emote);
+    });
+
+    // Play cat.mp3 as dedicated BGM matching dance duration
+    const duration = sound.startRitualMusic('cat.mp3', () => {
+      if (this.isDanceFormationActive) {
+        this.endAnyActiveDance(true);
+      }
+    });
+    this.danceFormationDuration = duration;
+
+    this.spawnCelebrationConfetti();
+    EventBus.emit('toast', {
+      message: '🐱 The Star Compass points skyward! The cats outline a Giant Cat Constellation! 🌟🔮🐾',
+    });
+  }
+
+  private endAnyActiveDance(playDone = true): void {
+    if (!this.isDanceFormationActive) return;
+    const danceName =
+      this.activeDanceFormation === 'snowflake' ? 'Snowflake Mandala' :
+      this.activeDanceFormation === 'heart' ? 'Heart Formation' :
+      this.activeDanceFormation === 'infinity' ? 'Infinity Loop' :
+      this.activeDanceFormation === 'sunset' ? 'Sunset Spiral' :
+      this.activeDanceFormation === 'constellation' ? 'Cat Constellation' : 'Dance Ritual';
+
+    this.isDanceFormationActive = false;
+    this.activeDanceFormation = 'none';
+    sound.stopRitualMusic(playDone);
+
+    const participatingSprites = Array.from(this.catSprites.values()).filter((s) => s.active);
+    const catCount = participatingSprites.length;
+    const starsEarned = catCount * 10;
+
+    for (const sprite of participatingSprites) {
+      sprite.endActiveDance();
+      sprite.cat.fun = Math.min(100, sprite.cat.fun + 35);
+      sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 25);
+      sprite.showEmote('⭐');
+      sprite.refreshVisuals();
+      if (playDone) {
+        this.spawnCatStarsBurst(sprite.x, sprite.y);
+      }
+    }
+
+    if (playDone) {
+      if (starsEarned > 0) {
+        this.milestones.addTokens(starsEarned);
+      }
+      this.love.add(35);
+      this.state.totalLoveEarned += 35;
+      EventBus.emit('love-changed', { love: this.love.love });
+      EventBus.emit('toast', { message: `✨ The ${danceName} concludes! ${catCount} cats earned you +${starsEarned} ⭐ Stars! (+35 💗)` });
+      this.spawnCelebrationConfetti();
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+    }
+  }
+
+  getActiveDanceFormation(): string {
+    return this.activeDanceFormation;
   }
 }

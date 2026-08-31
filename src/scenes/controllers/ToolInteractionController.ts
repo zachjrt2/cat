@@ -118,7 +118,7 @@ export class ToolInteractionController {
       }
     }
 
-     if (this.selectedTool === 'wash') {
+    if (this.selectedTool === 'wash') {
       if (!this.washBrushFollower) {
         const container = this.scene.add.container(400, 300);
         container.setDepth(99999);
@@ -173,46 +173,13 @@ export class ToolInteractionController {
         container.add(gfx);
         container.setScale(1.2);
         this.washBrushFollower = container;
-
-        this.createWashBrushFollower();
       }
-      this.washBrushFollower?.setVisible(true);
-    } else if (this.washBrushFollower) {
-      this.washBrushFollower.setVisible(false);
+      this.washBrushFollower.setVisible(true);
+    } else {
+      if (this.washBrushFollower) {
+        this.washBrushFollower.setVisible(false);
+      }
     }
-  }
-
-  private createWashBrushFollower(): void {
-    if (this.washBrushFollower) return;
-    this.washBrushFollower = this.scene.add.container(0, 0);
-    this.washBrushFollower.setDepth(99999);
-    this.washBrushFollower.setVisible(false);
-
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(0x78350f, 0.95);
-    bg.fillRoundedRect(-22, -10, 44, 16, 4);
-
-    bg.fillStyle(0x92400e, 0.9);
-    bg.fillRoundedRect(-14, -17, 28, 9, 3);
-    bg.fillStyle(0xb45309, 0.9);
-    bg.fillRoundedRect(-11, -15, 22, 5, 2);
-
-    bg.fillStyle(0xfef08a, 0.95);
-    bg.fillRoundedRect(-20, 6, 40, 9, 2);
-
-    bg.fillStyle(0x451a03, 0.35);
-    for (let bx = -16; bx <= 16; bx += 5) {
-      bg.fillRect(bx, 6, 1.5, 9);
-    }
-
-    bg.fillStyle(0xffffff, 0.85);
-    bg.fillCircle(-12, -4, 4);
-    bg.fillCircle(10, -5, 3.5);
-    bg.fillCircle(0, -6, 5);
-    bg.fillCircle(14, 5, 3);
-    bg.fillCircle(-15, 6, 3.5);
-
-    this.washBrushFollower.add(bg);
   }
 
   getSelectedTool(): ToolType | null {
@@ -251,12 +218,16 @@ export class ToolInteractionController {
     this.isPointerDown = pointer.isDown;
 
     if (this.washBrushFollower) {
-      this.washBrushFollower.setVisible(true);
-      this.washBrushFollower.setPosition(pointer.worldX, pointer.worldY);
-      if (pointer.isDown || Math.hypot(pointer.velocity.x, pointer.velocity.y) > 15) {
-        this.washBrushFollower.rotation = Math.sin(animTimer * 16) * 0.22;
+      if (this.selectedTool === 'wash') {
+        this.washBrushFollower.setVisible(true);
+        this.washBrushFollower.setPosition(pointer.worldX, pointer.worldY);
+        if (pointer.isDown || Math.hypot(pointer.velocity.x, pointer.velocity.y) > 15) {
+          this.washBrushFollower.rotation = Math.sin(animTimer * 16) * 0.22;
+        } else {
+          this.washBrushFollower.rotation = 0;
+        }
       } else {
-        this.washBrushFollower.rotation = 0;
+        this.washBrushFollower.setVisible(false);
       }
     }
   }

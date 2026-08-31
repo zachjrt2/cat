@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { Cat, LifeStage, ToolType } from '../data/types';
+import type { Cat, CatAnimationState, LifeStage, ToolType } from '../data/types';
 import { shouldFallAsleep, shouldWakeUp } from '../systems/NeedsSystem';
 import { sound } from '../systems/SoundManager';
 import { MUTATION_CATALOG } from '../data/mutations';
@@ -226,6 +226,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private targetFurnitureId: string | null = null;
   private followingAdultSprite: CatSprite | null = null;
   private followLeaderTimer = 0;
+  private isFollowingWalking = false;
+  private followOffsetX = 0;
+  private followOffsetY = 0;
   private biscuitPuffTimer = 0;
   private otherSpritesProvider: (() => CatSprite[]) | null = null;
   private machineUseCallback: ((cat: Cat, machineId: string) => void) | null = null;
@@ -248,6 +251,30 @@ export class CatSprite extends Phaser.GameObjects.Container {
   private congaWaypointIndex = 0;
   private congaFollowTarget: CatSprite | null = null;
   private congaEmoteTimer = 0;
+
+  // Concentric Circles Rain Ritual Event
+  private isRainDanceActive = false;
+  private rainDanceCenterX = 0;
+  private rainDanceCenterY = 0;
+  private rainDanceRadius = 0;
+  private rainDanceAngle = 0;
+  private rainDanceDirection = 1; // +1 = CW, -1 = CCW
+  private rainDanceOmega = 1.0;
+  private rainDanceEmoteTimer = 0;
+
+  // Unified Ritual & Consumable Dances
+  private activeDanceType: 'none' | 'snowflake' | 'heart' | 'infinity' | 'sunset' | 'constellation' = 'none';
+  private danceCenterX = 0;
+  private danceCenterY = 0;
+  private danceTargetX = 0;
+  private danceTargetY = 0;
+  private danceRadius = 0;
+  private danceAngle = 0;
+  private danceParamU = 0;
+  private danceParamSpeed = 1.0;
+  private danceInfinityTilt = 0;
+  private danceElapsedTime = 0;
+  private danceEmoteTimer = 0;
 
   // Autonomous Wash Fleeing
   private brushFleeTarget: Phaser.Math.Vector2 | null = null;
@@ -875,9 +902,9 @@ export class CatSprite extends Phaser.GameObjects.Container {
     this.isAmbushing = false;
     this.isZoomieTornado = false;
     this.isPouncing = false;
-    this.congaEmoteTimer = 0.8 + Math.random() * 1.5;
+    this.congaEmoteTimer = 0.6 + Math.random() * 1.2;
 
-    this.cat.animationState = 'walk';
+    this.cat.animationState = 'run';
     this.playCurrentAnimation();
     this.showEmote('👑');
   }
@@ -887,14 +914,18 @@ export class CatSprite extends Phaser.GameObjects.Container {
     this.isCongaLeader = false;
     this.congaFollowTarget = leaderCat;
     this.followingAdultSprite = leaderCat;
+    this.followLeaderTimer = 9999;
+    this.followOffsetX = Phaser.Math.Between(-18, 18);
+    this.followOffsetY = Phaser.Math.Between(-14, 14);
+    this.isFollowingWalking = false;
     this.wanderTarget = null;
     this.chaseTarget = null;
     this.isAmbushing = false;
     this.isZoomieTornado = false;
     this.isPouncing = false;
-    this.congaEmoteTimer = 1.2 + Math.random() * 2.5;
+    this.congaEmoteTimer = 1.0 + Math.random() * 2.0;
 
-    this.cat.animationState = 'walk';
+    this.cat.animationState = 'run';
     this.playCurrentAnimation();
     this.showEmote('🐾');
   }
@@ -913,6 +944,156 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
   isCongaActive(): boolean {
     return this.isCongaParadeActive;
+  }
+
+  startRainDance(cx: number, cy: number, radius: number, initialAngle: number, direction: number, omega: number): void {
+    this.isRainDanceActive = true;
+    this.isCongaParadeActive = false;
+    this.isCongaLeader = false;
+    this.congaFollowTarget = null;
+    this.followingAdultSprite = null;
+    this.wanderTarget = null;
+    this.chaseTarget = null;
+    this.chasingCatSprite = null;
+    this.fleeingFromCatSprite = null;
+    this.brushFleeTarget = null;
+    this.brushFleeTimer = 0;
+    this.isAmbushing = false;
+    this.isZoomieTornado = false;
+    this.isPouncing = false;
+
+    this.rainDanceCenterX = cx;
+    this.rainDanceCenterY = cy;
+    this.rainDanceRadius = radius;
+    this.rainDanceAngle = initialAngle;
+    this.rainDanceDirection = direction;
+    this.rainDanceOmega = omega;
+    this.rainDanceEmoteTimer = 1.0 + Math.random() * 2.0;
+
+    this.cat.animationState = 'walk';
+    this.playCurrentAnimation();
+    this.showEmote('🌧️');
+  }
+
+  endRainDance(): void {
+    this.isRainDanceActive = false;
+    this.activeDanceType = 'none';
+    this.cat.animationState = 'look';
+    this.wanderTimer = 3.0 + Math.random() * 3.0;
+    this.playCurrentAnimation();
+    this.showEmote('✨');
+  }
+
+  isRainDance(): boolean {
+    return this.isRainDanceActive;
+  }
+
+  getActiveDanceType(): string {
+    return this.activeDanceType;
+  }
+
+  isAnyDanceActive(): boolean {
+    return this.isRainDanceActive || this.activeDanceType !== 'none';
+  }
+
+  /** Starts 6-pointed Snowflake Mandala Dance */
+  startSnowflakeDance(cx: number, cy: number, armAngle: number, maxDist: number): void {
+    this.resetBehavioralFlagsForDance();
+    this.activeDanceType = 'snowflake';
+    this.danceCenterX = cx;
+    this.danceCenterY = cy;
+    this.danceAngle = armAngle;
+    this.danceRadius = maxDist;
+    this.danceParamU = Math.random() * Math.PI;
+    this.danceEmoteTimer = 1.0 + Math.random() * 2.0;
+    this.cat.animationState = 'walk';
+    this.playCurrentAnimation();
+    this.showEmote('❄️');
+  }
+
+  /** Starts Parametric Heart Pulsing Formation */
+  startHeartFormation(cx: number, cy: number, u: number): void {
+    this.resetBehavioralFlagsForDance();
+    this.activeDanceType = 'heart';
+    this.danceCenterX = cx;
+    this.danceCenterY = cy;
+    this.danceAngle = u;
+    this.danceParamU = 0;
+    this.danceEmoteTimer = 0.8 + Math.random() * 2.0;
+    this.cat.animationState = 'knead';
+    this.playCurrentAnimation();
+    this.showEmote('💖');
+  }
+
+  /** Starts High-Speed Interlocking Figure-8 Infinity Loop with optional tilt angle for offset counter-tracks */
+  startInfinityLoop(cx: number, cy: number, u0: number, speed: number, tiltAngle = 0): void {
+    this.resetBehavioralFlagsForDance();
+    this.activeDanceType = 'infinity';
+    this.danceCenterX = cx;
+    this.danceCenterY = cy;
+    this.danceParamU = u0;
+    this.danceParamSpeed = speed;
+    this.danceInfinityTilt = tiltAngle;
+    this.danceElapsedTime = 0;
+    this.danceEmoteTimer = 0.6 + Math.random() * 2.0;
+    this.cat.animationState = 'run';
+    this.playCurrentAnimation();
+    this.showEmote('♾️');
+  }
+
+  /** Starts Archimedean Fibonacci Sunset Spiral that tightens dynamically inward over the song duration */
+  startSunsetSpiral(cx: number, cy: number, radius: number, baseAngle: number, omega: number): void {
+    this.resetBehavioralFlagsForDance();
+    this.activeDanceType = 'sunset';
+    this.danceCenterX = cx;
+    this.danceCenterY = cy;
+    this.danceRadius = radius;
+    this.danceAngle = baseAngle;
+    this.danceParamSpeed = omega;
+    this.danceParamU = 0;
+    this.danceElapsedTime = 0;
+    this.danceEmoteTimer = 1.0 + Math.random() * 2.5;
+    this.cat.animationState = 'walk';
+    this.playCurrentAnimation();
+    this.showEmote('🌅');
+  }
+
+  /** Starts Giant Cat Floor Constellation */
+  startConstellationFormation(targetX: number, targetY: number, emote = '🌟'): void {
+    this.resetBehavioralFlagsForDance();
+    this.activeDanceType = 'constellation';
+    this.danceTargetX = targetX;
+    this.danceTargetY = targetY;
+    this.danceEmoteTimer = 1.0 + Math.random() * 2.5;
+    this.cat.animationState = 'walk';
+    this.playCurrentAnimation();
+    this.showEmote(emote);
+  }
+
+  endActiveDance(): void {
+    this.activeDanceType = 'none';
+    this.isRainDanceActive = false;
+    this.cat.animationState = 'look';
+    this.wanderTimer = 3.0 + Math.random() * 3.0;
+    this.playCurrentAnimation();
+    this.showEmote('✨');
+  }
+
+  private resetBehavioralFlagsForDance(): void {
+    this.isRainDanceActive = false;
+    this.isCongaParadeActive = false;
+    this.isCongaLeader = false;
+    this.congaFollowTarget = null;
+    this.followingAdultSprite = null;
+    this.wanderTarget = null;
+    this.chaseTarget = null;
+    this.chasingCatSprite = null;
+    this.fleeingFromCatSprite = null;
+    this.brushFleeTarget = null;
+    this.brushFleeTimer = 0;
+    this.isAmbushing = false;
+    this.isZoomieTornado = false;
+    this.isPouncing = false;
   }
 
   /** Called by SanctuaryScene whenever the breed cooldown state changes for this cat. */
@@ -1381,29 +1562,237 @@ export class CatSprite extends Phaser.GameObjects.Container {
     // ── Chirp cooldown tick ────────────────────────────────────────────────
     if (this.chirpCooldown > 0) this.chirpCooldown -= dt;
 
-    // ── Grand Cat Conga Line Event Processing ──────────────────────────────
+    // ── Concentric Circles Rain Ritual AI ──────────────────────────────────
+    if (this.isRainDanceActive) {
+      this.rainDanceAngle += this.rainDanceDirection * this.rainDanceOmega * dt;
+      const targetX = this.rainDanceCenterX + Math.cos(this.rainDanceAngle) * this.rainDanceRadius;
+      const targetY = this.rainDanceCenterY + Math.sin(this.rainDanceAngle) * this.rainDanceRadius;
+
+      const dx = targetX - this.x;
+      const dy = targetY - this.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > 4) {
+        const speed = Math.min(190, Math.max(75, dist * 5)) * dt;
+        this.x += (dx / dist) * speed;
+        this.y += (dy / dist) * speed;
+      } else {
+        this.x = targetX;
+        this.y = targetY;
+      }
+
+      this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
+      this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
+
+      // Tangent vector of circle along orbit direction:
+      // CW (+1): (-sin(theta), cos(theta))
+      // CCW (-1): (sin(theta), -cos(theta))
+      const tangentX = -this.rainDanceDirection * Math.sin(this.rainDanceAngle);
+      const tangentY = this.rainDanceDirection * Math.cos(this.rainDanceAngle);
+      this.currentDirection = vectorToDirection(tangentX, tangentY);
+
+      this.cat.animationState = 'walk';
+      this.playCurrentAnimation();
+
+      this.rainDanceEmoteTimer -= dt;
+      if (this.rainDanceEmoteTimer <= 0) {
+        this.rainDanceEmoteTimer = 2.5 + Math.random() * 3.0;
+        const rainEmotes = ['🌧️', '✨', '🌀', '🐾', '💧', '🔮', '😻'];
+        this.showEmote(Phaser.Math.RND.pick(rainEmotes));
+      }
+
+      this.setDepth(this.y);
+      return;
+    }
+
+    // ── Unified Dance Formations AI ────────────────────────────────────────
+    if (this.activeDanceType !== 'none') {
+      let targetX = this.x;
+      let targetY = this.y;
+      let targetAnim: CatAnimationState = 'walk';
+
+      if (this.activeDanceType === 'snowflake') {
+        this.danceParamU += dt * 1.6;
+        const pulse = 0.5 + 0.5 * Math.cos(this.danceParamU);
+        const currentDist = 35 + (this.danceRadius - 35) * pulse;
+        targetX = this.danceCenterX + Math.cos(this.danceAngle) * currentDist;
+        targetY = this.danceCenterY + Math.sin(this.danceAngle) * currentDist;
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 3) {
+          const moveSpeed = Math.min(180, Math.max(65, dist * 4)) * dt;
+          this.x += (dx / dist) * moveSpeed;
+          this.y += (dy / dist) * moveSpeed;
+          this.currentDirection = vectorToDirection(dx, dy);
+        }
+        targetAnim = pulse < 0.15 || pulse > 0.85 ? 'knead' : 'walk';
+
+        this.danceEmoteTimer -= dt;
+        if (this.danceEmoteTimer <= 0) {
+          this.danceEmoteTimer = 2.0 + Math.random() * 2.5;
+          this.showEmote(Phaser.Math.RND.pick(['❄️', '✨', '💎', '🌟', '🐾']));
+        }
+      } else if (this.activeDanceType === 'heart') {
+        this.danceParamU += dt * 3.4;
+        const u = this.danceAngle;
+        const sinU = Math.sin(u);
+        const xCardioid = 16 * sinU * sinU * sinU;
+        const yCardioid = -(13 * Math.cos(u) - 5 * Math.cos(2 * u) - 2 * Math.cos(3 * u) - Math.cos(4 * u));
+        const pulseScale = 6.8 * (1 + 0.14 * Math.sin(this.danceParamU));
+
+        targetX = this.danceCenterX + xCardioid * pulseScale;
+        targetY = this.danceCenterY + yCardioid * pulseScale;
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 4) {
+          const moveSpeed = Math.min(220, Math.max(80, dist * 5)) * dt;
+          this.x += (dx / dist) * moveSpeed;
+          this.y += (dy / dist) * moveSpeed;
+        }
+        // Face inward toward center
+        this.currentDirection = vectorToDirection(this.danceCenterX - this.x, this.danceCenterY - this.y);
+        targetAnim = 'knead';
+
+        this.danceEmoteTimer -= dt;
+        if (this.danceEmoteTimer <= 0) {
+          this.danceEmoteTimer = 1.8 + Math.random() * 2.2;
+          this.showEmote(Phaser.Math.RND.pick(['💖', '❤️', '🥰', '💕', '✨', '😻']));
+        }
+      } else if (this.activeDanceType === 'infinity') {
+        this.danceParamU += dt * this.danceParamSpeed;
+        const u = this.danceParamU;
+        const sinU = Math.sin(u);
+        const denom = 1 + sinU * sinU;
+        const A = 165;
+        const xInf = (A * Math.cos(u)) / denom;
+        const yInf = (A * sinU * Math.cos(u)) / denom;
+
+        // Apply tilt / offset rotation to support dual interlocking tracks
+        const cosTilt = Math.cos(this.danceInfinityTilt);
+        const sinTilt = Math.sin(this.danceInfinityTilt);
+        const rotX = xInf * cosTilt - yInf * sinTilt;
+        const rotY = xInf * sinTilt + yInf * cosTilt;
+
+        targetX = this.danceCenterX + rotX;
+        targetY = this.danceCenterY + rotY;
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 4) {
+          const moveSpeed = Math.min(300, Math.max(120, dist * 6)) * dt;
+          this.x += (dx / dist) * moveSpeed;
+          this.y += (dy / dist) * moveSpeed;
+        }
+
+        // Derivative tangent vector along travel direction for velocity facing
+        const uNext = u + (this.danceParamSpeed >= 0 ? 0.06 : -0.06);
+        const sinNext = Math.sin(uNext);
+        const denomNext = 1 + sinNext * sinNext;
+        const xNext = (A * Math.cos(uNext)) / denomNext;
+        const yNext = (A * sinNext * Math.cos(uNext)) / denomNext;
+        const rotNextX = xNext * cosTilt - yNext * sinTilt;
+        const rotNextY = xNext * sinTilt + yNext * cosTilt;
+        this.currentDirection = vectorToDirection(rotNextX - rotX, rotNextY - rotY);
+        targetAnim = 'run';
+
+        this.danceEmoteTimer -= dt;
+        if (this.danceEmoteTimer <= 0) {
+          this.danceEmoteTimer = 1.5 + Math.random() * 2.0;
+          this.showEmote(Phaser.Math.RND.pick(['♾️', '⚡', '🐾', '💨', '✨', '😸']));
+        }
+      } else if (this.activeDanceType === 'sunset') {
+        this.danceElapsedTime += dt;
+        // Dynamically tighten spiral radius over 18s duration (from 100% down to 26% of initial radius)
+        const progress = Math.min(1, this.danceElapsedTime / 18.0);
+        const tightenFactor = Math.max(0.26, 1.0 - progress * 0.74);
+        const currentRadius = this.danceRadius * tightenFactor;
+
+        // Angular acceleration as radius tightens (vortex spin effect)
+        const speedMultiplier = 1.0 + progress * 0.95;
+        this.danceParamU += dt * this.danceParamSpeed * speedMultiplier;
+        const angle = this.danceAngle + this.danceParamU;
+
+        targetX = this.danceCenterX + Math.cos(angle) * currentRadius;
+        targetY = this.danceCenterY + Math.sin(angle) * currentRadius;
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 3) {
+          const moveSpeed = Math.min(210, Math.max(75, dist * 5)) * dt;
+          this.x += (dx / dist) * moveSpeed;
+          this.y += (dy / dist) * moveSpeed;
+        }
+        // Tangent facing
+        this.currentDirection = vectorToDirection(-Math.sin(angle), Math.cos(angle));
+        targetAnim = 'walk';
+
+        this.danceEmoteTimer -= dt;
+        if (this.danceEmoteTimer <= 0) {
+          this.danceEmoteTimer = 2.0 + Math.random() * 2.5;
+          this.showEmote(Phaser.Math.RND.pick(['🌅', '🎶', '✨', '⭐', '💫', '🧡']));
+        }
+      } else if (this.activeDanceType === 'constellation') {
+        targetX = this.danceTargetX;
+        targetY = this.danceTargetY;
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 5) {
+          const moveSpeed = Math.min(200, Math.max(70, dist * 4)) * dt;
+          this.x += (dx / dist) * moveSpeed;
+          this.y += (dy / dist) * moveSpeed;
+          this.currentDirection = vectorToDirection(dx, dy);
+          targetAnim = 'walk';
+        } else {
+          this.x = targetX;
+          this.y = targetY;
+          this.currentDirection = 0; // Front facing South
+          targetAnim = 'sit';
+        }
+
+        this.danceEmoteTimer -= dt;
+        if (this.danceEmoteTimer <= 0) {
+          this.danceEmoteTimer = 2.2 + Math.random() * 2.5;
+          this.showEmote(Phaser.Math.RND.pick(['🐱', '🌟', '✨', '🔮', '😻', '⭐']));
+        }
+      }
+
+      this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
+      this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
+
+      this.cat.animationState = targetAnim;
+      this.playCurrentAnimation();
+      this.setDepth(this.y);
+      return;
+    }
+
+    // ── Grand Cat Conga Line Event Processing (Maximum Sprint Speed) ─────────
     if (this.isCongaParadeActive) {
       this.congaEmoteTimer -= dt;
       if (this.congaEmoteTimer <= 0) {
-        this.congaEmoteTimer = 2.5 + Math.random() * 3.5;
-        const emotes = ['🎵', '🎶', '🎉', '🐾', '✨', '😸', '💖'];
+        this.congaEmoteTimer = 1.8 + Math.random() * 2.2;
+        const emotes = this.isCongaLeader ? ['👑', '🎶', '⚡', '🎉', '💃', '🐾'] : ['🎵', '🎶', '🎉', '🐾', '✨', '😻', '💃'];
         this.showEmote(Phaser.Math.RND.pick(emotes));
       }
 
       if (this.isCongaLeader) {
         if (this.congaWaypoints.length > 0) {
           const target = this.congaWaypoints[this.congaWaypointIndex % this.congaWaypoints.length];
-          const dist = Math.hypot(target.x - this.x, target.y - this.y);
-          if (dist < 24) {
+          const dx = target.x - this.x;
+          const dy = target.y - this.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < 36) {
             this.congaWaypointIndex = (this.congaWaypointIndex + 1) % this.congaWaypoints.length;
           } else {
-            const marchSpeed = 74 * dt;
-            this.x += ((target.x - this.x) / dist) * marchSpeed;
-            this.y += ((target.y - this.y) / dist) * marchSpeed;
+            const sprintSpeed = 280 * dt; // Full-speed sprint run!
+            this.x += (dx / dist) * sprintSpeed;
+            this.y += (dy / dist) * sprintSpeed;
             this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
             this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
-            this.currentDirection = vectorToDirection(target.x - this.x, target.y - this.y);
-            this.cat.animationState = 'walk';
+            this.currentDirection = vectorToDirection(dx, dy);
+            this.cat.animationState = 'run';
             this.playCurrentAnimation();
           }
         }
@@ -1415,22 +1804,29 @@ export class CatSprite extends Phaser.GameObjects.Container {
         }
 
         if (this.congaFollowTarget) {
-          const targetX = this.congaFollowTarget.x;
-          const targetY = this.congaFollowTarget.y;
-          const dist = Math.hypot(targetX - this.x, targetY - this.y);
+          const leader = this.congaFollowTarget;
+          const dirAngle = (leader.currentDirection * 45 + 90) * Phaser.Math.DEG_TO_RAD;
+          const trailDist = this.cat.stage === 'kitten' ? 32 : 36;
+          const targetX = Phaser.Math.Clamp(leader.x - Math.cos(dirAngle) * trailDist + this.followOffsetX * 0.2, this.bounds.left + 24, this.bounds.right - 24);
+          const targetY = Phaser.Math.Clamp(leader.y - Math.sin(dirAngle) * trailDist + this.followOffsetY * 0.2, this.bounds.top + 24, this.bounds.bottom - 24);
 
-          if (dist > 24) {
-            const catchUp = dist > 60 ? 1.6 : dist > 35 ? 1.25 : 1.0;
-            const marchSpeed = 74 * catchUp * dt;
-            this.x += ((targetX - this.x) / dist) * marchSpeed;
-            this.y += ((targetY - this.y) / dist) * marchSpeed;
+          const dx = targetX - this.x;
+          const dy = targetY - this.y;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist > 8) {
+            const catchUp = dist > 90 ? 1.5 : dist > 45 ? 1.25 : 1.0;
+            const followerSpeed = Math.min(320, 280 * catchUp) * dt;
+            this.x += (dx / dist) * followerSpeed;
+            this.y += (dy / dist) * followerSpeed;
             this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
             this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
-            this.currentDirection = vectorToDirection(targetX - this.x, targetY - this.y);
-            this.cat.animationState = dist > 55 ? 'run' : 'walk';
+            this.currentDirection = vectorToDirection(dx, dy);
+            this.cat.animationState = 'run';
             this.playCurrentAnimation();
           } else {
-            this.cat.animationState = 'walk';
+            this.cat.animationState = 'run';
+            this.currentDirection = leader.currentDirection;
             this.playCurrentAnimation();
           }
         }
@@ -1804,7 +2200,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
     // ── Stationary / Resting Cat CPU Fast-Path ────────────────────────────
     const isRestingState = this.cat.animationState === 'sit' || this.cat.animationState === 'lay' || this.cat.animationState === 'knead';
-    const hasActiveDynamicGoal = this.wanderTarget || this.chasingCatSprite || this.fleeingFromCatSprite || this.followingAdultSprite || this.brushFleeTarget || this.isAmbushing || this.isZoomieTornado || this.perfumeFrenzyTimer > 0 || this.isCongaParadeActive;
+    const hasActiveDynamicGoal = this.wanderTarget || this.chasingCatSprite || this.fleeingFromCatSprite || this.followingAdultSprite || this.brushFleeTarget || this.isAmbushing || this.isZoomieTornado || this.perfumeFrenzyTimer > 0 || this.isCongaParadeActive || this.isRainDanceActive;
 
     if (isRestingState && !hasActiveDynamicGoal) {
       this.wanderTimer -= dt;
@@ -1924,39 +2320,94 @@ export class CatSprite extends Phaser.GameObjects.Container {
       }
     }
 
-    // ── Kitten Follow the Leader AI ───────────────────────────────────────
+    // ── Kitten Follow the Leader AI (Loose, Smooth, Hysteresis Connection) ─
     if (this.followingAdultSprite) {
-      if (!this.followingAdultSprite.active || this.followingAdultSprite.isCurrentlyDragged() || this.followLeaderTimer <= 0) {
+      const leader = this.followingAdultSprite;
+      if (!leader.active || leader.isCurrentlyDragged() || this.followLeaderTimer <= 0) {
         // If direct leader was following someone else, smoothly promote target to keep the parade alive!
-        const nextLeader = this.followingAdultSprite?.getFollowTarget?.();
+        const nextLeader = leader.getFollowTarget?.();
         if (nextLeader && nextLeader.active && !nextLeader.isCurrentlyDragged() && this.bounds.contains(nextLeader.x, nextLeader.y) && !nextLeader.isFollowChainAncestor(this)) {
           this.followingAdultSprite = nextLeader;
           this.followLeaderTimer = 22.0 + Math.random() * 15.0;
+          this.followOffsetX = Phaser.Math.Between(-28, 28);
+          this.followOffsetY = Phaser.Math.Between(-24, 24);
+          if (Math.abs(this.followOffsetX) < 12 && Math.abs(this.followOffsetY) < 12) {
+            this.followOffsetX = 20;
+          }
         } else {
           this.followingAdultSprite = null;
           this.followLeaderTimer = 0;
+          this.isFollowingWalking = false;
         }
       } else {
         this.followLeaderTimer -= dt;
-        const dist = Math.hypot(this.followingAdultSprite.x - this.x, this.followingAdultSprite.y - this.y);
-        const leaderMoving = this.followingAdultSprite.cat.animationState === 'walk' || this.followingAdultSprite.cat.animationState === 'run';
+        this.wanderTarget = null; // Prevent random wandering from interfering
 
-        if (dist > 28) {
-          const catchUpMult = dist > 90 ? 1.65 : dist > 55 ? 1.3 : 1.0;
-          const baseSpeed = (this.followingAdultSprite.cat.animationState === 'run' ? 88 : 52);
-          const speed = baseSpeed * catchUpMult * dt;
-          this.x += ((this.followingAdultSprite.x - this.x) / dist) * speed;
-          this.y += ((this.followingAdultSprite.y - this.y) / dist) * speed;
+        const leaderMoving = leader.cat.animationState === 'walk' || leader.cat.animationState === 'run';
+
+        // Calculate a comfortable trailing anchor position behind leader
+        let targetX: number;
+        let targetY: number;
+
+        if (leaderMoving) {
+          // Trail behind the leader's current direction
+          const dirAngle = (leader.currentDirection * 45 + 90) * Phaser.Math.DEG_TO_RAD;
+          const trailDist = this.cat.stage === 'kitten' ? 34 : 38;
+          targetX = leader.x - Math.cos(dirAngle) * trailDist + this.followOffsetX * 0.25;
+          targetY = leader.y - Math.sin(dirAngle) * trailDist + this.followOffsetY * 0.25;
+        } else {
+          // Settle naturally beside the resting leader
+          targetX = leader.x + this.followOffsetX;
+          targetY = leader.y + this.followOffsetY;
+        }
+
+        targetX = Phaser.Math.Clamp(targetX, this.bounds.left + 24, this.bounds.right - 24);
+        targetY = Phaser.Math.Clamp(targetY, this.bounds.top + 24, this.bounds.bottom - 24);
+
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const distToTarget = Math.hypot(dx, dy);
+        const distToLeader = Math.hypot(leader.x - this.x, leader.y - this.y);
+
+        // Hysteresis: start moving if pulled away (> 38px or leader moving & pulled away), stop when close (< 14px)
+        if (!this.isFollowingWalking) {
+          if (distToTarget > 38 || (leaderMoving && distToLeader > 34)) {
+            this.isFollowingWalking = true;
+          }
+        } else {
+          if (distToTarget < 14) {
+            this.isFollowingWalking = false;
+          }
+        }
+
+        if (this.isFollowingWalking && distToTarget > 3) {
+          const catchUpMult = distToTarget > 90 ? 1.5 : distToTarget > 45 ? 1.25 : 1.0;
+          const baseSpeed = (this.isCongaParadeActive || leader.cat.animationState === 'run') ? 245 : 50;
+          const speed = Math.min(270, Math.max(30, baseSpeed * catchUpMult)) * dt;
+
+          this.x += (dx / distToTarget) * speed;
+          this.y += (dy / distToTarget) * speed;
           this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
           this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
-          this.currentDirection = vectorToDirection(this.followingAdultSprite.x - this.x, this.followingAdultSprite.y - this.y);
-          this.cat.animationState = (this.followingAdultSprite.cat.animationState === 'run' || dist > 70) ? 'run' : 'walk';
+
+          // Direction deadband: only update direction if movement is clear to prevent flipping
+          if (distToTarget > 8) {
+            this.currentDirection = vectorToDirection(dx, dy);
+          }
+          this.cat.animationState = (this.isCongaParadeActive || leader.cat.animationState === 'run' || distToTarget > 70) ? 'run' : 'walk';
           this.playCurrentAnimation();
-          this.setDepth(this.y);
-          return;
+
+          if (this.isCongaParadeActive) {
+            this.congaEmoteTimer -= dt;
+            if (this.congaEmoteTimer <= 0) {
+              this.congaEmoteTimer = 2.5 + Math.random() * 3.0;
+              this.showEmote(Phaser.Math.RND.pick(['🎶', '🐾', '🎉', '😻', '💃', '✨']));
+            }
+          }
         } else {
+          // Stationary in loose comfort zone
           if (!leaderMoving) {
-            const leaderState = this.followingAdultSprite.cat.animationState;
+            const leaderState = leader.cat.animationState;
             if (leaderState === 'knead' && Math.random() < 0.01) {
               this.triggerKneadBiscuits(4.0);
             } else if (leaderState === 'lay' || leaderState === 'sleep') {
@@ -1966,8 +2417,21 @@ export class CatSprite extends Phaser.GameObjects.Container {
               this.cat.animationState = 'sit';
               this.playCurrentAnimation();
             }
+            // Gentle orientation towards leader without twitching
+            if (distToLeader > 16) {
+              this.currentDirection = vectorToDirection(leader.x - this.x, leader.y - this.y);
+              this.playCurrentAnimation();
+            }
+          } else {
+            // Leader just started moving or is close: walk along in same direction
+            this.cat.animationState = 'walk';
+            this.currentDirection = leader.currentDirection;
+            this.playCurrentAnimation();
           }
         }
+
+        this.setDepth(this.y);
+        return;
       }
     }
 
@@ -2401,6 +2865,12 @@ export class CatSprite extends Phaser.GameObjects.Container {
       if (chosenLeader) {
         this.followingAdultSprite = chosenLeader;
         this.followLeaderTimer = 30.0 + Math.random() * 25.0;
+        this.followOffsetX = Phaser.Math.Between(-28, 28);
+        this.followOffsetY = Phaser.Math.Between(-24, 24);
+        if (Math.abs(this.followOffsetX) < 12 && Math.abs(this.followOffsetY) < 12) {
+          this.followOffsetX = 20;
+        }
+        this.isFollowingWalking = false;
         this.wanderTarget = null;
         this.showEmote('🐾');
         return;

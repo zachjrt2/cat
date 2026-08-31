@@ -1,5 +1,18 @@
 import type { Cat, CatArea, FenceLayout, Milestone, SanctuaryArea } from '../../data/types';
-import { AREA_INFO_MAP, AUTOMATION_CATALOG, FURNITURE_CATALOG, OFFLINE_STAR_UPGRADES, getAreaCapacityUpgradeCost, CAT_PERFUME_COST } from '../../data/constants';
+import {
+  AREA_INFO_MAP,
+  AUTOMATION_CATALOG,
+  FURNITURE_CATALOG,
+  OFFLINE_STAR_UPGRADES,
+  getAreaCapacityUpgradeCost,
+  CAT_PERFUME_COST,
+  CONGA_WHISTLE_COST,
+  SNOWFLAKE_WAND_COST,
+  HEART_WAND_COST,
+  INFINITY_METRONOME_COST,
+  SOLAR_PRISM_COST,
+  STAR_COMPASS_COST,
+} from '../../data/constants';
 import { SVG_ICONS } from '../icons';
 import { sound } from '../../systems/SoundManager';
 import { EventBus } from '../EventBus';
@@ -29,6 +42,12 @@ export interface ShopModalData {
   milestones: Milestone[];
   offlineStarLevel: number;
   catPerfumeCount: number;
+  congaWhistleCount?: number;
+  snowflakeWandCount?: number;
+  heartWandCount?: number;
+  infinityMetronomeCount?: number;
+  solarPrismCount?: number;
+  starCompassCount?: number;
   fenceLayout: FenceLayout;
 }
 
@@ -125,6 +144,10 @@ export class ShopModal {
 
       modal.querySelectorAll<HTMLButtonElement>('.buy-perfume-btn').forEach((btn) => {
         btn.disabled = data.love < CAT_PERFUME_COST;
+      });
+
+      modal.querySelectorAll<HTMLButtonElement>('.buy-conga-whistle-btn').forEach((btn) => {
+        btn.disabled = data.love < CONGA_WHISTLE_COST;
       });
     };
 
@@ -384,6 +407,132 @@ export class ShopModal {
             btn.innerHTML = `📦 Delivering...`;
             (btn as HTMLButtonElement).disabled = true;
             EventBus.emit('buy-cat-perfume', {});
+            setTimeout(() => {
+              btn.classList.remove('delivering-btn');
+              btn.innerHTML = prevText;
+              updateButtonAffordability();
+            }, 350);
+          }
+        });
+      });
+
+      // Bind Buy Party Whistle button
+      modal.querySelectorAll('.buy-conga-whistle-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (data.love >= CONGA_WHISTLE_COST) {
+            data.love -= CONGA_WHISTLE_COST;
+            updateBalances();
+            updateButtonAffordability();
+            const prevText = btn.innerHTML;
+            btn.classList.add('delivering-btn');
+            btn.innerHTML = `📦 Delivering...`;
+            (btn as HTMLButtonElement).disabled = true;
+            EventBus.emit('buy-conga-whistle', {});
+            setTimeout(() => {
+              btn.classList.remove('delivering-btn');
+              btn.innerHTML = prevText;
+              updateButtonAffordability();
+            }, 350);
+          }
+        });
+      });
+
+      // Bind Buy Snowflake Crystal button
+      modal.querySelectorAll('.buy-snowflake-wand-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (data.love >= SNOWFLAKE_WAND_COST) {
+            data.love -= SNOWFLAKE_WAND_COST;
+            updateBalances();
+            updateButtonAffordability();
+            const prevText = btn.innerHTML;
+            btn.classList.add('delivering-btn');
+            btn.innerHTML = `📦 Delivering...`;
+            (btn as HTMLButtonElement).disabled = true;
+            EventBus.emit('buy-snowflake-wand', {});
+            setTimeout(() => {
+              btn.classList.remove('delivering-btn');
+              btn.innerHTML = prevText;
+              updateButtonAffordability();
+            }, 350);
+          }
+        });
+      });
+
+      // Bind Buy Catnip Heart Wand button
+      modal.querySelectorAll('.buy-heart-wand-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (data.love >= HEART_WAND_COST) {
+            data.love -= HEART_WAND_COST;
+            updateBalances();
+            updateButtonAffordability();
+            const prevText = btn.innerHTML;
+            btn.classList.add('delivering-btn');
+            btn.innerHTML = `📦 Delivering...`;
+            (btn as HTMLButtonElement).disabled = true;
+            EventBus.emit('buy-heart-wand', {});
+            setTimeout(() => {
+              btn.classList.remove('delivering-btn');
+              btn.innerHTML = prevText;
+              updateButtonAffordability();
+            }, 350);
+          }
+        });
+      });
+
+      // Bind Buy Infinity Metronome button
+      modal.querySelectorAll('.buy-infinity-metronome-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (data.love >= INFINITY_METRONOME_COST) {
+            data.love -= INFINITY_METRONOME_COST;
+            updateBalances();
+            updateButtonAffordability();
+            const prevText = btn.innerHTML;
+            btn.classList.add('delivering-btn');
+            btn.innerHTML = `📦 Delivering...`;
+            (btn as HTMLButtonElement).disabled = true;
+            EventBus.emit('buy-infinity-metronome', {});
+            setTimeout(() => {
+              btn.classList.remove('delivering-btn');
+              btn.innerHTML = prevText;
+              updateButtonAffordability();
+            }, 350);
+          }
+        });
+      });
+
+      // Bind Buy Solar Prism button
+      modal.querySelectorAll('.buy-solar-prism-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (data.love >= SOLAR_PRISM_COST) {
+            data.love -= SOLAR_PRISM_COST;
+            updateBalances();
+            updateButtonAffordability();
+            const prevText = btn.innerHTML;
+            btn.classList.add('delivering-btn');
+            btn.innerHTML = `📦 Delivering...`;
+            (btn as HTMLButtonElement).disabled = true;
+            EventBus.emit('buy-solar-prism', {});
+            setTimeout(() => {
+              btn.classList.remove('delivering-btn');
+              btn.innerHTML = prevText;
+              updateButtonAffordability();
+            }, 350);
+          }
+        });
+      });
+
+      // Bind Buy Star Compass button
+      modal.querySelectorAll('.buy-star-compass-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (data.love >= STAR_COMPASS_COST) {
+            data.love -= STAR_COMPASS_COST;
+            updateBalances();
+            updateButtonAffordability();
+            const prevText = btn.innerHTML;
+            btn.classList.add('delivering-btn');
+            btn.innerHTML = `📦 Delivering...`;
+            (btn as HTMLButtonElement).disabled = true;
+            EventBus.emit('buy-star-compass', {});
             setTimeout(() => {
               btn.classList.remove('delivering-btn');
               btn.innerHTML = prevText;
@@ -653,6 +802,102 @@ export class ShopModal {
         <div class="machine-action-wrap">
           <button class="shop-action-btn buy-perfume-btn" ${data.love < CAT_PERFUME_COST ? 'disabled' : ''}>
             Buy (${CAT_PERFUME_COST} 💗)
+          </button>
+        </div>
+      </div>
+
+      <!-- Consumable: Party Whistle -->
+      <div class="shop-card" style="margin-top:10px;border-left: 4px solid #8b5cf6;">
+        <div class="shop-card-info">
+          <div class="machine-title-row">
+            <h3><span class="svg-inline">${SVG_ICONS.whistle}</span> Party Whistle</h3>
+            <span class="unlocked-badge" style="background:#ede9fe;color:#6d28d9;font-weight:bold;">Stock: <b>${data.congaWhistleCount ?? 0}</b></span>
+          </div>
+          <p>Blow the festive party whistle to summon all sanctuary cats into an instant Grand Conga Line! 🐾🎶</p>
+        </div>
+        <div class="machine-action-wrap">
+          <button class="shop-action-btn buy-conga-whistle-btn" ${data.love < CONGA_WHISTLE_COST ? 'disabled' : ''}>
+            Buy (${CONGA_WHISTLE_COST} 💗)
+          </button>
+        </div>
+      </div>
+
+      <!-- Consumable: Snowflake Crystal -->
+      <div class="shop-card" style="margin-top:10px;border-left: 4px solid #38bdf8;">
+        <div class="shop-card-info">
+          <div class="machine-title-row">
+            <h3><span class="svg-inline">${SVG_ICONS.snowflakeWand}</span> Snowflake Crystal</h3>
+            <span class="unlocked-badge" style="background:#e0f2fe;color:#0369a1;font-weight:bold;">Stock: <b>${data.snowflakeWandCount ?? 0}</b></span>
+          </div>
+          <p>Unleash a glittering frost prism that summons cats into a 6-pointed Snowflake Mandala Dance! ❄️✨</p>
+        </div>
+        <div class="machine-action-wrap">
+          <button class="shop-action-btn buy-snowflake-wand-btn" ${data.love < SNOWFLAKE_WAND_COST ? 'disabled' : ''}>
+            Buy (${SNOWFLAKE_WAND_COST} 💗)
+          </button>
+        </div>
+      </div>
+
+      <!-- Consumable: Catnip Heart Wand -->
+      <div class="shop-card" style="margin-top:10px;border-left: 4px solid #f43f5e;">
+        <div class="shop-card-info">
+          <div class="machine-title-row">
+            <h3><span class="svg-inline">${SVG_ICONS.heartWand}</span> Catnip Heart Wand</h3>
+            <span class="unlocked-badge" style="background:#ffe4e6;color:#be123c;font-weight:bold;">Stock: <b>${data.heartWandCount ?? 0}</b></span>
+          </div>
+          <p>Wave the infused heart wand to assemble all cats into a giant pulsating Heart Formation! 💖🐾</p>
+        </div>
+        <div class="machine-action-wrap">
+          <button class="shop-action-btn buy-heart-wand-btn" ${data.love < HEART_WAND_COST ? 'disabled' : ''}>
+            Buy (${HEART_WAND_COST} 💗)
+          </button>
+        </div>
+      </div>
+
+      <!-- Consumable: Infinity Metronome -->
+      <div class="shop-card" style="margin-top:10px;border-left: 4px solid #10b981;">
+        <div class="shop-card-info">
+          <div class="machine-title-row">
+            <h3><span class="svg-inline">${SVG_ICONS.infinityMetronome}</span> Infinity Metronome</h3>
+            <span class="unlocked-badge" style="background:#d1fae5;color:#047857;font-weight:bold;">Stock: <b>${data.infinityMetronomeCount ?? 0}</b></span>
+          </div>
+          <p>Set the metronome ticking to guide cats into a high-speed interlocking Figure-8 Infinity Loop! ♾️⚡</p>
+        </div>
+        <div class="machine-action-wrap">
+          <button class="shop-action-btn buy-infinity-metronome-btn" ${data.love < INFINITY_METRONOME_COST ? 'disabled' : ''}>
+            Buy (${INFINITY_METRONOME_COST} 💗)
+          </button>
+        </div>
+      </div>
+
+      <!-- Consumable: Solar Prism -->
+      <div class="shop-card" style="margin-top:10px;border-left: 4px solid #f59e0b;">
+        <div class="shop-card-info">
+          <div class="machine-title-row">
+            <h3><span class="svg-inline">${SVG_ICONS.solarPrism}</span> Solar Prism</h3>
+            <span class="unlocked-badge" style="background:#fef3c7;color:#b45309;font-weight:bold;">Stock: <b>${data.solarPrismCount ?? 0}</b></span>
+          </div>
+          <p>Focus the golden solar rays to guide cats into an outward-expanding Fibonacci Golden Spiral! 🌅✨</p>
+        </div>
+        <div class="machine-action-wrap">
+          <button class="shop-action-btn buy-solar-prism-btn" ${data.love < SOLAR_PRISM_COST ? 'disabled' : ''}>
+            Buy (${SOLAR_PRISM_COST} 💗)
+          </button>
+        </div>
+      </div>
+
+      <!-- Consumable: Star Compass -->
+      <div class="shop-card" style="margin-top:10px;border-left: 4px solid #a855f7;">
+        <div class="shop-card-info">
+          <div class="machine-title-row">
+            <h3><span class="svg-inline">${SVG_ICONS.starCompass}</span> Star Compass</h3>
+            <span class="unlocked-badge" style="background:#f3e8ff;color:#7e22ce;font-weight:bold;">Stock: <b>${data.starCompassCount ?? 0}</b></span>
+          </div>
+          <p>Align the astral compass to summon cats into a magnificent Giant Cat Constellation on the floor! 🐱🌟</p>
+        </div>
+        <div class="machine-action-wrap">
+          <button class="shop-action-btn buy-star-compass-btn" ${data.love < STAR_COMPASS_COST ? 'disabled' : ''}>
+            Buy (${STAR_COMPASS_COST} 💗)
           </button>
         </div>
       </div>

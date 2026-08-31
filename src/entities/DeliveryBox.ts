@@ -2,7 +2,16 @@ import Phaser from 'phaser';
 import { sound } from '../systems/SoundManager';
 import { isAnyModalOpen } from '../ui/EventBus';
 
-export type DeliveryItemType = 'machine' | 'furniture' | 'perfume';
+export type DeliveryItemType =
+  | 'machine'
+  | 'furniture'
+  | 'perfume'
+  | 'conga_whistle'
+  | 'snowflake_wand'
+  | 'heart_wand'
+  | 'infinity_metronome'
+  | 'solar_prism'
+  | 'star_compass';
 
 export interface DeliveryData {
   type: DeliveryItemType;
@@ -56,8 +65,10 @@ export class DeliveryBox extends Phaser.GameObjects.Container {
       this.handleTap();
     });
 
-    // Perfume parcels deliver and open extra fast (1 tap, 380ms drop)
-    if (delivery.type === 'perfume') {
+    const isConsumable = delivery.type !== 'machine' && delivery.type !== 'furniture';
+
+    // Consumable parcels deliver and open extra fast (1 tap, 380ms drop)
+    if (isConsumable) {
       this.tapsRemaining = 1;
     }
 
@@ -65,7 +76,7 @@ export class DeliveryBox extends Phaser.GameObjects.Container {
     this.setDepth(targetY + 25);
 
     // Parachute descent drop animation
-    const dropDuration = delivery.type === 'perfume' ? 380 : 680;
+    const dropDuration = isConsumable ? 380 : 680;
     scene.tweens.add({
       targets: this,
       y: targetY,

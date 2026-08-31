@@ -596,6 +596,7 @@ export const ADOPTION_BASE_COST = 20; // Love cost, scales gently with cat count
 export const CAT_PERFUME_COST = 200; // 200 Care Points
 export const CAT_PERFUME_COOLDOWN_MS = 3 * 60 * 1000; // 3 minutes per cat
 export const CAT_PERFUME_FRENZY_SECONDS = 15; // 15 seconds of breeding frenzy
+export const CONGA_WHISTLE_COST = 180; // 180 Care Points
 
 export interface PlinkoUpgradeDef {
   id: string;
@@ -692,3 +693,11 @@ export const PLINKO_UPGRADES_CATALOG: PlinkoUpgradeDef[] = [
     ],
   },
 ];
+
+export const SNOWFLAKE_WAND_COST = 160;
+export const HEART_WAND_COST = 200;
+export const INFINITY_METRONOME_COST = 220;
+export const SOLAR_PRISM_COST = 190;
+export const STAR_COMPASS_COST = 250;
+
+

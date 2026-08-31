@@ -511,6 +511,250 @@ html, body {
   to { transform: scale(1.2); }
 }
 
+/* ---------- Consumables Bag Floating HUD Button & Drawer ---------- */
+.bag-hud-wrap {
+  position: absolute;
+  left: 14px;
+  bottom: 96px;
+  z-index: 35;
+  pointer-events: none;
+}
+
+.bag-hud-btn {
+  pointer-events: auto;
+  position: relative;
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #8b5cf6, #ec4899, #f59e0b);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  padding: 0;
+  font-family: inherit;
+  font-weight: 800;
+  box-shadow: 0 5px 15px rgba(139, 92, 246, 0.45);
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.bag-hud-btn:hover {
+  transform: translateY(-3px) scale(1.08);
+  box-shadow: 0 10px 24px rgba(139, 92, 246, 0.65);
+}
+
+.bag-hud-btn:active {
+  transform: scale(0.92);
+}
+
+.bag-hud-btn.bag-open {
+  box-shadow: 0 0 0 4px rgba(236, 72, 153, 0.4), 0 8px 24px rgba(236, 72, 153, 0.6);
+  transform: scale(1.05);
+}
+
+.bag-hud-btn .bag-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bag-hud-btn .bag-btn-icon svg {
+  width: 25px;
+  height: 25px;
+  fill: #ffffff;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+}
+
+.bag-count-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ffffff;
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 2px 7px;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  border: 1.5px solid #7c3aed;
+}
+
+/* Expandable Consumables Drawer Panel */
+.bag-consumables-panel {
+  position: absolute;
+  bottom: 60px;
+  left: 0;
+  pointer-events: auto;
+  width: 290px;
+  max-width: calc(100vw - 32px);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 18px;
+  border: 1.5px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 16px 36px rgba(45, 31, 20, 0.22), 0 0 0 1px rgba(139, 92, 246, 0.15);
+  padding: 12px 14px;
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  max-height: 420px;
+}
+
+.bag-consumables-panel.open {
+  display: flex;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.bag-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1.5px solid rgba(139, 92, 246, 0.12);
+  padding-bottom: 8px;
+}
+
+.bag-panel-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #4c1d95;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bag-panel-close-btn {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.bag-panel-close-btn:hover {
+  color: #1f2937;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.bag-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 340px;
+  padding-right: 2px;
+}
+
+.bag-item-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 12px;
+  background: #fdfaf7;
+  border: 1.5px solid #f1ece4;
+  cursor: pointer;
+  transition: all 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+  user-select: none;
+}
+
+.bag-item-row:hover {
+  transform: translateX(4px);
+  background: #ffffff;
+  border-color: #8b5cf6;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+}
+
+.bag-item-row.empty-stock {
+  opacity: 0.72;
+  background: #f9fafb;
+}
+
+.bag-item-row.empty-stock:hover {
+  opacity: 1;
+}
+
+.bag-item-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bag-item-icon-wrap svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.bag-item-details {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.bag-item-name {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #292524;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bag-item-sub {
+  font-size: 10.5px;
+  color: #78716c;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bag-action-pill {
+  border: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.14s ease, filter 0.14s;
+}
+
+.bag-action-pill.use-pill {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.35);
+}
+
+.bag-action-pill.buy-pill {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.bag-item-row:hover .bag-action-pill {
+  transform: scale(1.06);
+}
+
 /* ---------- Toasts ---------- */
 /* ---------- Toasts / Card Deck ---------- */
 #toast-stack, .toast-stack {

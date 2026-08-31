@@ -173,6 +173,12 @@ export interface GameState {
   offlineStarLevel?: number; // 1..5: Passive Star rate per hour when offline (1=1/hr, 2=2/hr, 3=3/hr, 4=4/hr, 5=5/hr)
   plinkoUpgrades?: Record<string, number>; // upgradeId -> level (1, 2, 3)
   catPerfumeCount?: number; // Number of consumable Cat Perfumes owned
+  congaWhistleCount?: number; // Number of consumable Conga Whistles owned
+  snowflakeWandCount?: number; // Number of consumable Snowflake Wands owned (Mandala Dance)
+  heartWandCount?: number; // Number of consumable Heart Wands owned (Pulsing Heart)
+  infinityMetronomeCount?: number; // Number of consumable Infinity Metronomes owned (Figure-8 Loop)
+  solarPrismCount?: number; // Number of consumable Solar Prisms owned (Sunset Spiral)
+  starCompassCount?: number; // Number of consumable Star Compasses owned (Cat Constellation)
   fenceLayout?: FenceLayout; // Customizable area divider fence layout
   showCatNames?: boolean; // Whether cat name labels are visible in sanctuary
   totalPetsGiven: number;
