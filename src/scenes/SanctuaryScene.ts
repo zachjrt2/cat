@@ -13,7 +13,7 @@ import { GrowthSystem } from '../systems/GrowthSystem';
 import { AutomationSystem } from '../systems/AutomationSystem';
 import { BreedingSystem, BREED_COOLDOWN_MS } from '../systems/BreedingSystem';
 import { tickCatNeeds, applyAutomationThresholds } from '../systems/NeedsSystem';
-import { CatSprite, type AvailableMachineInfo } from '../entities/CatSprite';
+import { CatSprite, type AvailableMachineInfo, type AvailableFurnitureInfo } from '../entities/CatSprite';
 import { DeliveryBox, type DeliveryData } from '../entities/DeliveryBox';
 import { AUTOSAVE_INTERVAL_MS, AREA_INFO_MAP, FURNITURE_CATALOG, RARE_SUMMONS, OFFLINE_STAR_UPGRADES, calculateRehomeLove, getAreaCapacityUpgradeCost, CAT_PERFUME_COST, CAT_PERFUME_COOLDOWN_MS, CAT_PERFUME_FRENZY_SECONDS } from '../data/constants';
 import { EventBus } from '../ui/EventBus';
@@ -151,6 +151,8 @@ export class SanctuaryScene extends Phaser.Scene {
       this.state.cats.push(cat2);
       this.love.add(50);
     }
+
+    CatSprite.showNameLabels = this.state.showCatNames !== false;
   }
 
   private initControllers(): void {
@@ -243,6 +245,9 @@ export class SanctuaryScene extends Phaser.Scene {
       sprite.x = Phaser.Math.Clamp(sprite.x, assignedPart.left + 20, assignedPart.right - 20);
       sprite.y = Phaser.Math.Clamp(sprite.y, assignedPart.top + 20, assignedPart.bottom - 20);
     }
+
+    this.refreshCatMachines();
+    this.refreshCatFurniture();
   }
 
   private spawnCatsInCurrentArea(): void {
@@ -281,6 +286,26 @@ export class SanctuaryScene extends Phaser.Scene {
     }
   }
 
+  private getAvailableFurnitureForCurrentArea(bounds: Phaser.Geom.Rectangle): AvailableFurnitureInfo[] {
+    const owned = FURNITURE_CATALOG.filter(
+      (f) => f.area === this.currentArea && this.state.furniture.includes(f.id),
+    );
+    return owned.map((f) => ({
+      id: f.id,
+      name: f.name,
+      x: bounds.left + f.xPercent * bounds.width,
+      y: bounds.top + f.yPercent * bounds.height,
+    }));
+  }
+
+  private refreshCatFurniture(): void {
+    const bounds = this.areaRenderer.walkableBounds(this.currentArea);
+    const furniture = this.getAvailableFurnitureForCurrentArea(bounds);
+    for (const sprite of this.catSprites.values()) {
+      sprite.setAvailableFurniture(furniture);
+    }
+  }
+
   private spawnCatSprite(cat: Cat, bounds: Phaser.Geom.Rectangle): void {
     const partitions = this.areaRenderer.getPartitionBounds(this.state.fenceLayout || 'none', this.currentArea);
     let x = 0;
@@ -305,6 +330,8 @@ export class SanctuaryScene extends Phaser.Scene {
 
     const machines = this.getAvailableMachinesForCurrentArea(bounds);
     sprite.setAvailableMachines(machines);
+    const furniture = this.getAvailableFurnitureForCurrentArea(bounds);
+    sprite.setAvailableFurniture(furniture);
     sprite.setOtherSpritesProvider(() => Array.from(this.catSprites.values()));
     sprite.setMachineUseCallback((c, machineId) => {
       const res = this.automation.useMachine(c, machineId);
@@ -431,6 +458,17 @@ export class SanctuaryScene extends Phaser.Scene {
 
     EventBus.on('instant-grow-cat', ({ catId, cost }: { catId: string; cost: number }) => {
       this.handleInstantGrowCat(catId, cost);
+    });
+
+    EventBus.on('toggle-cat-names', () => {
+      const newVal = this.state.showCatNames === false ? true : false;
+      this.state.showCatNames = newVal;
+      CatSprite.showNameLabels = newVal;
+      for (const sprite of this.catSprites.values()) {
+        sprite.setNameLabelVisible(newVal);
+      }
+      this.saveManager.save(this.state);
+      this.notifyUiState();
     });
 
     EventBus.on('breed-cats', ({ parentAId, parentBId }: { parentAId: string; parentBId: string }) => {
@@ -1002,7 +1040,6 @@ export class SanctuaryScene extends Phaser.Scene {
         sprite.showEmote('✨');
       }
       sound.playSparkle();
-      sound.playSuccess();
       this.saveManager.save(this.state);
       this.notifyUiState();
     }

@@ -473,7 +473,7 @@ export class SoundManager {
   playCrunch(): void { this.playPop(); }       // food eating
   playSparkle(): void { this.playPop(); }       // sparkle / brush / automation
   playBubble(): void { this.playPop(); }        // wash bubble
-  playAdoptFanfare(): void { this.playSuccess(); }
+  playAdoptFanfare(): void { this.playPop(); }
 
 }
 

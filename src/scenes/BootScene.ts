@@ -122,6 +122,22 @@ export function ensureSpriteAnimations(anims: Phaser.Animations.AnimationManager
         });
       }
 
+      // 3b. Knead / Making Biscuits (repeats the last two frames of the laying down sequence)
+      const kneadAnimKey = `${textureKey}_knead_${dir}`;
+      if (!anims.exists(kneadAnimKey)) {
+        anims.create({
+          key: kneadAnimKey,
+          frames: anims.generateFrameNumbers(textureKey, {
+            frames: [
+              rowTop * colsPerRow + 10,
+              rowTop * colsPerRow + 11,
+            ],
+          }),
+          frameRate: 3.5,
+          repeat: -1,
+        });
+      }
+
       // 4. Sleep (curled sleeping breathing loop)
       const sleepAnimKey = `${textureKey}_sleep_${dir}`;
       if (!anims.exists(sleepAnimKey)) {

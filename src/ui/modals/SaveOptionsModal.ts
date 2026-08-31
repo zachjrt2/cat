@@ -1,6 +1,7 @@
 import { sound } from '../../systems/SoundManager';
 import { SVG_ICONS } from '../icons';
 import { EventBus } from '../EventBus';
+import { CatSprite } from '../../entities/CatSprite';
 
 export class SaveOptionsModal {
   static open(root: HTMLElement): void {
@@ -49,14 +50,23 @@ export class SaveOptionsModal {
         </div>
       </div>
 
-      <!-- Display & Screen Section -->
+      <!-- Display & Preferences Section -->
       <div class="options-section" style="margin-top: 14px;">
-        <div class="sound-title-row" style="align-items:center;">
-          <h3 style="margin:0;">📱 Display & Screen</h3>
-          <button class="options-fullscreen-btn" id="options-fs-btn" type="button">
-            <span class="svg-inline">${Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement) ? SVG_ICONS.exitFullscreen : SVG_ICONS.fullscreen}</span>
-            <span>${Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement) ? 'Exit Fullscreen' : 'Enter Fullscreen'}</span>
-          </button>
+        <h3>📱 Display & Preferences</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
+          <div class="sound-title-row" style="align-items:center;">
+            <span><b>Fullscreen Mode</b></span>
+            <button class="options-fullscreen-btn" id="options-fs-btn" type="button">
+              <span class="svg-inline">${Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement) ? SVG_ICONS.exitFullscreen : SVG_ICONS.fullscreen}</span>
+              <span>${Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement) ? 'Exit Fullscreen' : 'Enter Fullscreen'}</span>
+            </button>
+          </div>
+          <div class="sound-title-row" style="align-items:center;">
+            <span><b>Cat Name Labels</b></span>
+            <button class="options-fullscreen-btn" id="options-name-labels-btn" type="button">
+              <span id="name-labels-status">${CatSprite.showNameLabels ? '🏷️ Shown' : '🙈 Hidden'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -128,6 +138,19 @@ export class SaveOptionsModal {
     };
 
     optionsFsBtn?.addEventListener('click', handleFullscreenToggle);
+
+    const nameLabelsBtn = modal.querySelector('#options-name-labels-btn') as HTMLButtonElement | null;
+    const nameLabelsStatus = modal.querySelector('#name-labels-status') as HTMLElement | null;
+
+    nameLabelsBtn?.addEventListener('click', () => {
+      sound.playTap();
+      EventBus.emit('toggle-cat-names', {});
+      setTimeout(() => {
+        if (nameLabelsStatus) {
+          nameLabelsStatus.textContent = CatSprite.showNameLabels ? '🏷️ Shown' : '🙈 Hidden';
+        }
+      }, 50);
+    });
 
     sfxSlider.addEventListener('input', () => {
       const v = parseInt(sfxSlider.value) / 100;

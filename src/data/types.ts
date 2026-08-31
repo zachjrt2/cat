@@ -25,6 +25,7 @@ export type CatAnimationState =
   | 'sit'      // Idle
   | 'look'     // Curious
   | 'lay'      // Relax
+  | 'knead'    // Making biscuits (kneading paws)
   | 'sleep'    // Recover Energy
   | 'walk'     // Wander
   | 'run'      // Zoomies
@@ -173,6 +174,7 @@ export interface GameState {
   plinkoUpgrades?: Record<string, number>; // upgradeId -> level (1, 2, 3)
   catPerfumeCount?: number; // Number of consumable Cat Perfumes owned
   fenceLayout?: FenceLayout; // Customizable area divider fence layout
+  showCatNames?: boolean; // Whether cat name labels are visible in sanctuary
   totalPetsGiven: number;
   totalLoveEarned: number;
   totalRehomedCats: number;

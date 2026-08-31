@@ -215,7 +215,7 @@ export class ToolInteractionController {
             sprite.cat.happiness = Math.min(100, sprite.cat.happiness + 1.2);
             sprite.cat.energy = Math.min(100, sprite.cat.energy + 0.4);
 
-            sprite.triggerLayDown(5.5);
+            sprite.triggerKneadBiscuits(5.5);
             this.spawnPetHeart(sprite.x, sprite.y - 10);
 
             if (wasNeedy) {
@@ -281,7 +281,7 @@ export class ToolInteractionController {
     if (tool === 'pet') {
       sound.playPurr();
       sprite.showEmote(result.loveEarned > 0 ? '❤️' : '🥰');
-      sprite.triggerLayDown(6.0);
+      sprite.triggerKneadBiscuits(6.0);
       this.spawnPetHeart(sprite.x, sprite.y - 12);
     } else if (tool === 'food') {
       sound.playCrunch();

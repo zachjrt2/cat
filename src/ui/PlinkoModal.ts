@@ -456,7 +456,7 @@ export class PlinkoModal {
           EventBus.emit('upgrade-plinko', { upgradeId: upId, level: curLevel + 1, cost: cost.stars });
           EventBus.emit('spend-tokens', { amount: cost.stars });
           EventBus.emit('tokens-changed', { tokens: this.state.adoptionTokens });
-          sound.playAdoptFanfare();
+          sound.playSparkle();
 
           EventBus.emit('toast', { message: `Upgraded ${upDef.name} to Tier ${curLevel + 1}!` });
 

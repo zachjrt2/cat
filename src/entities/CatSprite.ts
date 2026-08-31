@@ -55,6 +55,13 @@ export interface AvailableMachineInfo {
   y: number;
 }
 
+export interface AvailableFurnitureInfo {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+}
+
 export class CatSprite extends Phaser.GameObjects.Container {
   private static graphicsPool: Phaser.GameObjects.Graphics[] = [];
   private static textPool: Phaser.GameObjects.Text[] = [];
@@ -125,6 +132,8 @@ export class CatSprite extends Phaser.GameObjects.Container {
     CatSprite.textPool = [];
   }
 
+  static showNameLabels = true;
+
   readonly cat: Cat;
   private baseSprite: Phaser.GameObjects.Sprite;
   private markingSprite: Phaser.GameObjects.Sprite | null = null;
@@ -181,6 +190,11 @@ export class CatSprite extends Phaser.GameObjects.Container {
   // AI & Social Interaction Support
   private targetMachineId: string | null = null;
   private availableMachines: AvailableMachineInfo[] = [];
+  private availableFurniture: AvailableFurnitureInfo[] = [];
+  private targetFurnitureId: string | null = null;
+  private followingAdultSprite: CatSprite | null = null;
+  private followLeaderTimer = 0;
+  private biscuitPuffTimer = 0;
   private otherSpritesProvider: (() => CatSprite[]) | null = null;
   private machineUseCallback: ((cat: Cat, machineId: string) => void) | null = null;
   private chaseTarget: { x: number; y: number } | null = null;
@@ -344,6 +358,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
       backgroundColor: 'rgba(255, 255, 255, 0.86)',
       padding: { left: 6, right: 6, top: 2, bottom: 2 },
     }).setOrigin(0.5, 0);
+    this.nameLabel.setVisible(CatSprite.showNameLabels);
     this.add(this.nameLabel);
 
     // 8. Sleep Zzz
@@ -717,9 +732,43 @@ export class CatSprite extends Phaser.GameObjects.Container {
     this.playCurrentAnimation();
   }
 
+  triggerKneadBiscuits(durationSeconds = 4.5): void {
+    if (this.perfumeFrenzyTimer > 0) return;
+    if (this.isDragged || this.cat.animationState === 'sleep') return;
+    this.wanderTarget = null;
+    this.chaseTarget = null;
+    if (this.chasingCatSprite) this.stopCatChase(false);
+    if (this.fleeingFromCatSprite) this.fleeingFromCatSprite = null;
+    this.cat.animationState = 'knead';
+    this.wanderTimer = durationSeconds;
+    this.biscuitPuffTimer = 0.3;
+    this.playCurrentAnimation();
+    this.spawnBiscuitHeart();
+  }
+
   setAvailableMachines(machines: AvailableMachineInfo[]): void { this.availableMachines = machines; }
+  setAvailableFurniture(furniture: AvailableFurnitureInfo[]): void { this.availableFurniture = furniture; }
   setOtherSpritesProvider(provider: () => CatSprite[]): void { this.otherSpritesProvider = provider; }
   setMachineUseCallback(cb: (cat: Cat, machineId: string) => void): void { this.machineUseCallback = cb; }
+
+  isFollowingLeader(): boolean {
+    return this.followingAdultSprite !== null;
+  }
+
+  getFollowTarget(): CatSprite | null {
+    return this.followingAdultSprite;
+  }
+
+  isFollowChainAncestor(sprite: CatSprite): boolean {
+    let curr: CatSprite | null = this.followingAdultSprite;
+    let depth = 0;
+    while (curr && depth < 20) {
+      if (curr === sprite) return true;
+      curr = curr.getFollowTarget();
+      depth++;
+    }
+    return false;
+  }
 
   /** Called by SanctuaryScene whenever the breed cooldown state changes for this cat. */
   setBreedReady(ready: boolean): void {
@@ -1245,6 +1294,15 @@ export class CatSprite extends Phaser.GameObjects.Container {
       this.spawnMutationParticles();
     }
 
+    // ── Biscuit Kneading Purr & Heart Ripples ───────────────────────────
+    if (this.cat.animationState === 'knead') {
+      this.biscuitPuffTimer -= dt;
+      if (this.biscuitPuffTimer <= 0) {
+        this.biscuitPuffTimer = 0.85 + Math.random() * 0.45;
+        this.spawnBiscuitHeart();
+      }
+    }
+
     // ── Active Perfume Breeding Frenzy AI ───────────────────────────────
     if (this.perfumeFrenzyTimer > 0) {
       this.perfumeFrenzyTimer -= dt;
@@ -1473,17 +1531,65 @@ export class CatSprite extends Phaser.GameObjects.Container {
       }
     }
 
+    // ── Kitten Follow the Leader AI ───────────────────────────────────────
+    if (this.followingAdultSprite) {
+      if (!this.followingAdultSprite.active || this.followingAdultSprite.isCurrentlyDragged() || this.followLeaderTimer <= 0) {
+        // If direct leader was following someone else, smoothly promote target to keep the parade alive!
+        const nextLeader = this.followingAdultSprite?.getFollowTarget?.();
+        if (nextLeader && nextLeader.active && !nextLeader.isCurrentlyDragged() && this.bounds.contains(nextLeader.x, nextLeader.y) && !nextLeader.isFollowChainAncestor(this)) {
+          this.followingAdultSprite = nextLeader;
+          this.followLeaderTimer = 22.0 + Math.random() * 15.0;
+        } else {
+          this.followingAdultSprite = null;
+          this.followLeaderTimer = 0;
+        }
+      } else {
+        this.followLeaderTimer -= dt;
+        const dist = Math.hypot(this.followingAdultSprite.x - this.x, this.followingAdultSprite.y - this.y);
+        const leaderMoving = this.followingAdultSprite.cat.animationState === 'walk' || this.followingAdultSprite.cat.animationState === 'run';
+
+        if (dist > 28) {
+          const catchUpMult = dist > 90 ? 1.65 : dist > 55 ? 1.3 : 1.0;
+          const baseSpeed = (this.followingAdultSprite.cat.animationState === 'run' ? 88 : 52);
+          const speed = baseSpeed * catchUpMult * dt;
+          this.x += ((this.followingAdultSprite.x - this.x) / dist) * speed;
+          this.y += ((this.followingAdultSprite.y - this.y) / dist) * speed;
+          this.x = Phaser.Math.Clamp(this.x, this.bounds.left + 24, this.bounds.right - 24);
+          this.y = Phaser.Math.Clamp(this.y, this.bounds.top + 24, this.bounds.bottom - 24);
+          this.currentDirection = vectorToDirection(this.followingAdultSprite.x - this.x, this.followingAdultSprite.y - this.y);
+          this.cat.animationState = (this.followingAdultSprite.cat.animationState === 'run' || dist > 70) ? 'run' : 'walk';
+          this.playCurrentAnimation();
+          this.setDepth(this.y);
+          return;
+        } else {
+          if (!leaderMoving) {
+            const leaderState = this.followingAdultSprite.cat.animationState;
+            if (leaderState === 'knead' && Math.random() < 0.01) {
+              this.triggerKneadBiscuits(4.0);
+            } else if (leaderState === 'lay' || leaderState === 'sleep') {
+              this.cat.animationState = 'lay';
+              this.playCurrentAnimation();
+            } else {
+              this.cat.animationState = 'sit';
+              this.playCurrentAnimation();
+            }
+          }
+        }
+      }
+    }
+
     // ── Anti-Crowding / Group Dispersion Check ────────────────────────────
     // If 3 or more cats gather in a tight bunch (or 2 stacked within 45px), disperse to open space
     this.crowdCheckTimer -= dt;
     if (this.crowdCheckTimer <= 0) {
       this.crowdCheckTimer = 1.5 + Math.random() * 2.0;
-      if (!this.chaseTarget && !this.chasingCatSprite && !this.fleeingFromCatSprite) {
+      if (!this.chaseTarget && !this.chasingCatSprite && !this.fleeingFromCatSprite && !this.followingAdultSprite) {
         const crowd = this.getNearbyCrowdInfo(85);
         if (crowd.count >= 2 || (crowd.count >= 1 && this.getNearbyCrowdInfo(45).count >= 1)) {
           // Crowd of 3+ cats (or tightly packed) -> walk away to a spacious area
           this.wanderTarget = this.findLeastCrowdedPosition();
           this.targetMachineId = null;
+          this.targetFurnitureId = null;
           this.cat.animationState = 'walk';
           this.wanderTimer = 5.0 + Math.random() * 3.0;
           this.playCurrentAnimation();
@@ -1497,8 +1603,11 @@ export class CatSprite extends Phaser.GameObjects.Container {
       const dist = Math.hypot(this.wanderTarget.x - this.x, this.wanderTarget.y - this.y);
       if (dist < 8) {
         const reachedMachineId = this.targetMachineId;
+        const reachedFurnitureId = this.targetFurnitureId;
         this.wanderTarget = null;
         this.targetMachineId = null;
+        this.targetFurnitureId = null;
+
         if (reachedMachineId && this.machineUseCallback) {
           this.machineUseCallback(this.cat, reachedMachineId);
           this.cat.animationState = 'sit';
@@ -1506,6 +1615,41 @@ export class CatSprite extends Phaser.GameObjects.Container {
           this.playCurrentAnimation();
           this.showEmote('✨');
           return;
+        }
+
+        if (reachedFurnitureId) {
+          if (reachedFurnitureId === 'plush_donut_bed' || reachedFurnitureId === 'sunbeam_mat') {
+            this.triggerKneadBiscuits(4.0);
+            this.showEmote('🍞');
+            this.scene.time.delayedCall(4000, () => {
+              if (this.active && this.cat.animationState === 'knead') {
+                this.cat.animationState = Math.random() < 0.65 ? 'sleep' : 'lay';
+                this.wanderTimer = 18.0 + Math.random() * 12.0;
+                this.playCurrentAnimation();
+                this.showEmote('💤');
+              }
+            });
+            return;
+          } else if (reachedFurnitureId === 'sisal_cat_tree') {
+            this.triggerPlayState(4.0);
+            this.showEmote('🧶');
+            this.cat.fun = Math.min(100, this.cat.fun + 18);
+            return;
+          } else if (reachedFurnitureId === 'cardboard_castle') {
+            this.cat.animationState = 'sit';
+            this.wanderTimer = 8.0 + Math.random() * 6.0;
+            this.playCurrentAnimation();
+            this.showEmote('📦');
+            return;
+          } else if (reachedFurnitureId === 'fountain_dish') {
+            this.cat.animationState = 'look';
+            this.wanderTimer = 4.0;
+            this.cat.cleanliness = Math.min(100, this.cat.cleanliness + 15);
+            this.cat.hunger = Math.min(100, this.cat.hunger + 10);
+            this.playCurrentAnimation();
+            this.showEmote('💦');
+            return;
+          }
         }
         if (this.cat.stage === 'adult' && this.otherSpritesProvider) {
           const others = this.otherSpritesProvider();
@@ -1718,13 +1862,54 @@ export class CatSprite extends Phaser.GameObjects.Container {
       return;
     }
 
+    // ── Kitten & Teen Follow-the-Leader Parade AI ─────────────────────────
+    const canFollow = this.cat.stage === 'kitten' || this.cat.stage === 'teen';
+    const followChance = this.cat.stage === 'kitten' ? 0.80 : 0.45;
+
+    if (canFollow && this.otherSpritesProvider && Math.random() < followChance) {
+      const others = this.otherSpritesProvider().filter(
+        (s) => s !== this && s.cat.animationState !== 'sleep' && !s.isCurrentlyDragged() && this.bounds.contains(s.x, s.y) && !s.isFollowChainAncestor(this)
+      );
+
+      // Prefer cats already leading a train or adult cats to form multi-cat conga lines
+      const adultsOrTrainLeaders = others.filter(
+        (s) => s.cat.stage === 'adult' || s.isFollowingLeader()
+      );
+
+      const targetPool = adultsOrTrainLeaders.length > 0 ? adultsOrTrainLeaders : others;
+
+      if (targetPool.length > 0) {
+        this.followingAdultSprite = Phaser.Math.RND.pick(targetPool);
+        this.followLeaderTimer = 30.0 + Math.random() * 25.0;
+        this.wanderTarget = null;
+        this.showEmote('🐾');
+        return;
+      }
+    }
+
+    // ── Placed Furniture Attraction AI ─────────────────────────────────────
+    if (this.availableFurniture.length > 0 && Math.random() < 0.40) {
+      const nearbyFurn = this.availableFurniture.filter((f) => this.bounds.contains(f.x, f.y));
+      if (nearbyFurn.length > 0) {
+        const chosen = Phaser.Math.RND.pick(nearbyFurn);
+        this.targetFurnitureId = chosen.id;
+        this.wanderTarget = new Phaser.Math.Vector2(chosen.x, chosen.y);
+        this.cat.animationState = 'walk';
+        this.wanderTimer = 9.0;
+        this.playCurrentAnimation();
+        return;
+      }
+    }
+
     if (Math.random() < (isKitten ? 0.22 : 0.38)) {
       if (crowd.count < 2) {
         this.wanderTarget = null;
         const r = Math.random();
-        const isSitting = r < 0.45;
-        this.cat.animationState = isSitting ? 'sit' : r < 0.75 ? 'look' : (this.cat.majorTrait === 'lazy' || this.cat.minorTrait === 'lazy' ? 'lay' : 'sit');
-        this.wanderTimer = isSitting ? (8.0 + Math.random() * 12.0) : (2.0 + Math.random() * 3.0);
+        const isSitting = r < 0.40;
+        const isKneading = !isSitting && r < 0.60 && this.cat.happiness > 60;
+        this.cat.animationState = isSitting ? 'sit' : isKneading ? 'knead' : r < 0.80 ? 'look' : (this.cat.majorTrait === 'lazy' || this.cat.minorTrait === 'lazy' ? 'lay' : 'sit');
+        this.wanderTimer = isSitting ? (8.0 + Math.random() * 12.0) : isKneading ? 4.5 : (2.0 + Math.random() * 3.0);
+        if (isKneading) this.showEmote('🍞');
         this.playCurrentAnimation();
         return;
       }
@@ -2117,6 +2302,37 @@ export class CatSprite extends Phaser.GameObjects.Container {
     });
   }
 
+  private spawnBiscuitHeart(): void {
+    const heart = CatSprite.getPooledGraphics(this.scene);
+    if (!heart) return;
+    heart.setDepth(this.y + 4);
+    const px = this.x + Phaser.Math.Between(-8, 8);
+    const py = this.y + 2;
+
+    heart.fillStyle(0xff758f, 0.9);
+    heart.fillCircle(-2, -2, 2.5);
+    heart.fillCircle(2, -2, 2.5);
+    heart.beginPath();
+    heart.moveTo(-4, -1);
+    heart.lineTo(4, -1);
+    heart.lineTo(0, 4);
+    heart.closePath();
+    heart.fillPath();
+    heart.setPosition(px, py);
+
+    this.scene.tweens.add({
+      targets: heart,
+      y: py - Phaser.Math.Between(16, 26),
+      x: px + (Math.random() - 0.5) * 8,
+      scaleX: 1.3,
+      scaleY: 1.3,
+      alpha: 0,
+      duration: 800,
+      ease: 'Sine.easeOut',
+      onComplete: () => CatSprite.recycleGraphics(heart),
+    });
+  }
+
   private spawnTinyFairyParticle(): void {
     const fairy = CatSprite.getPooledGraphics(this.scene);
     if (!fairy) return;
@@ -2179,6 +2395,10 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
   setAreaBounds(bounds: Phaser.Geom.Rectangle): void { this.bounds = bounds; }
 
+  setNameLabelVisible(visible: boolean): void {
+    this.nameLabel.setVisible(visible);
+  }
+
   refreshVisuals(): void {
     const scale = getScaleForCat(this.cat);
     this.baseSprite.setScale(scale);
@@ -2187,6 +2407,7 @@ export class CatSprite extends Phaser.GameObjects.Container {
     const prefix = this.cat.isRare ? '✨ ' : '';
     const stageSuffix = this.cat.stage === 'kitten' ? ' (Kitten)' : this.cat.stage === 'teen' ? ' (Teen)' : '';
     this.nameLabel.setText(`${prefix}${this.cat.name}${stageSuffix}`);
+    this.nameLabel.setVisible(CatSprite.showNameLabels);
 
     if (this.cat.mutation === 'gilded') {
       this.baseSprite.setTint(0xffd700);

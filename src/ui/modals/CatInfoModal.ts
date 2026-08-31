@@ -71,13 +71,13 @@ const PLAYFUL_SWAT_SEQUENCE: AvatarAnimFrame[] = [
   { row: 1, col: 5, duration: 260 },
 ];
 
-const PURR_LAY_SEQUENCE: AvatarAnimFrame[] = [
-  { row: 1, col: 8, duration: 180 },
-  { row: 1, col: 9, duration: 240 },
-  { row: 1, col: 10, duration: 340 },
-  { row: 1, col: 11, duration: 340 },
-  { row: 1, col: 10, duration: 340 },
-  { row: 1, col: 9, duration: 240 },
+const KNEADING_SEQUENCE: AvatarAnimFrame[] = [
+  { row: 1, col: 10, duration: 240 },
+  { row: 1, col: 11, duration: 240 },
+  { row: 1, col: 10, duration: 240 },
+  { row: 1, col: 11, duration: 240 },
+  { row: 1, col: 10, duration: 240 },
+  { row: 1, col: 11, duration: 240 },
 ];
 
 const EATING_SEQUENCE: AvatarAnimFrame[] = [
@@ -868,7 +868,11 @@ export class CatInfoModal {
     let animFrameId = 0;
 
     let currentSequence: AvatarAnimFrame[] =
-      cat.animationState === 'sleep' || cat.energy < 20 ? SLEEPING_SEQUENCE : IDLE_LOOK_SEQUENCE;
+      cat.animationState === 'sleep' || cat.energy < 20
+        ? SLEEPING_SEQUENCE
+        : cat.animationState === 'knead'
+        ? KNEADING_SEQUENCE
+        : IDLE_LOOK_SEQUENCE;
     let frameIndex = 0;
     let frameStartTime = performance.now();
     let reactionTimeout: any = null;
@@ -997,7 +1001,7 @@ export class CatInfoModal {
         seq = EATING_SEQUENCE;
         durationMs = 2000;
       } else if (type === 'pet') {
-        seq = PURR_LAY_SEQUENCE;
+        seq = KNEADING_SEQUENCE;
         durationMs = 2400;
       } else if (type === 'toy' || type === 'tap') {
         seq = PLAYFUL_SWAT_SEQUENCE;
@@ -1013,7 +1017,11 @@ export class CatInfoModal {
 
       reactionTimeout = setTimeout(() => {
         currentSequence =
-          cat.animationState === 'sleep' || cat.energy < 20 ? SLEEPING_SEQUENCE : IDLE_LOOK_SEQUENCE;
+          cat.animationState === 'sleep' || cat.energy < 20
+            ? SLEEPING_SEQUENCE
+            : cat.animationState === 'knead'
+            ? KNEADING_SEQUENCE
+            : IDLE_LOOK_SEQUENCE;
         frameIndex = 0;
         frameStartTime = performance.now();
       }, durationMs);
