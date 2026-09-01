@@ -41,12 +41,20 @@ export class ToolInteractionController {
   ) {}
 
   setSelectedTool(tool: ToolType | null): void {
+    const wasToolActive = this.selectedTool !== null;
     this.selectedTool = tool;
     if (this.selectedTool) sound.playTap();
 
     const catSprites = this.callbacks.getCatSprites();
     for (const sprite of catSprites.values()) {
       sprite.setSelectedTool(this.selectedTool);
+    }
+
+    if (wasToolActive && !this.selectedTool) {
+      // Signal all cats to resume natural wandering AI
+      for (const sprite of catSprites.values()) {
+        sprite.resumeNormalBehavior();
+      }
     }
 
     if (this.selectedTool === 'food') {
@@ -80,7 +88,14 @@ export class ToolInteractionController {
           },
         });
       }
+      if (this.kibblePieces.length > 0) {
+        for (const piece of this.kibblePieces) {
+          piece.destroy();
+        }
+        this.kibblePieces = [];
+      }
     }
+
 
     if (this.selectedTool === 'toy') {
       if (!this.toyBall) {

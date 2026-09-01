@@ -169,6 +169,13 @@ export interface ConquestState {
   totalBattlesLost: number;
 }
 
+export interface PyramidRecord {
+  maxHeight: number;              // Highest tower altitude in meters
+  maxCats: number;                // Max cats stacked in a single run
+  totalGames: number;
+  trophiesUnlocked: string[];
+}
+
 export interface GameState {
   love: number;
   adoptionTokens: number;
@@ -192,6 +199,7 @@ export interface GameState {
   fenceLayout?: FenceLayout; // Customizable area divider fence layout
   showCatNames?: boolean; // Whether cat name labels are visible in sanctuary
   conquestState?: ConquestState; // Persistent Cat Conquest progress
+  pyramidRecord?: PyramidRecord; // Persistent Purrfect Pyramid records
   totalPetsGiven: number;
   totalLoveEarned: number;
   totalRehomedCats: number;
@@ -202,4 +210,5 @@ export interface GameState {
   lastSavedAt: number;
   createdAt: number;
 }
+
 

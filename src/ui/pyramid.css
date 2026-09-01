@@ -1,0 +1,375 @@
+/* ===========================================================================
+   Purrfect Pyramid — Physics Cat Stacking Mini-Game UI
+   Matches the warm cozy wood, cream parchment, and pixel-art aesthetic of Cozy Cat Sanctuary.
+   =========================================================================== */
+
+/* ── Root Overlay ─────────────────────────────────────────────────────────── */
+
+#pyramid-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+  background: linear-gradient(180deg, #38bdf8 0%, #7dd3fc 40%, #bae6fd 75%, #fef3c7 100%);
+  color: var(--brown, #4d3827);
+  overflow: hidden;
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.22, 0.68, 0, 1.2);
+  user-select: none;
+  touch-action: none;
+}
+
+#pyramid-overlay.open {
+  transform: translateY(0);
+}
+
+/* ── Cozy Header ─────────────────────────────────────────────────────────── */
+
+.pyr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 16px;
+  background-color: #f7efe2;
+  background-image:
+    repeating-linear-gradient(90deg, transparent 0px, transparent 13px, rgba(180, 140, 100, 0.08) 13px, rgba(180, 140, 100, 0.08) 14px),
+    linear-gradient(180deg, #fdfaf5 0%, #f7efe2 50%, #eedecb 100%);
+  border-bottom: 2.5px solid #d4a373;
+  box-shadow: 0 4px 14px rgba(77, 56, 39, 0.16);
+  flex-shrink: 0;
+  min-height: 52px;
+  z-index: 30;
+}
+
+.pyr-back-btn {
+  background: var(--cream, #fffaf2);
+  border: 1.5px solid rgba(212, 163, 115, 0.6);
+  color: var(--brown, #4d3827);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(77, 56, 39, 0.12);
+  transition: transform 0.15s ease, background 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pyr-back-btn:hover {
+  background: #ffffff;
+  transform: scale(1.04);
+}
+
+.pyr-back-btn:active {
+  transform: scale(0.96);
+}
+
+.pyr-title-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 900;
+  color: #7c2d12;
+}
+
+.pyr-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pyr-stat-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1.5px solid rgba(212, 163, 115, 0.5);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #4d3827;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.06);
+}
+
+.pyr-lives-pill {
+  color: #e11d48;
+}
+
+/* ── Main Viewport Canvas Container ──────────────────────────────────────── */
+
+.pyr-game-area {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.pyr-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── In-Game HUD Overlays ────────────────────────────────────────────────── */
+
+.pyr-height-meter {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 2px solid #fb923c;
+  border-radius: 16px;
+  padding: 8px 14px;
+  box-shadow: 0 4px 14px rgba(251, 146, 60, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.pyr-height-val {
+  font-size: 22px;
+  font-weight: 900;
+  color: #c2410c;
+  line-height: 1.1;
+}
+
+.pyr-height-sub {
+  font-size: 11px;
+  font-weight: 800;
+  color: #9a3412;
+  opacity: 0.85;
+}
+
+.pyr-next-cat-preview {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 2px solid #38bdf8;
+  border-radius: 16px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.pyr-next-label {
+  font-size: 11px;
+  font-weight: 900;
+  color: #0369a1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pyr-next-canvas {
+  width: 44px;
+  height: 44px;
+  image-rendering: pixelated;
+}
+
+.pyr-next-name {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #475569;
+}
+
+/* ── Drop Tap Helper ─────────────────────────────────────────────────────── */
+
+.pyr-drop-hint {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(38, 28, 20, 0.75);
+  color: #ffffff;
+  padding: 8px 20px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 800;
+  pointer-events: none;
+  z-index: 20;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  animation: pyr-pulse-hint 1.6s ease-in-out infinite;
+}
+
+@keyframes pyr-pulse-hint {
+  0%, 100% { opacity: 0.85; transform: translateX(-50%) scale(1); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.05); }
+}
+
+/* ── Milestone Toast Notification ────────────────────────────────────────── */
+
+.pyr-milestone-banner {
+  position: absolute;
+  top: 75px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.8);
+  background: linear-gradient(135deg, #fef08a, #facc15);
+  border: 2px solid #ca8a04;
+  border-radius: 999px;
+  padding: 8px 22px;
+  color: #713f12;
+  font-size: 15px;
+  font-weight: 900;
+  box-shadow: 0 6px 20px rgba(202, 138, 4, 0.35);
+  z-index: 40;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  white-space: nowrap;
+}
+
+.pyr-milestone-banner.show {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+/* ── Results / Game Over Modal ───────────────────────────────────────────── */
+
+.pyr-results-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  background: #fffaf2;
+  border: 3px solid #d4a373;
+  border-radius: 24px;
+  padding: 24px 28px;
+  max-width: 420px;
+  width: 90vw;
+  box-shadow: 0 16px 40px rgba(77, 56, 39, 0.35);
+  z-index: 50;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pyr-results-card.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.pyr-results-title {
+  font-size: 26px;
+  font-weight: 900;
+  color: #7c2d12;
+  margin: 0 0 6px;
+}
+
+.pyr-results-sub {
+  font-size: 13.5px;
+  color: #7c6855;
+  margin-bottom: 16px;
+  font-weight: 700;
+}
+
+.pyr-results-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.pyr-res-stat {
+  background: #ffffff;
+  border: 1.5px solid rgba(212, 163, 115, 0.4);
+  border-radius: 14px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pyr-res-stat-val {
+  font-size: 20px;
+  font-weight: 900;
+  color: #c2410c;
+}
+
+.pyr-res-stat-lbl {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #7c6855;
+}
+
+.pyr-rewards-box {
+  background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+  border: 1.5px solid #10b981;
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  font-weight: 900;
+  font-size: 15px;
+  color: #065f46;
+}
+
+.pyr-actions-row {
+  display: flex;
+  gap: 10px;
+}
+
+.pyr-btn-primary {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ff758f, #f43f5e);
+  color: #ffffff;
+  font-family: inherit;
+  font-weight: 900;
+  font-size: 15px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(244, 63, 94, 0.35);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.pyr-btn-primary:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+}
+
+.pyr-btn-secondary {
+  flex: 1;
+  padding: 12px;
+  border: 1.5px solid rgba(212, 163, 115, 0.6);
+  border-radius: 14px;
+  background: #fffaf2;
+  color: #4d3827;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.pyr-btn-secondary:hover {
+  transform: translateY(-2px);
+  background: #ffffff;
+}

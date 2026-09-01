@@ -7,6 +7,7 @@ import { EventBus } from '../EventBus';
 const AREA_KEYS: CatArea[] = ['yard', 'shelter', 'sunroom', 'cafe'];
 
 export interface HeaderHudCallbacks {
+  onOpenMinigames: () => void;
   onOpenPlinko: () => void;
   onOpenShop: (tab?: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades') => void;
   onOpenSaveMenu: () => void;
@@ -50,13 +51,16 @@ export class HeaderHud {
           <span class="hud-icon heart-icon">${SVG_ICONS.heart}</span>
           <span id="love-value">0</span>
         </div>
-        <div class="hud-tokens" id="tokens-pill" title="Stars (for Plinko!)">
+        <div class="hud-tokens" id="tokens-pill" title="Stars (for Plinko & Mini Games!)">
           <span class="hud-icon star-icon">${SVG_ICONS.star}</span>
           <span id="tokens-value">0</span>
         </div>
       </div>
 
       <div class="hud-actions">
+        <button class="icon-btn minigames-btn" id="minigames-btn" title="🎮 Cat Mini Games Hub">
+          ${SVG_ICONS.minigames}
+        </button>
         <button class="icon-btn plinko-btn" id="plinko-btn" title="⭐ Cat Plinko (Wager Stars to Discover Cats!)">
           ${SVG_ICONS.sparkle}
         </button>
@@ -96,6 +100,11 @@ export class HeaderHud {
     // Show 1-tap mobile fullscreen prompt modal if on mobile touch device
     this.showMobileFullscreenPrompt(toggleFullscreen);
 
+    hud.querySelector('#minigames-btn')!.addEventListener('click', () => {
+      sound.playTap();
+      this.callbacks.onOpenMinigames();
+    });
+
     hud.querySelector('#plinko-btn')!.addEventListener('click', () => {
       sound.playTap();
       this.callbacks.onOpenPlinko();
@@ -110,6 +119,7 @@ export class HeaderHud {
       this.callbacks.onOpenSaveMenu();
     });
   }
+
 
   private showMobileFullscreenPrompt(onEnterFullscreen: () => void): void {
     const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window || (navigator as any).maxTouchPoints > 0;

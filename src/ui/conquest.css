@@ -486,9 +486,10 @@
   align-items: center;
   gap: 3px;
   user-select: none;
+  contain: layout style;
   will-change: top, left, transform;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.28));
   width: clamp(56px, 14vw, 84px);
+  transform: translate3d(-50%, 0, 0);
   transition: transform 0.2s ease, opacity 0.3s ease;
 }
 
@@ -505,20 +506,21 @@
 }
 
 @keyframes cq-sprite-march {
-  0% { transform: translateX(-50%) translateY(0) rotate(-2deg); }
-  100% { transform: translateX(-50%) translateY(-5px) rotate(2deg); }
+  0% { transform: translate3d(-50%, 0, 0) rotate(-2deg); }
+  100% { transform: translate3d(-50%, -5px, 0) rotate(2deg); }
 }
 
 .cq-sprite.cq-hit {
   animation: cq-hit-shake 0.28s ease;
-  filter: drop-shadow(0 0 12px #ff758f) brightness(2);
+  filter: brightness(1.8);
 }
 
 @keyframes cq-hit-shake {
-  0%, 100% { transform: translateX(-50%) scale(1); }
-  25% { transform: translateX(-58%) scale(0.9) rotate(-7deg); }
-  75% { transform: translateX(-42%) scale(0.9) rotate(7deg); }
+  0%, 100% { transform: translate3d(-50%, 0, 0) scale(1); }
+  25% { transform: translate3d(-58%, 0, 0) scale(0.9) rotate(-7deg); }
+  75% { transform: translate3d(-42%, 0, 0) scale(0.9) rotate(7deg); }
 }
+
 
 .cq-sprite.cq-special-glow .cq-cat-canvas {
   animation: cq-special-pulse 0.6s infinite alternate;

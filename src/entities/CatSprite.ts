@@ -664,10 +664,34 @@ export class CatSprite extends Phaser.GameObjects.Container {
 
 
   setSelectedTool(tool: ToolType | null): void {
+    const wasToolActive = this.currentSelectedTool !== null;
     this.currentSelectedTool = tool;
     this.updateNeedIndicator();
     this.drawHoverRing(false);
+
+    if (wasToolActive && !tool) {
+      this.resumeNormalBehavior();
+    }
   }
+
+  resumeNormalBehavior(): void {
+    // If cat is actively dragged, sleeping, in perfume frenzy, or participating in a dance, preserve that state
+    if (this.isDragged || this.cat.animationState === 'sleep' || this.perfumeFrenzyTimer > 0 || this.isCongaParadeActive || this.isRainDanceActive) {
+      return;
+    }
+
+    // Clear any stuck interaction/chase/flee states
+    this.brushFleeTarget = null;
+    this.isAmbushing = false;
+    this.ambushTargetSprite = null;
+
+    // If cat was in an interaction posture (knead, play, look, sit) or stationary without a target, awaken its wandering AI
+    if (this.cat.animationState === 'knead' || this.cat.animationState === 'play' || this.cat.animationState === 'look' || this.cat.animationState === 'sit' || !this.wanderTarget) {
+      this.wanderTimer = 0.3 + Math.random() * 0.7;
+      this.pickNewWanderTarget();
+    }
+  }
+
 
   updateNeedIndicator(): void {
     if (!this.currentSelectedTool) {

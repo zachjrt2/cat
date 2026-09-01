@@ -17,7 +17,6 @@ import {
 import { SVG_ICONS } from '../icons';
 import { sound } from '../../systems/SoundManager';
 import { EventBus } from '../EventBus';
-import { CONQUEST_REGIONS } from '../../data/conquest/ConquestData';
 
 const AREA_KEYS: CatArea[] = ['yard', 'shelter', 'sunroom', 'cafe'];
 
@@ -32,6 +31,8 @@ function escapeHtml(s?: string): string {
   div.textContent = s;
   return div.innerHTML;
 }
+
+export type ShopTab = 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades';
 
 export interface ShopModalData {
   love: number;
@@ -52,18 +53,18 @@ export interface ShopModalData {
   solarPrismCount?: number;
   starCompassCount?: number;
   fenceLayout: FenceLayout;
-  conquestState?: import('../../data/types').ConquestState;
 }
 
 export class ShopModal {
   static open(
     root: HTMLElement,
     data: ShopModalData,
-    defaultTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' | 'conquest' = 'areas',
+    defaultTab: ShopTab = 'areas',
   ): void {
-    let currentActiveTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' | 'conquest' = defaultTab;
+    let currentActiveTab: ShopTab = defaultTab;
     let currentFence = data.fenceLayout;
     const pendingPurchases = new Set<string>();
+
 
     const backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
@@ -235,7 +236,7 @@ export class ShopModal {
       }
     });
 
-    const renderTabs = (activeTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' | 'conquest', preserveScroll = true) => {
+    const renderTabs = (activeTab: ShopTab, preserveScroll = true) => {
       currentActiveTab = activeTab;
       const savedModalScroll = preserveScroll ? modal.scrollTop : 0;
       const contentEl = modal.querySelector('.shop-content');
@@ -262,7 +263,6 @@ export class ShopModal {
           <button class="shop-tab-btn ${activeTab === 'furniture' ? 'active' : ''}" id="tab-furniture-btn" title="Furniture & Decor"><span class="shop-tab-icon">${SVG_ICONS.shop}</span></button>
           <button class="shop-tab-btn ${activeTab === 'milestones' ? 'active' : ''}" id="tab-milestones-btn" title="Sanctuary Milestone Goals"><span class="shop-tab-icon">${SVG_ICONS.star}</span></button>
           <button class="shop-tab-btn ${activeTab === 'upgrades' ? 'active' : ''}" id="tab-upgrades-btn" title="Upgrades & Sorting Fences"><span class="shop-tab-icon">${SVG_ICONS.sparkle}</span></button>
-          <button class="shop-tab-btn ${activeTab === 'conquest' ? 'active' : ''}" id="tab-conquest-btn" title="Cat Conquest — Invade enemy territories!"><span class="shop-tab-icon">${SVG_ICONS.conquest}</span></button>
         </div>
 
 
@@ -275,9 +275,7 @@ export class ShopModal {
                 ? ShopModal.renderShopFurnitureContent(data, pendingPurchases)
                 : activeTab === 'milestones'
                   ? ShopModal.renderShopMilestonesContent(data)
-                  : activeTab === 'conquest'
-                    ? ShopModal.renderConquestContent(data)
-                    : ShopModal.renderShopUpgradesContent(data, currentFence)
+                  : ShopModal.renderShopUpgradesContent(data, currentFence)
           }
         </div>
 
@@ -312,30 +310,43 @@ export class ShopModal {
         sound.playTap();
         renderTabs('upgrades', false);
       });
-      modal.querySelector('#tab-conquest-btn')?.addEventListener('click', () => {
-        sound.playTap();
-        renderTabs('conquest', false);
-      });
 
-      // Bind conquest launch buttons
-      modal.querySelectorAll<HTMLButtonElement>('.cq-shop-launch-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const regionIndex = parseInt(btn.dataset.region ?? '0', 10);
-          sound.playTap();
-          closeModal();
-          EventBus.emit('launch-conquest', { regionIndex });
-        });
-      });
 
       modal.querySelector('#shop-close-btn')?.addEventListener('click', () => {
         sound.playTap();
         closeModal();
       });
 
+      const triggerPurchaseJuice = (btn: HTMLElement, costText?: string) => {
+        sound.playCoin();
+
+        btn.classList.remove('btn-purchase-juice');
+        void btn.offsetWidth;
+        btn.classList.add('btn-purchase-juice');
+
+        const card = btn.closest('.shop-card') as HTMLElement | null;
+        if (card) {
+          card.classList.remove('card-purchase-pulse');
+          void card.offsetWidth;
+          card.classList.add('card-purchase-pulse');
+        }
+
+        const floatEl = document.createElement('div');
+        floatEl.className = 'shop-purchase-float';
+        floatEl.innerHTML = costText ? `<span>✨ ${costText}</span>` : `<span>✨ Purchased!</span>`;
+        btn.style.position = 'relative';
+        btn.appendChild(floatEl);
+
+        setTimeout(() => {
+          floatEl.remove();
+        }, 750);
+      };
+
       // Bind Area Unlock buttons
       modal.querySelectorAll('.unlock-area-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           const areaKey = (btn as HTMLElement).dataset.area as CatArea;
+          triggerPurchaseJuice(btn as HTMLElement);
           EventBus.emit('unlock-area', { area: areaKey });
         });
       });
@@ -344,6 +355,7 @@ export class ShopModal {
       modal.querySelectorAll('.upgrade-cap-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           const areaKey = (btn as HTMLElement).dataset.area as CatArea;
+          triggerPurchaseJuice(btn as HTMLElement);
           EventBus.emit('upgrade-capacity', { area: areaKey });
         });
       });
@@ -355,6 +367,7 @@ export class ShopModal {
           if (machineId && !pendingPurchases.has(machineId)) {
             const m = AUTOMATION_CATALOG.find((item) => item.id === machineId);
             if (m && data.love >= m.baseCost) {
+              triggerPurchaseJuice(btn as HTMLElement, `-${m.baseCost.toLocaleString()} 💗`);
               pendingPurchases.add(machineId);
               data.love -= m.baseCost;
               updateBalances();
@@ -382,6 +395,7 @@ export class ShopModal {
             const lvl = data.machines[machineId] || 0;
             const cost = lvl === 1 ? m?.upgradeCostLvl2 : m?.upgradeCostLvl3;
             if (cost && data.love >= cost) {
+              triggerPurchaseJuice(btn as HTMLElement, `-${cost.toLocaleString()} 💗`);
               btn.classList.add('delivering-btn');
               btn.innerHTML = `✨ Upgrading...`;
               (btn as HTMLButtonElement).disabled = true;
@@ -398,6 +412,7 @@ export class ShopModal {
           if (furnitureId && !pendingPurchases.has(furnitureId)) {
             const item = FURNITURE_CATALOG.find((f) => f.id === furnitureId);
             if (item && data.love >= item.loveCost) {
+              triggerPurchaseJuice(btn as HTMLElement, `-${item.loveCost.toLocaleString()} 💗`);
               pendingPurchases.add(furnitureId);
               data.love -= item.loveCost;
               updateBalances();
@@ -416,13 +431,15 @@ export class ShopModal {
         btn.addEventListener('click', () => {
           const milestoneId = (btn as HTMLElement).dataset.milestoneId;
           if (milestoneId) {
+            triggerPurchaseJuice(btn as HTMLElement);
             EventBus.emit('claim-milestone', { milestoneId });
           }
         });
       });
 
       // Bind Upgrade Offline Stars button
-      modal.querySelector('.upgrade-offline-stars-btn')?.addEventListener('click', () => {
+      modal.querySelector('.upgrade-offline-stars-btn')?.addEventListener('click', (e) => {
+        triggerPurchaseJuice(e.currentTarget as HTMLElement);
         EventBus.emit('upgrade-offline-stars', {});
       });
 
@@ -430,6 +447,7 @@ export class ShopModal {
       modal.querySelectorAll('.buy-perfume-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (data.love >= CAT_PERFUME_COST) {
+            triggerPurchaseJuice(btn as HTMLElement, `-${CAT_PERFUME_COST.toLocaleString()} 💗`);
             data.love -= CAT_PERFUME_COST;
             updateBalances();
             updateButtonAffordability();
@@ -451,6 +469,7 @@ export class ShopModal {
       modal.querySelectorAll('.buy-conga-whistle-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (data.love >= CONGA_WHISTLE_COST) {
+            triggerPurchaseJuice(btn as HTMLElement, `-${CONGA_WHISTLE_COST.toLocaleString()} 💗`);
             data.love -= CONGA_WHISTLE_COST;
             updateBalances();
             updateButtonAffordability();
@@ -472,6 +491,7 @@ export class ShopModal {
       modal.querySelectorAll('.buy-rain-totem-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (data.love >= RAIN_TOTEM_COST) {
+            triggerPurchaseJuice(btn as HTMLElement, `-${RAIN_TOTEM_COST.toLocaleString()} 💗`);
             data.love -= RAIN_TOTEM_COST;
             updateBalances();
             updateButtonAffordability();
@@ -493,6 +513,7 @@ export class ShopModal {
       modal.querySelectorAll('.buy-snowflake-wand-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (data.love >= SNOWFLAKE_WAND_COST) {
+            triggerPurchaseJuice(btn as HTMLElement, `-${SNOWFLAKE_WAND_COST.toLocaleString()} 💗`);
             data.love -= SNOWFLAKE_WAND_COST;
             updateBalances();
             updateButtonAffordability();
@@ -514,6 +535,7 @@ export class ShopModal {
       modal.querySelectorAll('.buy-heart-wand-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (data.love >= HEART_WAND_COST) {
+            triggerPurchaseJuice(btn as HTMLElement, `-${HEART_WAND_COST.toLocaleString()} 💗`);
             data.love -= HEART_WAND_COST;
             updateBalances();
             updateButtonAffordability();
@@ -535,6 +557,7 @@ export class ShopModal {
       modal.querySelectorAll('.buy-infinity-metronome-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (data.love >= INFINITY_METRONOME_COST) {
+            triggerPurchaseJuice(btn as HTMLElement, `-${INFINITY_METRONOME_COST.toLocaleString()} 💗`);
             data.love -= INFINITY_METRONOME_COST;
             updateBalances();
             updateButtonAffordability();
@@ -556,6 +579,7 @@ export class ShopModal {
       modal.querySelectorAll('.buy-solar-prism-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (data.love >= SOLAR_PRISM_COST) {
+            triggerPurchaseJuice(btn as HTMLElement, `-${SOLAR_PRISM_COST.toLocaleString()} 💗`);
             data.love -= SOLAR_PRISM_COST;
             updateBalances();
             updateButtonAffordability();
@@ -577,6 +601,7 @@ export class ShopModal {
       modal.querySelectorAll('.buy-star-compass-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           if ((data.tokens ?? 0) >= STAR_COMPASS_COST) {
+            triggerPurchaseJuice(btn as HTMLElement, `-${STAR_COMPASS_COST.toLocaleString()} ⭐`);
             data.tokens -= STAR_COMPASS_COST;
             updateBalances();
             updateButtonAffordability();
@@ -593,6 +618,7 @@ export class ShopModal {
           }
         });
       });
+
 
       // Bind Fence Layout Selector buttons
       modal.querySelectorAll('.fence-option-card').forEach((card) => {
@@ -1001,73 +1027,11 @@ export class ShopModal {
             <span class="fence-card-sub">Left / Right</span>
           </button>
 
-          <button type="button" class="fence-option-card ${fenceLayout === 'both' ? 'active' : ''}" data-fence-layout="both">
-            <div class="fence-diagram fence-diag-both"></div>
-            <span class="fence-card-title">Cross</span>
-            <span class="fence-card-sub">4 Quadrants</span>
           </button>
         </div>
       </div>
     `;
   }
-
-  // ── Conquest Tab ──────────────────────────────────────────────────────────
-
-  static renderConquestContent(data: ShopModalData): string {
-    const cs = data.conquestState ?? {
-      clearedRegions: [],
-      pendingLove: 0,
-      pendingStars: 0,
-      totalInvasionsLaunched: 0,
-      totalBattlesWon: 0,
-      totalBattlesLost: 0,
-    };
-
-    let html = `
-      <div style="padding:4px 0;">
-        <div style="background:#fffaf2;border:2px solid #d4a373;border-radius:16px;padding:12px 14px;margin-bottom:14px;box-shadow:0 3px 8px rgba(77,56,39,0.06);">
-          <div style="font-size:16px;font-weight:900;color:#4d3827;margin-bottom:4px;display:flex;align-items:center;gap:6px;">
-            <span class="svg-inline" style="color:#ff758f;display:inline-flex;align-items:center;">${SVG_ICONS.conquest}</span> Cat Conquest Campaign
-          </div>
-          <div style="font-size:12px;color:#7c6855;line-height:1.4;font-weight:600;">
-            Spend Care Points to launch your sanctuary cats on conquests across 10 territories! Your cats always return safely.
-          </div>
-          <div style="display:flex;gap:12px;margin-top:10px;font-size:12px;font-weight:800;">
-            <span style="color:#529656;background:#e8f5df;padding:3px 8px;border-radius:999px;border:1px solid #68ad6c;">${cs.clearedRegions.length}/10 Territories Claimed</span>
-            <span style="color:#ff758f;background:#ffe5ec;padding:3px 8px;border-radius:999px;border:1px solid #ff758f;">${cs.totalBattlesWon}W / ${cs.totalBattlesLost}L</span>
-          </div>
-        </div>
-    `;
-
-    for (const region of CONQUEST_REGIONS) {
-      const cleared = cs.clearedRegions.includes(region.index);
-      const isAvailable = region.index === 0 || cs.clearedRegions.includes(region.index - 1) || cleared;
-      const canAfford = data.love >= region.invasionCost;
-
-      html += `
-        <div style="background:#fffaf2;border:2px solid ${cleared ? '#68ad6c' : isAvailable ? '#d4a373' : 'rgba(212,163,115,0.25)'};border-radius:16px;padding:12px 14px;margin-bottom:10px;opacity:${isAvailable ? 1 : 0.55};box-shadow:0 2px 6px rgba(77,56,39,0.05);">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-            <div style="flex:1;">
-              <div style="font-size:15px;font-weight:900;color:#4d3827;">${region.name}</div>
-              <div style="font-size:11px;color:#7c6855;font-weight:700;">${region.isBoss ? 'Boss Battle' : `${region.enemyCount} Enemy Cats`} · Reward: +${region.loveReward.toLocaleString()} 💗 +${region.starReward} ⭐</div>
-            </div>
-            <span>${cleared ? '<span style="color:#529656;font-size:12px;font-weight:900;">Claimed</span>' : isAvailable ? `<span class="svg-inline" style="color:#ff758f;display:inline-flex;align-items:center;">${SVG_ICONS.conquest}</span>` : '<span style="color:#9c8e7c;font-size:12px;font-weight:700;">Locked</span>'}</span>
-          </div>
-          ${isAvailable ? `<button
-            class="cq-shop-launch-btn"
-            data-region="${region.index}"
-            ${!canAfford ? 'disabled' : ''}
-            style="width:100%;padding:10px;border:none;border-radius:999px;font-family:'Nunito',system-ui,sans-serif;font-size:14px;font-weight:900;cursor:${canAfford ? 'pointer' : 'not-allowed'};background:${cleared ? 'linear-gradient(135deg,#68ad6c,#529656)' : canAfford ? 'linear-gradient(135deg,#ff758f,#e05770)' : '#d8cebd'};color:${canAfford ? 'white' : '#9c8e7c'};box-shadow:${canAfford ? '0 3px 10px rgba(0,0,0,0.12)' : 'none'};"
-          >
-            ${cleared ? 'Re-invade Territory' : `Launch Invasion — ${region.invasionCost.toLocaleString()} 💗`}
-          </button>` : `<div style="font-size:11px;color:#7c6855;text-align:center;font-weight:700;">Clear previous territory first</div>`}
-        </div>
-      `;
-    }
-
-    html += `</div>`;
-    return html;
-  }
-
 }
+
 

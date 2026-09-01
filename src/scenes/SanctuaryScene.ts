@@ -42,9 +42,12 @@ import { WeatherAndLightingController } from './controllers/WeatherAndLightingCo
 import { ToolInteractionController } from './controllers/ToolInteractionController';
 import { CatDragDropManager } from './controllers/CatDragDropManager';
 import { ConquestScene } from './conquest/ConquestScene';
+import { PyramidScene } from './pyramid/PyramidScene';
 import { CONQUEST_REGIONS } from '../data/conquest/ConquestData';
 
 let activeConquestScene: ConquestScene | null = null;
+let activePyramidScene: PyramidScene | null = null;
+
 
 export class SanctuaryScene extends Phaser.Scene {
   private state!: GameState;
@@ -276,10 +279,11 @@ export class SanctuaryScene extends Phaser.Scene {
       infinityMetronomeCount: this.state.infinityMetronomeCount || 0,
       solarPrismCount: this.state.solarPrismCount || 0,
       starCompassCount: this.state.starCompassCount || 0,
-      fenceLayout: this.state.fenceLayout || 'none',
       plinkoUpgrades: this.state.plinkoUpgrades || {},
       conquestState: this.state.conquestState,
+      pyramidRecord: this.state.pyramidRecord,
     });
+
   }
 
   private drawCurrentArea(): void {
@@ -1028,7 +1032,58 @@ export class SanctuaryScene extends Phaser.Scene {
         EventBus.emit('toast', { message: `⚔️ Conquest rewards: +${love.toLocaleString()} 💗${stars > 0 ? ` +${stars} ⭐` : ''}` });
       }
     });
+
+    // ── Purrfect Pyramid Handlers ───────────────────────────────────────────
+    EventBus.on('launch-pyramid', () => {
+      if (activePyramidScene) return;
+      if (this.state.cats.length === 0) {
+        EventBus.emit('toast', { message: 'Adopt or discover cats in sanctuary before stacking!' });
+        return;
+      }
+      const gameRoot = document.getElementById('game-container') ?? document.body;
+      activePyramidScene = new PyramidScene(
+        gameRoot,
+        this.state.cats,
+        this.love.love,
+        this.state.pyramidRecord?.maxHeight ?? 0,
+      );
+      activePyramidScene.mount();
+    });
+
+    EventBus.on('pyramid-reward', ({ love, stars, height, catsCount }: { love: number; stars: number; height: number; catsCount: number }) => {
+      activePyramidScene = null;
+      if (love > 0) {
+        this.love.add(love);
+        this.state.totalLoveEarned += love;
+        EventBus.emit('love-changed', { love: this.love.love });
+      }
+      if (stars > 0) {
+        this.milestones.addTokens(stars);
+        EventBus.emit('tokens-changed', { tokens: this.milestones.tokens });
+      }
+
+      if (!this.state.pyramidRecord) {
+        this.state.pyramidRecord = {
+          maxHeight: 0,
+          maxCats: 0,
+          totalGames: 0,
+          trophiesUnlocked: [],
+        };
+      }
+
+      this.state.pyramidRecord.totalGames++;
+      if (height > this.state.pyramidRecord.maxHeight) {
+        this.state.pyramidRecord.maxHeight = height;
+      }
+      if (catsCount > this.state.pyramidRecord.maxCats) {
+        this.state.pyramidRecord.maxCats = catsCount;
+      }
+
+      this.saveManager.save(this.state);
+      this.notifyUiState();
+    });
   }
+
 
   private focusOnCat(catId: string): void {
     const sprite = this.catSprites.get(catId);

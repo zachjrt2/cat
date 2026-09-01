@@ -32,11 +32,23 @@ DESIGN DECISIONS
   • ♾️ Infinity Metronome (Infinity Loop): +5 ⭐ per cat
   • 🌅 Solar Prism (Sunset Spiral): +6 ⭐ per cat
   • 🧭 Star Compass (Cat Constellation): Costs 5,000 ⭐ Stars in Shop; yields +7 ⭐ per cat, +1,600 💗 & instantly advances the life stage of every participating cat (Kitten → Teen → Adult)!
-  • 🛡️ Conquest UI & Aesthetics:
-    • Custom clean vector swords SVG icon on shop tab, conquest header, and action buttons
-    • Cleaned all extraneous emoji icons from conquest tab and scene, keeping only the dedicated conquest SVG icon
+  • 🛍️ Store Juice & Aesthetics:
+    • Satisfying purchase micro-animations on all store buy buttons (`scale` bounce + golden glow pulse)
+    • Floating emerald/gold cost deduction badges (`-500 💗`, `-5,000 ⭐`, `✨ Purchased!`) rising and fading out smoothly
+    • Store card border shimmer and acoustic coin sfx feedback
+  • 🎒 Item & Tool Management:
+    • 4x2 responsive grid for expandable consumables tray (210px width) ensuring all 8 items fit comfortably on mobile without extending off-screen
+    • Tool deselect wake signal: Putting away tools (`pet`, `food`, `brush`, `toy`) instantly signals all cats to release interaction postures and resume natural wandering AI
+
+
+
     • 10 combat columns with pure vertical queue ranks
     • Clean pixel-art friendly HP bars with dynamic status badges (removed the blue shield bar overlay)
+    • ⚡ Mobile High-Performance Architecture:
+      - Queue windowing: only active combatants + 2 closest visible reserves per lane (Ranks 0..2) are mounted to DOM / canvas (reduces active sprites from 600 down to ≤60)
+      - Single global requestAnimationFrame loop replacing hundreds of separate timers
+      - GPU hardware-accelerated transforms (`translate3d`) with CSS containment (`contain: layout style`)
+
 
 
 

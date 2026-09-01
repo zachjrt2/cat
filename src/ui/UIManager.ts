@@ -10,6 +10,7 @@ import { ShopModal } from './modals/ShopModal';
 import { RosterModal } from './modals/RosterModal';
 import { CatInfoModal } from './modals/CatInfoModal';
 import { PlinkoModal } from './PlinkoModal';
+import { MinigamesModal } from './modals/MinigamesModal';
 
 const TOOLS: { id: ToolType; svg: string; label: string }[] = [
   { id: 'food', svg: SVG_ICONS.food, label: 'Food' },
@@ -71,6 +72,7 @@ export class UIManager {
     this.root = container;
     this.toastManager = new ToastManager(this.root);
     this.headerHud = new HeaderHud(this.root, {
+      onOpenMinigames: () => this.openMinigamesModal(),
       onOpenPlinko: () => this.openPlinkoModal(),
       onOpenShop: (tab) => this.openShopModal(tab),
       onOpenSaveMenu: () => SaveOptionsModal.open(this.root),
@@ -451,7 +453,10 @@ export class UIManager {
         starCompassCount?: number;
         plinkoUpgrades?: Record<string, number>;
         conquestState?: import('../data/types').ConquestState;
+        pyramidRecord?: import('../data/types').PyramidRecord;
       }) => {
+
+
         this.areasState = payload.areas;
         this.currentArea = payload.currentArea;
         this.catsList = payload.cats;
@@ -471,6 +476,7 @@ export class UIManager {
         this.currentFenceLayout = payload.fenceLayout ?? 'none';
         this.plinkoUpgrades = payload.plinkoUpgrades ?? {};
         if (payload.conquestState) this.conquestState = payload.conquestState;
+        if (payload.pyramidRecord) this.pyramidRecord = payload.pyramidRecord;
 
         this.headerHud.updateTokens(this.currentTokens);
         this.headerHud.updateAreas(this.areasState, this.currentArea, this.catsList);
@@ -498,7 +504,24 @@ export class UIManager {
     });
   }
 
-  private openShopModal(defaultTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' | 'conquest' = 'areas'): void {
+  private pyramidRecord?: import('../data/types').PyramidRecord;
+
+  private openMinigamesModal(defaultTab: 'conquest' | 'pyramid' | 'derby' | 'avalanche' = 'conquest'): void {
+    MinigamesModal.open(
+      this.root,
+      {
+        love: this.currentLove,
+        tokens: this.currentTokens,
+        cats: this.catsList,
+        conquestState: this.conquestState,
+        pyramidRecord: this.pyramidRecord,
+      },
+      defaultTab,
+    );
+  }
+
+
+  private openShopModal(defaultTab: 'areas' | 'machines' | 'furniture' | 'milestones' | 'upgrades' = 'areas'): void {
     ShopModal.open(
       this.root,
       {
@@ -520,11 +543,11 @@ export class UIManager {
         solarPrismCount: this.solarPrismCount,
         starCompassCount: this.starCompassCount,
         fenceLayout: this.currentFenceLayout,
-        conquestState: this.conquestState,
       },
       defaultTab,
     );
   }
+
 
   private openPlinkoModal(): void {
     const totalCapacity = Object.entries(this.areasState).reduce((acc, [, area]) => {
